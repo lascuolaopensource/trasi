@@ -81,7 +81,9 @@ ASL» — che è la cosa che l'AT deve sapere.
 ## 2. Fragilità: 22 link su 126 sono «troppo specifici»
 
 Classificazione misurata (criteri: id numerici o `?query` nell'URL, testo visibile < 1.200 caratteri, corpo di
-blocco, redirect):
+blocco, redirect). **22 voci grezze su 126** — che sono **17 link distinti** (alcune compaiono due volte nella
+misura: `nominatim` con e senza barra finale, `angsa` e `theqube` con e senza `www`, `naukleros` come voce di
+Tabella A e come URL di allow-list). Ecco i 17:
 
 | Link | Problema misurato | Cosa fare |
 |---|---|---|
