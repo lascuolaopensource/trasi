@@ -43,6 +43,8 @@ Operatore → Trasi Home (Casa preselezionata)
 | `plan.md` | Piano di implementazione (blocchi, criteri, tagli d'emergenza) |
 | **`docs/verifiche.md`** | **Log delle prove**: ogni criterio con comando e output reale |
 | **`docs/B7-report.md`** | Report E2E con le 8 user stories (7/8 PASS) |
+| **`design/readme.md`** | **Design system**: token, componenti, UI kit delle 5 superfici |
+| `design/guidelines/analisi-architettura-informazione.md` | L'analisi IA della Home (gerarchia, stati, le due informazioni difficili) |
 | **`docs/runbook.md`** | Operatività: start/stop, backup, restore, retention, rollback, segreti |
 | `docs/skills-setup.md` | Skill e scoping per agente (per chi continua il lavoro) |
 | `deployment/README.md` | Infrastruttura: compose, limiti RAM, selettività di avvio |

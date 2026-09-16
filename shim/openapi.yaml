@@ -1033,6 +1033,7 @@ components:
       - eventi
       - schede_in_scadenza
       - proposte
+      - giorni_piu_vecchia
       - testo
       description: Riga «Oggi» della Casa, per la Home e per la chat.
       properties:
@@ -1051,6 +1052,12 @@ components:
           type: integer
           minimum: 0
           description: Numero di proposte in attesa di approvazione.
+        giorni_piu_vecchia:
+          type: integer
+          minimum: 0
+          description: 'Giorni di calendario trascorsi dalla creazione della proposta più vecchia ancora in attesa per la Casa:
+            `0` se la coda è vuota o se la più vecchia è di oggi. È `0` e non `null` per scelta: il consumatore lo usa
+            come booleano (`if (giorni)`) e mostra la riga solo quando la coda è ferma da almeno un giorno.'
         testo:
           type: string
           description: 'Riepilogo già formattato per la Home, da riportare così com''è (es. «Oggi a San Bao: 2 eventi · 1

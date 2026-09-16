@@ -80,7 +80,7 @@ def _argomenti(operation_id: str) -> dict[str, Any]:
 # `rete` e `ti` (che non ne hanno una) è `NULL`, quindi vedono tutte le Case (§11). La decisione
 # resta del database, non di un confronto fatto dallo shim.
 SQL_OGGI = """
-SELECT casa_id, slug, nome, data, eventi, schede_in_scadenza, proposte, testo
+SELECT casa_id, slug, nome, data, eventi, schede_in_scadenza, proposte, giorni_piu_vecchia, testo
   FROM trasi.v_oggi_casa
  WHERE slug = $1
    AND (trasi.casa_corrente() IS NULL OR casa_id = trasi.casa_corrente())
@@ -98,6 +98,10 @@ async def oggi(
     Il `testo` arriva **già composto dalla vista** («Oggi a San Bao: 2 eventi · 1 scheda in scadenza · 3 proposte»):
     ricomporlo in Python significherebbe due formattazioni da tenere allineate, e la vista è la stessa che alimenta
     la Home statica — quindi la chat e la Home non possono dire numeri diversi.
+
+    `giorni_piu_vecchia` è l'età della proposta più vecchia in attesa, calcolata dalla vista: dice *da quanto* la coda
+    è ferma, dove `proposte` dice solo *quante* ce ne sono. Vale `0` (mai `null`) quando la coda è vuota, così il
+    consumatore può usarlo come booleano.
 
     La vista è `security_invoker=false`, cioè gira con i privilegi del proprietario: **la RLS non limita le righe che
     restituisce**, e tutte le dieci Case sarebbero leggibili da qualunque ruolo. Il filtro «solo la propria Casa» sta
@@ -125,6 +129,7 @@ async def oggi(
         "eventi": riga["eventi"],
         "schede_in_scadenza": riga["schede_in_scadenza"],
         "proposte": riga["proposte"],
+        "giorni_piu_vecchia": riga["giorni_piu_vecchia"],
         "testo": riga["testo"],
     }
 

@@ -126,6 +126,7 @@ RIGA_OGGI = {
     "eventi": 2,
     "schede_in_scadenza": 1,
     "proposte": 3,
+    "giorni_piu_vecchia": 27,
     "testo": "Oggi a San Bao: 2 eventi · 1 scheda in scadenza · 3 proposte",
 }
 
@@ -144,8 +145,39 @@ def test_oggi_riporta_i_conteggi_e_il_testo_della_vista(app_cliente):
         "eventi": 2,
         "schede_in_scadenza": 1,
         "proposte": 3,
+        "giorni_piu_vecchia": 27,
         "testo": "Oggi a San Bao: 2 eventi · 1 scheda in scadenza · 3 proposte",
     }
+
+
+def test_oggi_senza_proposte_in_attesa_riporta_zero_giorni(app_cliente):
+    """Coda vuota → `giorni_piu_vecchia == 0`, mai `null`: il consumatore lo usa come booleano (`if (giorni)`).
+
+    Il valore è verificato contro il contratto congelato, che dichiara `type: integer` **senza** `nullable`: un `NULL`
+    sfuggito dal `COALESCE` della vista arriverebbe qui come `null` e questo test fallirebbe sia sul confronto sia sulla
+    validazione di schema — che è il modo in cui il difetto si manifesterebbe davvero, cioè nel consumatore.
+    """
+    pytest.importorskip("jsonschema")
+    import yaml
+    from jsonschema import Draft7Validator
+
+    contratto = yaml.safe_load(
+        (Path(__file__).resolve().parent.parent / "openapi.yaml").read_text(encoding="utf-8")
+    )
+    validatore = Draft7Validator(_schema_risolto(contratto, "RispostaOggi"))
+
+    client = app_cliente(SessioneFinta(riga_oggi={**RIGA_OGGI, "proposte": 0, "giorni_piu_vecchia": 0}))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/oggi", headers=_intestazioni(), params={"casa": "san-bao"}
+    )
+
+    assert risposta.status_code == 200
+    corpo = risposta.json()
+    assert corpo["giorni_piu_vecchia"] == 0
+    assert corpo["giorni_piu_vecchia"] is not None
+    errori = sorted(validatore.iter_errors(corpo), key=str)
+    assert errori == [], errori
 
 
 def test_oggi_conteggi_coincidono_con_v_oggi_casa(app_cliente):
@@ -170,7 +202,8 @@ def test_oggi_conteggi_coincidono_con_v_oggi_casa(app_cliente):
         conn = await ambiente.connessione(ruolo="casa_sanbao")
         try:
             riga = await conn.fetchrow(
-                "SELECT casa_id, slug, eventi, schede_in_scadenza, proposte, testo FROM trasi.v_oggi_casa WHERE slug = $1",
+                "SELECT casa_id, slug, eventi, schede_in_scadenza, proposte, giorni_piu_vecchia, testo "
+                "FROM trasi.v_oggi_casa WHERE slug = $1",
                 ambiente.SLUG_SANBAO,
             )
             return dict(riga)
@@ -179,11 +212,19 @@ def test_oggi_conteggi_coincidono_con_v_oggi_casa(app_cliente):
 
     atteso = asyncio.run(dalla_vista())
     corpo = risposta.json()
-    assert (corpo["casa"], corpo["eventi"], corpo["schede_in_scadenza"], corpo["proposte"], corpo["testo"]) == (
+    assert (
+        corpo["casa"],
+        corpo["eventi"],
+        corpo["schede_in_scadenza"],
+        corpo["proposte"],
+        corpo["giorni_piu_vecchia"],
+        corpo["testo"],
+    ) == (
         atteso["slug"],
         atteso["eventi"],
         atteso["schede_in_scadenza"],
         atteso["proposte"],
+        atteso["giorni_piu_vecchia"],
         atteso["testo"],
     )
 

@@ -155,9 +155,9 @@ BEGIN
   RAISE NOTICE 'PASS V06 — v_proposte_aperte: nessuna colonna di identità, motivazione presente';
 END $$;
 
--- V07 · v_oggi_casa: 10 righe (una per Casa) e testo già formattato --------------------------
+-- V07 · v_oggi_casa: 10 righe (una per Casa), testo già formattato, età della coda mai NULL --------
 DO $$
-DECLARE n integer; t text; ev integer;
+DECLARE n integer; t text; ev integer; tipo_colonna text; nulli integer; incoerenti integer;
 BEGIN
   SELECT count(*) INTO n FROM trasi.v_oggi_casa;
   IF n <> 10 THEN RAISE EXCEPTION 'FAIL V07 — v_oggi_casa ha % righe, attese 10', n; END IF;
@@ -165,7 +165,21 @@ BEGIN
   IF t !~ '^Oggi a .+: \d+ (eventi|evento) · \d+ (schede|scheda) in scadenza · \d+ (proposte|proposta)$' THEN
     RAISE EXCEPTION 'FAIL V07 — riga «Oggi» fuori formato: %', t;
   END IF;
-  RAISE NOTICE 'PASS V07 — v_oggi_casa: 10 Case · esempio → «%»', t;
+  -- `giorni_piu_vecchia` è 0 e non NULL anche a coda vuota (il consumatore lo usa come booleano),
+  -- ed è l'età della proposta più vecchia in attesa. Un NULL qui non è «nessun dato»: è un errore.
+  SELECT data_type INTO tipo_colonna FROM information_schema.columns
+   WHERE table_schema = 'trasi' AND table_name = 'v_oggi_casa' AND column_name = 'giorni_piu_vecchia';
+  IF tipo_colonna IS DISTINCT FROM 'integer' THEN
+    RAISE EXCEPTION 'FAIL V07 — giorni_piu_vecchia è %, atteso integer', COALESCE(tipo_colonna, 'assente');
+  END IF;
+  SELECT count(*) INTO nulli FROM trasi.v_oggi_casa WHERE giorni_piu_vecchia IS NULL;
+  IF nulli <> 0 THEN RAISE EXCEPTION 'FAIL V07 — giorni_piu_vecchia NULL su % Case (atteso 0)', nulli; END IF;
+  SELECT count(*) INTO incoerenti FROM trasi.v_oggi_casa v
+   WHERE v.giorni_piu_vecchia IS DISTINCT FROM COALESCE((SELECT current_date - min(p.proposto_ts)::date
+                                                         FROM trasi.proposta p
+                                                         WHERE p.casa_id = v.casa_id AND p.stato = 'proposta'), 0);
+  IF incoerenti <> 0 THEN RAISE EXCEPTION 'FAIL V07 — giorni_piu_vecchia non è l''età della proposta più vecchia su % Case', incoerenti; END IF;
+  RAISE NOTICE 'PASS V07 — v_oggi_casa: 10 Case · giorni_piu_vecchia mai NULL e coerente col minimo · esempio → «%»', t;
 END $$;
 
 -- V08 · v_mappa_case / v_mappa_luoghi: 10 pin, coordinate numeriche, raggio effettivo ---------
