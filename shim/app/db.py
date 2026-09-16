@@ -18,6 +18,7 @@ Le due decisioni d'errore sono deliberate e non negoziabili:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -48,6 +49,19 @@ HEADER_CHIAVE = "X-Trasi-Key"
 _pool: asyncpg.Pool | None = None
 _cache_identita: dict[str, tuple[float, "Identita | None"]] = {}
 
+# Il lucchetto del pool, tenuto insieme al ciclo di eventi che l'ha creato: un `asyncio.Lock` legato a un ciclo
+# non è riusabile in un altro, e i test aprono un ciclo nuovo per ogni client.
+_lucchetto_pool: tuple[asyncio.AbstractEventLoop, asyncio.Lock] | None = None
+
+
+def _lucchetto() -> asyncio.Lock:
+    """Il lucchetto del ciclo di eventi corrente."""
+    global _lucchetto_pool
+    ciclo = asyncio.get_running_loop()
+    if _lucchetto_pool is None or _lucchetto_pool[0] is not ciclo:
+        _lucchetto_pool = (ciclo, asyncio.Lock())
+    return _lucchetto_pool[1]
+
 
 @dataclass(frozen=True)
 class Identita:
@@ -75,19 +89,47 @@ async def apri_pool(settings: Settings | None = None) -> asyncpg.Pool:
 
     `min_size=1` e `max_size=4`: lo shim ha un solo worker e un tetto di 256 MB (`mem_limit` del compose); un pool
     più grande aprirebbe connessioni che il database paga senza che lo shim le usi.
+
+    Il lucchetto serve al riavvio a caldo (`pool_pronto`): due richieste che scoprono insieme il pool assente
+    aprirebbero due pool, e il secondo resterebbe orfano con le sue connessioni.
     """
     global _pool
-    if _pool is None:
-        impostazioni = settings or get_settings()
-        _pool = await asyncpg.create_pool(
-            dsn=impostazioni.database_url,
-            min_size=1,
-            max_size=4,
-            command_timeout=impostazioni.shim_timeout_s,
-            server_settings={"application_name": "trasi-shim"},
-            init=_prepara_connessione,
-        )
+    async with _lucchetto():
+        if _pool is None:
+            impostazioni = settings or get_settings()
+            _pool = await asyncpg.create_pool(
+                dsn=impostazioni.database_url,
+                min_size=1,
+                max_size=4,
+                # Senza questo, `create_pool` aspetta il default di asyncpg (60 s) e una richiesta con il database
+                # giù resterebbe appesa invece di rispondere 503 entro il tempo dichiarato (§9.1: 3 s).
+                timeout=impostazioni.shim_timeout_s,
+                command_timeout=impostazioni.shim_timeout_s,
+                server_settings={"application_name": "trasi-shim"},
+                init=_prepara_connessione,
+            )
     return _pool
+
+
+async def pool_pronto() -> asyncpg.Pool:
+    """Il pool, **aprendolo adesso** se l'avvio non c'è riuscito.
+
+    L'apertura all'avvio non è una garanzia: lo shim e `db_trasi` partono insieme e Postgres impiega qualche
+    secondo ad accettare connessioni. Un `_pool = None` permanente trasformerebbe quel ritardo in un guasto
+    definitivo — ogni endpoint tranne `healthz` risponderebbe 503 «database non raggiungibile» fino al riavvio a
+    mano del container, con il database invece vivo (osservato: `operationId=oggi status=503 ms=0` per ore).
+
+    Quindi il pool si apre alla **prima richiesta** che ne ha bisogno, non solo all'avvio: il fallimento
+    all'avvio è un avviso, non uno stato.
+    """
+    if _pool is not None:
+        return _pool
+    try:
+        return await apri_pool()
+    except Exception as errore_connessione:
+        # Il chiamante vede il motivo del contratto, non lo stacktrace del driver (§9.1).
+        logger.warning("pool non apribile: %s", type(errore_connessione).__name__)
+        raise errore(503, DETAIL_DATABASE_NON_RAGGIUNGIBILE) from errore_connessione
 
 
 async def chiudi_pool() -> None:
@@ -99,7 +141,7 @@ async def chiudi_pool() -> None:
 
 
 def _pool_corrente() -> asyncpg.Pool:
-    """Il pool aperto; se l'applicazione non l'ha ancora aperto, è un errore di configurazione, non di rete."""
+    """Il pool **già aperto**; se l'applicazione non l'ha aperto, è un errore di configurazione, non di rete."""
     if _pool is None:
         raise errore(503, DETAIL_DATABASE_NON_RAGGIUNGIBILE)
     return _pool
@@ -133,7 +175,7 @@ async def risolvi_identita(email: str, *, conn: asyncpg.Connection | None = None
             "SELECT ruolo_db, casa_id FROM trasi.identita_onyx WHERE email = $1 AND attiva", email
         )
     else:
-        pool = _pool_corrente()
+        pool = await pool_pronto()
         async with pool.acquire() as connessione:
             riga = await connessione.fetchrow(
                 "SELECT ruolo_db, casa_id FROM trasi.identita_onyx WHERE email = $1 AND attiva", email
@@ -214,7 +256,7 @@ async def dipendenza_sessione(request: Request) -> AsyncIterator[Sessione]:
         # Nessuna query applicativa è stata eseguita: l'unica lettura è stata la risoluzione dell'identità.
         raise errore(403, DETAIL_IDENTITA_NON_RICONOSCIUTA)
 
-    pool = _pool_corrente()
+    pool = await pool_pronto()
     async with pool.acquire() as conn:
         async with conn.transaction():
             # `SET LOCAL ROLE` non ammette parametri: si interpola con `format` dopo aver verificato che il ruolo

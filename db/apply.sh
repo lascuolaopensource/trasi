@@ -43,7 +43,7 @@ psql_owner() {
 
 # La 000 definisce i ruoli: se manca QUALSIASI ruolo atteso, la 000 gira comunque (è idempotente).
 ORDER=(000_roles.sql 001_schema.sql 002_rls.sql 003_parametri.sql 004_views.sql
-       005_rls_proposta.sql 006_fn_proposte.sql 007_dash.sql
+       005_rls_proposta.sql 006_fn_proposte.sql 007_dash.sql 008_eventi.sql
        010_seed_case.sql 011_seed_fonti.sql 012_seed_luoghi.sql)
 
 # filtri opzionali da riga di comando (prefissi)

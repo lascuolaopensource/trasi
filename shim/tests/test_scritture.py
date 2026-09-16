@@ -14,7 +14,6 @@ Due livelli, per due domande diverse.
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import date
 from typing import Any
 
@@ -229,8 +228,11 @@ def test_proponi_modifica_non_scrive_il_dominio_e_non_sceglie_l_approvatore(app_
     assert not [c for c in sessione_finta.eseguite if any(
         parola in c[0].upper() for parola in ("INSERT INTO TRASI.LUOGO", "UPDATE TRASI.LUOGO", "INSERT INTO TRASI.SCHEDA", "UPDATE TRASI.SCHEDA")
     )], "lo shim non scrive il dominio"
-    corpo_payload = json.loads(insert[0][1][4])
-    assert corpo_payload == {"orari": {"lun": ["09:00", "13:00"]}}
+    # Il payload arriva al driver come **dizionario**, non come stringa JSON: è il codec `jsonb` del pool a
+    # serializzarlo. Passare qui una stringa produceva `jsonb_typeof(payload) = 'string'` nel database — la
+    # proposta si creava e poi non era applicabile (`cannot call jsonb_each on a non-object`).
+    assert insert[0][1][4] == {"orari": {"lun": ["09:00", "13:00"]}}
+    assert isinstance(insert[0][1][4], dict), "il payload deve essere un oggetto JSON, non una stringa"
 
 
 def test_proponi_modifica_motivazione_81_char_422(app_cliente):

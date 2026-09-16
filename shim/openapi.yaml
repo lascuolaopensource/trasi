@@ -957,6 +957,35 @@ components:
         anomalo:
           type: boolean
           description: Vero se la proposta nasce da un'anomalia rilevata su una fonte automatica.
+        titolo:
+          type: string
+          description: Titolo dell'evento, della scheda o dell'opportunità.
+        inizio:
+          type: string
+          format: date-time
+          description: 'Inizio proposto di un evento, con l''ora (`modifica_evento`). La whitelist di `applica_proposte_approvate`
+            accetta `inizio` e `fine` da sempre: senza questi campi nel contratto, la correzione dell''orario di un evento non
+            era proponibile dal percorso utente (422 «Extra inputs are not permitted»).'
+        fine:
+          type: string
+          format: date-time
+          description: Fine proposta di un evento, con l'ora. Deve essere uguale o successiva a `inizio`.
+        luogo_testo:
+          type: string
+          description: Luogo di un evento in forma testuale (può non essere ancora in memoria). Testo libero, filtrato dall'anti-PII.
+        url:
+          type: string
+          description: Indirizzo web del luogo, dell'evento, della scheda o dell'opportunità.
+        annullato:
+          type: boolean
+          description: 'Per un evento: vero per ritirarlo. Il dominio non ammette `DELETE`, e un evento passato resta leggibile.'
+        referente_ruolo:
+          type: string
+          description: 'Ruolo del referente interno di una scheda di servizio (es. «psicologa di comunità»): un ruolo, mai un nome.'
+        validata_il:
+          type: string
+          format: date
+          description: Data di validazione di una scheda di servizio.
     FasceOrario:
       type: array
       description: Fasce orarie del giorno, in coppie «apertura», «chiusura» (elenco vuoto = chiuso).

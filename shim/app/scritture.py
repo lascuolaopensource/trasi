@@ -35,7 +35,6 @@ dell'operatore», ed è esattamente quello che viene calcolato.
 
 from __future__ import annotations
 
-import json
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -181,6 +180,27 @@ class PayloadProposta(BaseModel):
     data_aggiornamento: date | None = None
     casa_id: int | None = Field(default=None, ge=1)
     anomalo: bool | None = None
+
+    # I campi di `evento` e `scheda_servizio`. Mancavano, e non era una svista senza conseguenze:
+    # `trasi.applica_proposte_approvate` accetta `inizio`, `fine` e `luogo_testo` per `modifica_evento`
+    # e `titolo` per `nuova_scheda`/`modifica_scheda`, ma `extra="forbid"` respingeva ogni payload che
+    # li portasse con un 422. La conseguenza era che **l'orario di un evento non si poteva correggere
+    # dal percorso utente**: l'assistente chiamava `proponi_modifica` e riceveva
+    # «payload.inizio: Extra inputs are not permitted», quindi la segnalazione dell'operatore non
+    # diventava una proposta. L'elenco qui sotto è la chiusura di quel divario: gli stessi nomi che
+    # le whitelist di `db/006_fn_proposte.sql` leggono dai rami C (evento) e B (scheda).
+    #
+    # `inizio`/`fine` sono `datetime` e non `date`: un evento ha un'ora, e un `date` la perderebbe
+    # silenziosamente a mezzanotte. `luogo_testo` è testo libero (il luogo di un evento può non essere
+    # ancora in memoria) e resta coperto dal filtro anti-PII.
+    titolo: str | None = None
+    inizio: datetime | None = None
+    fine: datetime | None = None
+    luogo_testo: str | None = None
+    url: str | None = None
+    annullato: bool | None = None
+    referente_ruolo: str | None = None
+    validata_il: date | None = None
 
 
 class ProponiModificaIn(BaseModel):
@@ -387,7 +407,19 @@ async def proponi_modifica(
     casa_proposta = _casa_della_proposta(corpo, sess)
     # `payload` così com'è stato dichiarato: solo i campi inviati (`exclude_unset`), perché un `null` esplicito
     # significherebbe «azzera questo valore», che è una proposta diversa da quella formulata.
-    payload = json.dumps(corpo.payload.model_dump(exclude_unset=True, mode="json"))
+    #
+    # **Dizionario, non stringa.** Il codec `jsonb` del pool (`db.py`, `_prepara_connessione`) codifica già con
+    # `json.dumps`: passare qui una stringa la faceva incapsulare come *stringa JSON* dentro il `jsonb`, e il
+    # database conservava `"{\"inizio\": …}"` invece di `{"inizio": …}`. Il sintomo non era un errore al momento
+    # della scrittura — l'INSERT riusciva — ma al momento dell'**applicazione**, ore dopo e in un altro processo:
+    # `applica_proposte_approvate` chiama `trasi.payload_ammesso(v_rec.payload)`, che fa `jsonb_each` su una
+    # stringa e cade con `cannot call jsonb_each on a non-object`. La proposta risultava approvata e non
+    # applicabile, con l'errore registrato in `audit` come `errore_applicazione`.
+    #
+    # Il difetto era largo: 44 delle 46 proposte in database avevano `jsonb_typeof(payload) = 'string'`, quindi
+    # *nessuna* modifica proposta dal percorso utente poteva essere applicata. Nessun test lo copriva perché le
+    # fixture scrivono il payload direttamente in SQL (dove `$5::jsonb` su una stringa è la cosa giusta).
+    payload = corpo.payload.model_dump(exclude_unset=True, mode="json")
 
     try:
         riga = await sess.fetchrow(

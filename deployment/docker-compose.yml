@@ -97,6 +97,14 @@ services:
     image: trasi-shim:local
     restart: unless-stopped
     mem_limit: 256m
+    # Senza questo, lo shim parte insieme a Postgres e il primo tentativo di connessione fallisce mentre il
+    # database sta ancora inizializzando: il pool restava `None` per sempre e ogni endpoint tranne `healthz`
+    # rispondeva 503 «database non raggiungibile» con il database invece vivo.
+    # `condition: service_healthy` rende il ritardo impossibile all'origine; il riavvio a caldo del pool
+    # (`pool_pronto`) copre comunque il caso in cui Postgres si riavvii dopo.
+    depends_on:
+      db_trasi:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL}
       TRASI_SHIM_KEY: ${TRASI_SHIM_KEY}
