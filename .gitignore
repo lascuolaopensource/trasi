@@ -1,0 +1,53 @@
+# Trasi — cosa NON va versionato.
+#
+# Il criterio: si versiona ciò che serve a **ricostruire** il sistema (codice, schema, configurazione
+# senza segreti, documentazione, prove), non ciò che è **stato locale** di questa installazione
+# (segreti, cache, artefatti generati, sessioni degli strumenti).
+
+# ---------------------------------------------------------------- segreti
+# Mai versionati. I modelli senza segreti sono versionati come `*.example`.
+.env
+.env.*
+!.env.example
+*.secrets/
+.secrets/
+credentials.json
+*.pem
+*.key
+
+# ---------------------------------------------------------------- esecuzione locale
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+
+# Backup e dump: rigenerabili dal database, e possono contenere dati reali.
+backups/
+/backups/
+*.sql.gz
+*.dump
+
+# Log e stato dei servizi.
+*.log
+logs/
+
+# Evidenze generate dall'esecuzione (screenshot, messaggi di alert su file, batteria JSON).
+# Si versionano solo le evidenze che documentano una verifica conclusa, non l'output corrente.
+flussi/evidenze/alert/
+/tmp/
+
+# ---------------------------------------------------------------- strumenti di sviluppo
+# Sessioni e stato locali degli agenti: non fanno parte del progetto, sono di chi lo lavora.
+.omp/run/
+.omp/cache/
+.omp/agent/
+.claude/settings.local.json
+
+# ---------------------------------------------------------------- sistema
+.DS_Store
+Thumbs.db
+
+# Mirror delle skill per altri strumenti: i symlink puntano a `.omp/skills/`, già versionato.
+.claude/skills/
