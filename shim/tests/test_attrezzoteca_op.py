@@ -121,6 +121,16 @@ async def _stato_movimento(movimento_id: int) -> str | None:
         await conn.close()
 
 
+async def _movimenti_di(oggetto_id: int) -> list[int]:
+    """Gli id dei movimenti che riguardano un oggetto: serve a provare che un rifiuto non ha lasciato righe."""
+    conn = await ambiente.connessione(ruolo="rete")
+    try:
+        righe = await conn.fetch("SELECT id FROM trasi.movimento WHERE oggetto_id = $1", oggetto_id)
+        return [r["id"] for r in righe]
+    finally:
+        await conn.close()
+
+
 # --- client con la sessione di una Casa -----------------------------------------------------------------------
 
 
@@ -289,6 +299,38 @@ def test_movimenti_da_confermare_esclude_i_movimenti_confermati(accedi):
         assert _trova(_movimenti(ricevente), movimenti[0]) is None, "un movimento confermato non attende più nulla"
     finally:
         asyncio.run(_pulisci([oggetto], movimenti))
+
+
+@pytest.mark.live
+def test_proporre_un_prestito_di_un_oggetto_altrui_e_403_non_500(accedi):
+    """Cedere un oggetto che non è della propria Casa è un **403**, non un 500.
+
+    La regola è `mov_ins_casa` (db/014): la RLS ammette l'INSERT solo se `oggetto.casa_id` è quello della Casa del
+    chiamante. È il caso normale dell'inventario — l'elenco serve a *chiedere* un oggetto agli altri — quindi il
+    rifiuto deve essere leggibile: prima della correzione l'eccezione di asyncpg attraversava il modulo e diventava
+    «errore interno dello shim», cioè un guasto dichiarato al posto di un confine di ruolo, e chi diagnostica cerca
+    un bug che non esiste.
+
+    Il 403 è asserito insieme al 500 che sostituisce: senza il secondo assert il test passerebbe anche se lo shim
+    rispondesse 403 per un motivo diverso (chiave errata, sessione assente), e non proverebbe la traduzione.
+    """
+    oggetto = asyncio.run(_crea_oggetto(SLUG_CEDENTE, NOME_OGGETTO, quantita=1))
+    try:
+        # La sessione è di San Bao; l'oggetto è di Bozzano: la cedente non è la proprietaria.
+        risposta = accedi(SLUG_PRINCIPALE).post(
+            "/op/movimento",
+            headers=_intestazioni(),
+            json={"oggetto_id": oggetto, "a_casa": SLUG_TERZA},
+        )
+
+        assert risposta.status_code == 403, (
+            f"un oggetto di un'altra Casa è un rifiuto di ruolo, non un guasto: {risposta.status_code} {risposta.text}"
+        )
+        assert risposta.json()["detail"], "il 403 porta il dettaglio del contratto, non un corpo vuoto"
+        # Nessuna riga è nata: il rifiuto è della RLS, non una validazione a valle.
+        assert asyncio.run(_movimenti_di(oggetto)) == []
+    finally:
+        asyncio.run(_pulisci([oggetto], []))
 
 
 # --- il confine di autenticazione, senza sessione -------------------------------------------------------------

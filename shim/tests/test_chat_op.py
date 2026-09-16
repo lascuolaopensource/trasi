@@ -104,7 +104,7 @@ def app_cliente(monkeypatch, tmp_path):
     """`TestClient` sull'app reale: sessione sostituita, token e base URL di Onyx dall'ambiente di prova."""
     monkeypatch.setattr("app.chat.PERCORSO_ENV", tmp_path / "env-inesistente")
     monkeypatch.setenv("ONYX_CHAT_TOKEN", TOKEN_DI_PROVA)
-    monkeypatch.setenv("ONYX_API_URL", BASE_ONYX)
+    monkeypatch.setenv("ONYX_CHAT_API_URL", BASE_ONYX)
     monkeypatch.delenv("ONYX_CHAT_TIMEOUT_S", raising=False)
     monkeypatch.delenv("ONYX_PERSONA_ID", raising=False)
     ambiente.configura_ambiente()

@@ -11,9 +11,10 @@ Entità **nuova** che la decisione §2 dichiara in due metà diverse, e il codic
   regola «conferma solo la destinataria, rientro solo la cedente/rete» vive **là dentro**, non qui. Lo shim
   traduce l'esito (righe toccate o errore parlante), non decide i permessi.
 
-«Errori DB → 409/422 parlanti, mai 500»: le violazioni di CHECK (`quantita`, `condizione`, transizione vietata
+«Errori DB → 403/422 parlanti, mai 500»: le violazioni di CHECK (`quantita`, `condizione`, transizione vietata
 dalla funzione) devono arrivare al LLM in italiano leggibile, perché possa correggersi invece di dichiarare guasti.
-L'unico 500 ammesso è il handler generico di `errori.py` su un bug vero, non su un input cattivo.
+Un rifiuto della RLS è un **403** (la decisione è del database, non un guasto); l'unico 500 ammesso è il handler
+generico di `errori.py` su un bug vero, non su un input cattivo.
 
 Disponibilità: `v_inventario` è l'unica fonte — il conteggio «quanti pezzi sono fuori adesso» è calcolato dalla
 vista (al netto dei movimenti confermati in corso), mai sommato qui, così la UI, la chat e la dashboard Metabase
@@ -25,7 +26,12 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Literal
 
-from asyncpg.exceptions import CheckViolationError, ForeignKeyViolationError, RaiseError
+from asyncpg.exceptions import (
+    CheckViolationError,
+    ForeignKeyViolationError,
+    InsufficientPrivilegeError,
+    RaiseError,
+)
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -73,7 +79,7 @@ class RegistraRichiestaIn(BaseModel):
 
 
 def _traduci_db(exc: Exception) -> None:
-    """Traduce una violazione del DB in una risposta parlante (409/422), poi rilancia.
+    """Traduce una violazione del DB in una risposta parlante (403/422), poi rilancia.
 
     Le funzioni di db/006 sollevano `RaiseError` con messaggi italiani propri («destinazione inesistente»,
     «conferma solo la casa destinataria»): quel testo è già il messaggio del dominio e si propaga così com'è.
@@ -87,6 +93,16 @@ def _traduci_db(exc: Exception) -> None:
         raise errore(422, "valore non ammesso dal modello dati dell'attrezzoteca o della richiesta") from exc
     if isinstance(exc, ForeignKeyViolationError):
         raise errore(422, "un riferimento non esiste in memoria (oggetto, casa o destinazione)") from exc
+    # La RLS ha deciso: il ruolo dell'operatore non può fare questa scrittura. **Non è un guasto** ed è il
+    # caso più probabile di tutto il modulo, perché ogni INSERT qui è filtrato da una policy: cedere un
+    # oggetto che è di un'altra Casa (`mov_ins_casa` chiede `oggetto.casa_id = casa_corrente()`) finisce
+    # qui. Senza questo ramo l'eccezione di asyncpg attraversa il modulo e diventa un **500 «errore
+    # interno dello shim»**, cioè l'operatore legge un guasto al posto di «non puoi prestare un oggetto che
+    # non è tuo» — e chi diagnostica cerca un bug che non c'è. Misurato: `POST /op/movimento` su un oggetto
+    # di un'altra Casa → `InsufficientPrivilegeError: new row violates row-level security policy for table
+    # "movimento"` → 500. Lo stesso in `scritture.py` è già 403: due traduttori, un criterio solo.
+    if isinstance(exc, InsufficientPrivilegeError):
+        raise errore(403, "operazione non consentita al ruolo dell'operatore") from exc
     raise
 
 

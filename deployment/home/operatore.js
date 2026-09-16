@@ -190,12 +190,25 @@
     riga.appendChild(cella(o.condizione));
     riga.appendChild(cella(o.fonte || ""));
     var azione = document.createElement("td");
-    var bottone = document.createElement("button");
-    bottone.type = "button";
-    bottone.className = "riquadro-azione";
-    bottone.textContent = "Proponi prestito";
-    bottone.addEventListener("click", function () { proponiMovimento(o); });
-    azione.appendChild(bottone);
+    /* Il pulsante c'è **solo sulla riga dell'oggetto della propria Casa**, e non è una rifinitura.
+       `mov_ins_casa` (db/014) pretende `oggetto.casa_id = casa_corrente()`: prestando un oggetto
+       altrui la RLS respinge l'INSERT. Mostrando il pulsante su ogni riga, l'operatore che vuole il
+       microfono di Bozzano — cioè il caso d'uso normale, «5 microfoni per domani, dove?» (US-5.1) —
+       preme l'unico pulsante disponibile e riceve un rifiuto: l'inventario della rete serve proprio
+       a **chiedere in prestito**, e la richiesta non ha un pulsante suo. Meglio dichiararlo qui che
+       far scoprire il confine con un errore. Il confronto è con `casa` della sessione (lo stesso
+       valore che `/me` restituisce e che l'intestazione mostra). */
+    var propria = String(o.casa_slug || o.casa || "") === String(casaCorrente || "");
+    if (propria) {
+      var bottone = document.createElement("button");
+      bottone.type = "button";
+      bottone.className = "riquadro-azione";
+      bottone.textContent = "Proponi prestito";
+      bottone.addEventListener("click", function () { proponiMovimento(o); });
+      azione.appendChild(bottone);
+    } else {
+      azione.textContent = "Di un'altra Casa: si chiede a loro";
+    }
     riga.appendChild(azione);
     return riga;
   }
@@ -228,10 +241,45 @@
     });
   }
 
+  /* Gli slug validi sono quelli che la pagina già elenca nel selettore di accesso: leggerli da lì
+     evita una seconda copia della lista delle Case nel JS, che sarebbe un secondo elenco da tenere
+     allineato al seed. */
+  function caseDellaRete() {
+    var opzioni = document.querySelectorAll("#accesso-casa option");
+    var slug = [];
+    for (var i = 0; i < opzioni.length; i++) slug.push(opzioni[i].value);
+    return slug;
+  }
+
   function proponiMovimento(o) {
     var oggi = new Date().toISOString().slice(0, 10);
-    var aCasa = window.prompt("A quale Casa va «" + o.nome + "»? (slug, es. bozzano)", casaCorrente || "");
-    if (!aCasa) return;
+    /* La destinataria si chiede finché non è una Casa **diversa dalla propria**, e non è pignoleria:
+       `movimento_case_distinte` (db/014) è un CHECK, e il default precedente era `casaCorrente` —
+       cioè il valore che il vincolo rifiuta *sempre*. Chi premeva «Proponi prestito» e accettava il
+       valore proposto otteneva un 422 su una data o su una Casa, a seconda di quale prompt
+       correggeva: un modulo che propone come default l'unico valore non ammesso. Il confronto è con
+       la Casa della sessione, la stessa che l'intestazione mostra. */
+    var aCasa = null;
+    while (true) {
+      var risposta = window.prompt(
+        "A quale Casa va «" + o.nome + "»? (slug, es. bozzano)",
+        o.casa_slug && o.casa_slug !== casaCorrente ? o.casa_slug : ""
+      );
+      if (risposta === null) return;
+      aCasa = risposta.trim();
+      if (!aCasa) return;
+      if (aCasa === casaCorrente) {
+        mostra($("attrezzoteca-errore"), "La Casa destinataria deve essere diversa dalla tua: un prestito va a un'altra Casa.");
+        nascondi($("attrezzoteca-ok"));
+        continue;
+      }
+      if (caseDellaRete().indexOf(aCasa) < 0) {
+        mostra($("attrezzoteca-errore"), "Casa «" + aCasa + "» non riconosciuta: usa lo slug di una Casa della rete (es. bozzano).");
+        nascondi($("attrezzoteca-ok"));
+        continue;
+      }
+      break;
+    }
     var al = window.prompt("Fino a quando? (AAAA-MM-GG)", oggi);
     if (!al) return;
     nascondi($("attrezzoteca-errore"));

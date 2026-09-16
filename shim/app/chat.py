@@ -74,9 +74,26 @@ PERCORSO_ENV = Path(__file__).resolve().parents[2] / "deployment" / ".env"
 # quello presuppone che il chiamante stia anche su `onyx_default`, e lo shim **non** ci sta. Verificato dal
 # container dello shim: `nginx` e `onyx-nginx-1` non risolvono (NXDOMAIN), `172.19.0.1` e `host.docker.internal`
 # rifiutano la connessione, `onyx-api_server-1:8080` risponde 200 su `/health`. Se un domani lo shim entra nella
-# rete di Onyx (raccomandato: `networks: [trasi_net, onyx_net]` nel compose, e `ONYX_API_URL=http://nginx/api`),
-# la variabile d'ambiente vince su questo default senza toccare una riga di codice.
+# rete di Onyx (raccomandato: `networks: [trasi_net, onyx_net]` nel compose), la variabile d'ambiente vince su
+# questo default senza toccare una riga di codice.
 URL_ONYX_DEFAULT = "http://onyx-api_server-1:8080"
+
+# La variabile si chiama `ONYX_CHAT_API_URL` e **non** `ONYX_API_URL`, che è già presa: quel nome, in
+# `deployment/.env`, è l'indirizzo di Onyx **per le automazioni e l'export KB** (`http://nginx/api`, il default
+# di `docker-compose.automazioni.yml`) — un container che sta anche su `onyx_default`, dove l'alias `nginx`
+# risolve. Lo shim sta solo su `trasi_net`, dove `nginx` **non** risolve: `socket.gethostbyname('nginx')` →
+# `Name or service not known` (verificato).
+#
+# Il nome condiviso era una trappola silenziosa, e non ipotetica: `_variabile()` legge prima l'ambiente e poi
+# `deployment/.env`, quindi bastava che `.env` contenesse `ONYX_API_URL=http://nginx/api` — cioè **esattamente
+# quello che `.env.example` insegna a scrivere** — perché la chat usasse un indirizzo che da qui non esiste,
+# fallendo con un errore di connessione al posto del default corretto. Misurato in questa stessa sessione:
+# passando `ONYX_API_URL` allo shim nel compose, la chat smette di funzionare. Un nome di variabile è
+# un'interfaccia: due servizi su reti diverse non possono condividerlo con due valori diversi.
+#
+# Nessun ripiego sul vecchio nome: leggerlo «solo se il nuovo manca» rimetterebbe in piedi la trappola, perché
+# il caso in cui il nuovo manca è proprio quello in cui `ONYX_API_URL` è configurato — e sbagliato.
+NOME_VARIABILE_URL = "ONYX_CHAT_API_URL"
 
 # L'assistente «Trasi Casa» (id 2 in `shim/.onyx-kb.json`): quello che sta all'operatore con una persona davanti.
 PERSONA_DEFAULT = 2
@@ -192,7 +209,7 @@ def configurazione() -> ConfigurazioneChat:
     poche righe davanti a una chiamata a un LLM che dura decine di secondi.
     """
     return ConfigurazioneChat(
-        base_url=(_variabile("ONYX_API_URL") or URL_ONYX_DEFAULT).rstrip("/"),
+        base_url=(_variabile(NOME_VARIABILE_URL) or URL_ONYX_DEFAULT).rstrip("/"),
         token=_variabile("ONYX_CHAT_TOKEN"),
         persona_id=_intero(_variabile("ONYX_PERSONA_ID"), PERSONA_DEFAULT),
         timeout_s=_intero(_variabile("ONYX_CHAT_TIMEOUT_S"), TIMEOUT_DEFAULT_S),

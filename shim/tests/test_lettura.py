@@ -133,17 +133,30 @@ def test_cerca_luogo_con_tipo_fuori_vocabolario_non_restringe(client, db_vivo):
 
 @pytest.mark.live
 def test_eventi_oggi_di_una_casa_senza_eventi_risponde_200_con_lista_vuota(client, db_vivo):
-    """Una Casa esistente senza eventi oggi è 200 con `eventi: []`: la Casa c'è, la giornata è vuota."""
+    """Una Casa esistente senza eventi in una data è 200 con `eventi: []`: la Casa c'è, la giornata è vuota.
+
+    Il giorno si chiede **lontano** invece che «oggi», e non è un dettaglio di comodo. Scritto su oggi, questo test
+    affermava una proprietà del database e non dell'endpoint: «San Bao non ha eventi oggi» è vero finché nessuno ne
+    inserisce uno — e l'area operatore ha **`crea_evento`** (`POST /v1/u/…/crea_evento`, scheda !NEW 1) proprio per
+    farlo. Misurato in questa sessione: una sessione sorella ha creato un evento per oggi alle 19:43 e questo test è
+    diventato rosso senza che nulla dell'endpoint fosse cambiato — il difetto peggiore, perché insegna a ignorare
+    l'unico test che dichiara «lista vuota = 200».
+
+    La data lontana è la stessa convenzione dell'altro test di questo file (`+30 giorni`), che crea il proprio evento
+    nel futuro per non dipendere da quelli già presenti. Ciò che si prova è il **contratto**: una Casa che esiste e
+    non ha eventi in quella data riceve 200 con la lista vuota, `casa` e `data` riecheggiati.
+    """
     if not db_vivo:
         pytest.skip("database non raggiungibile")
 
-    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?casa=san-bao")
+    giorno = (date.today() + timedelta(days=365)).isoformat()
+    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?casa=san-bao&data={giorno}")
 
     assert risposta.status_code == 200
     corpo = risposta.json()
     assert corpo["casa"] == "san-bao"
-    assert corpo["eventi"] == []
-    assert corpo["data"] == date.today().isoformat()
+    assert corpo["eventi"] == [], f"nessun evento atteso il {giorno}: {corpo['eventi']}"
+    assert corpo["data"] == giorno
 
 
 def test_eventi_oggi_con_casa_inesistente_risponde_404(client, sessione_finta):
