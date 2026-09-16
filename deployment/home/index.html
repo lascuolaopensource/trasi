@@ -9,15 +9,23 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- Le risorse (CSS/JS) sono locali: zero CDN. Le destinazioni sono URL
-     protocol-relative (`//host`) o relativi all'origine, senza schema, così
-     `grep -Ec "https?://"` sui src/href resta 0 e nessuna risorsa esterna
-     entra nella pagina. -->
-<a class="salta" href="#riquadri">Salta ai riquadri</a>
+<!-- Risorse locali, zero CDN. Le destinazioni sono URL protocol-relative (`//host`)
+     o relativi all'origine, senza schema, così `grep -Ec "https?://"` sui src/href
+     resta 0. Il perché di ogni scelta di veste sta in design/readme.md. -->
+<a class="salta" href="#destinazioni">Salta alle destinazioni</a>
 
 <header class="testata">
-  <p class="marchio"><span class="marchio-nome">TRASI</span><span class="marchio-sep" aria-hidden="true">·</span>Casa:
-    <label class="etichetta-casa" for="selettore-casa">Casa di riferimento</label>
+  <p class="marchio">
+    <img class="marchio-logo" src="assets/logo-case-di-quartiere.png" alt="" width="203" height="88">
+    <span class="marchio-testo">
+      <span class="marchio-nome">TRASI</span>
+      <span class="marchio-sotto">Rete delle Case di Quartiere di Brindisi</span>
+    </span>
+  </p>
+  <div class="casa">
+    <label class="casa-etichetta" for="selettore-casa">Casa di riferimento</label>
+    <!-- L'elenco delle Case sta solo qui. L'opzione di Tuturano porta la nota
+         «dati provvisori» nel testo: il JS ne ricava il nome per le frasi. -->
     <select id="selettore-casa">
       <option value="san-bao" selected>San Bao</option>
       <option value="bozzano">Centro di Aggregazione Bozzano</option>
@@ -28,9 +36,10 @@
       <option value="molo12">Molo 12</option>
       <option value="pop">POP — Piccolo Opificio Popolare</option>
       <option value="santa-spazio">Santa Spazio Culturale</option>
-      <option value="tuturano">Tuturano</option>
+      <option value="tuturano">Tuturano — dati provvisori</option>
     </select>
-  </p>
+    <p class="casa-nota" id="casa-nota" hidden></p>
+  </div>
   <nav class="azioni" aria-label="Aiuto e uscita">
     <a class="azione" href="/operatore.html">Area operatore</a>
     <a class="azione" href="#aiuto">Aiuto</a>
@@ -43,101 +52,96 @@
   </nav>
 </header>
 
-<main id="riquadri">
-  <h1 class="titolo">La porta della rete delle Case di Quartiere</h1>
+<main>
+  <!-- Le due sole cose che cambiano da sole stanno in testa: si leggono prima di
+       scegliere dove andare, non dopo. Il filetto di 4 px a sinistra è il segno di
+       stato del sistema: blu mare per «Oggi», terracotta per la coda. Mai il colore
+       da solo — accanto c'è sempre la parola. -->
+  <section class="fascia" aria-label="Stato di oggi">
+    <p class="oggi" id="oggi" role="status" aria-live="polite" aria-busy="true">Lettura dei dati di oggi in corso…</p>
 
-  <ul class="riquadri">
-    <li class="cella">
-      <!-- CHIEDI resta dentro Trasi: punta all'area operatore, che ha la chat
-           integrata (`POST /api/shim/op/chat`, server-to-server verso Onyx).
-           Prima era un collegamento diretto all'app di Onyx su un altro dominio:
-           il salto di dominio che il vincolo «nessun redirect» vieta, e che la
-           chat via shim esiste per eliminare. -->
-      <a class="riquadro" id="riquadro-chiedi" data-modello="/operatore.html?casa={casa}" href="/operatore.html?casa=san-bao">
-        <h2 class="riquadro-titolo">CHIEDI</h2>
-        <p class="riquadro-testo">L’assistente della rete: domande dei cittadini, con la fonte di ogni risposta.</p>
-      </a>
-    </li>
-    <li class="cella">
-      <a class="riquadro" id="riquadro-mappa" data-modello="/metabase/dashboard/4?casa={casa}" href="/metabase/dashboard/4?casa=san-bao">
-        <h2 class="riquadro-titolo">MAPPA</h2>
-        <p class="riquadro-testo">Luoghi, servizi e Case vicine, con provenienza e affidabilità del dato.</p>
-      </a>
-    </li>
-    <li class="cella">
-      <a class="riquadro" id="riquadro-registra" data-modello="/nocodb/?casa={casa}" href="/nocodb/?casa=san-bao">
-        <h2 class="riquadro-titolo">REGISTRA / AGGIORNA</h2>
-        <p class="riquadro-testo">Schede, eventi e opportunità della Casa.</p>
-        <p class="stato-inattivo">Servizio non ancora attivo</p>
-      </a>
-    </li>
-    <li class="cella">
-      <a class="riquadro" id="riquadro-osservatorio" data-modello="/metabase/dashboard/3?casa={casa}" href="/metabase/dashboard/3?casa=san-bao">
-        <h2 class="riquadro-titolo">OSSERVATORIO</h2>
-        <p class="riquadro-testo">Digest, alert e proposte in attesa per la Casa.</p>
-      </a>
-      <p class="coda"><a id="coda-proposte" data-modello="/nocodb/?casa={casa}&amp;view=da-approvare" href="/nocodb/?casa=san-bao&amp;view=da-approvare">Coda delle proposte «Da approvare»</a> <span class="nota-inattiva">(servizio non ancora attivo)</span></p>
-    </li>
-  </ul>
-
-  <p class="oggi" id="oggi" role="status" aria-live="polite" aria-busy="true">Lettura dei dati di oggi in corso…</p>
-
-  <!-- ====================== INIZIO BLOCCO TEST ======================
-       Pannello di collaudo: esiste SOLO durante il collaudo e va rimosso
-       per le utenti finali cancellando questo blocco e il blocco omonimo
-       in home.js e style.css (marcati «BLOCCO TEST»). Si attiva con
-       ?test=1 nell'indirizzo; senza il parametro non esiste nella pagina. -->
-  <section class="pannello-test" id="pannello-test" hidden aria-labelledby="test-titolo">
-    <h2 id="test-titolo">Pannello di collaudo <span class="nota-inattiva">(solo test — da rimuovere al rilascio)</span></h2>
-    <dl class="test-righe">
-      <dt>Salute del servizio dati</dt>
-      <dd><button class="riquadro-azione" type="button" id="test-healthz">Verifica /healthz</button>
-          <output id="test-healthz-esito" role="status"></output></dd>
-      <dt>Sessione operatore</dt>
-      <dd><button class="riquadro-azione" type="button" id="test-me">Verifica /me</button>
-          <output id="test-me-esito" role="status"></output></dd>
-      <dt>Scheda evento stampabile</dt>
-      <dd>
-        <label class="etichetta" for="test-evento-id">ID evento</label>
-        <input id="test-evento-id" type="number" min="1" value="1">
-        <button class="riquadro-azione" type="button" id="test-scheda-evento">Apri scheda stampabile</button>
-      </dd>
-      <dt>Embed Osservatorio (Metabase)</dt>
-      <dd><button class="riquadro-azione" type="button" id="test-metabase">Verifica caricamento</button>
-          <output id="test-metabase-esito" role="status"></output>
-          <iframe id="test-metabase-frame" title="Anteprima Osservatorio (collaudo)" hidden></iframe></dd>
-      <dt>Ultima chiamata «Oggi»</dt>
-      <dd><output id="test-oggi-esito" role="status">—</output></dd>
-    </dl>
+    <div class="coda" id="coda" hidden>
+      <p class="coda-testo" id="coda-testo"></p>
+      <!-- Predisposto ma inattivo (B6): NocoDB non ha ancora le basi, quindi il
+           collegamento atterrerebbe su una registrazione. La nota lo dichiara,
+           come per REGISTRA/AGGIORNA. -->
+      <a class="coda-azione" id="coda-azione" data-modello="/nocodb/?casa={casa}&amp;view=da-approvare" href="/nocodb/?casa=san-bao&amp;view=da-approvare">Apri la coda delle proposte</a>
+      <span class="nota">il registro non è ancora attivo: per ora si approvano dalla chat</span>
+    </div>
   </section>
-  <!-- ======================= FINE BLOCCO TEST ======================== -->
+
+  <div id="destinazioni">
+    <h1 class="titolo">La porta della rete delle Case di Quartiere</h1>
+
+    <!-- La gerarchia dice quanto una cosa si usa: CHIEDI decine di volte al giorno,
+         MAPPA e OSSERVATORIO qualche volta, REGISTRA quando capita. Quattro riquadri
+         uguali direbbero una cosa falsa. Vedi guidelines/analisi-architettura-informazione.md §1. -->
+    <a class="destinazione principale" id="riquadro-chiedi" data-modello="/operatore.html?casa={casa}" href="/operatore.html?casa=san-bao">
+      <span class="destinazione-titolo principale-titolo">CHIEDI</span>
+      <span class="destinazione-testo principale-testo">L’assistente della rete: risponde alla persona che hai davanti — dove andare, con quali orari — e dichiara da dove viene ogni informazione.</span>
+      <span class="nota" id="chiedi-nota">si apre nella tua area operatore, con San Bao già impostata</span>
+    </a>
+
+    <div class="coppia">
+      <a class="destinazione" id="riquadro-mappa" data-modello="/metabase/dashboard/4?casa={casa}" href="/metabase/dashboard/4?casa=san-bao">
+        <span class="destinazione-titolo">MAPPA</span>
+        <span class="destinazione-testo">Dove sono i luoghi e le Case vicine, da guardare insieme alla persona.</span>
+      </a>
+      <a class="destinazione" id="riquadro-osservatorio" data-modello="/metabase/dashboard/3?casa={casa}" href="/metabase/dashboard/3?casa=san-bao">
+        <span class="destinazione-intestazione">
+          <span class="destinazione-titolo">OSSERVATORIO</span>
+          <span class="destinazione-contatore" id="osservatorio-contatore" hidden></span>
+        </span>
+        <span class="destinazione-testo">I numeri della Casa e le proposte che aspettano una decisione.</span>
+      </a>
+    </div>
+
+    <!-- Non è `disabled` (illeggibile e non spiega nulla): è spento, e lo dichiara
+         in parole. Un servizio non attivo che occupa un quarto della pagina insegna
+         che il sistema promette cose che non fa. -->
+    <div class="destinazione spenta" id="riquadro-registra">
+      <span class="destinazione-titolo">REGISTRA / AGGIORNA</span>
+      <span class="destinazione-testo">Schede, eventi e opportunità della Casa.</span>
+      <span class="nota">Fino all’attivazione, le correzioni passano dalle proposte in chat.</span>
+      <span class="etichetta-attenzione">Servizio non ancora attivo</span>
+    </div>
+  </div>
+
+  <section id="aiuto" aria-labelledby="aiuto-titolo">
+    <h2 id="aiuto-titolo">Aiuto</h2>
+    <p>Trasi è la porta della rete delle Case di Quartiere. Da qui si aprono quattro destinazioni, e ognuna si apre già sulla Casa scelta in alto.</p>
+    <h3>CHIEDI</h3>
+    <p>La chat con l’assistente della rete. Si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali.</p>
+    <h3>MAPPA</h3>
+    <p>I luoghi e le Case della rete su una mappa, da guardare insieme alla persona.</p>
+    <h3>REGISTRA / AGGIORNA</h3>
+    <p>Il registro delle schede, degli eventi e delle opportunità della Casa. Non è ancora attivo: fino all’attivazione le correzioni passano dalle proposte fatte in chat.</p>
+    <h3>OSSERVATORIO</h3>
+    <p>I numeri della Casa e la coda delle proposte che aspettano una decisione. I conteggi troppo piccoli si leggono come «&lt;5»: è una tutela della riservatezza delle persone.</p>
+
+    <h3>Da dove viene l’informazione</h3>
+    <p>Ogni informazione porta un’etichetta. Ce ne sono due, e dicono cose diverse.</p>
+    <p class="esempio"><span class="esempio-etichetta"><strong>KB</strong> Rete delle Case di Quartiere · agg. 15/09/2026 · affidabilità 2</span> <span class="esempio-glossa">la rete lo sa</span></p>
+    <p>La rete lo sa: qualcuno della rete ha verificato questo dato. La data dice quando, il numero da 1 a 3 dice quanto è solida la fonte.</p>
+    <p class="esempio"><span class="esempio-etichetta esterna"><strong>Esterna</strong> OpenStreetMap contributors (ODbL) · consultata 02:21 · non verificata dalla rete</span> <span class="esempio-glossa">trovato fuori, non verificato</span></p>
+    <p>Trovato fuori: viene da una fonte esterna e nessuno della rete l’ha controllato. Si può usare, dicendo alla persona che non è verificato — meglio una telefonata prima di mandarla lì.</p>
+
+    <h3>Le proposte</h3>
+    <p>Trasi non cambia la memoria della rete da sola. Se in chat si segnala che un bar ha chiuso o che un orario è cambiato, nasce una proposta: resta in attesa finché una persona la approva. La riga in alto dice quante ne aspettano una decisione e da quanto tempo. Non c’è una scadenza da rispettare.</p>
+    <h3>La riga «Oggi»</h3>
+    <p>È una lettura della memoria della rete per la Casa scelta: eventi, schede in scadenza, proposte. Se il servizio dati non risponde entro tre secondi, la riga dice «dati non disponibili»: è un’informazione, non un guasto, e le destinazioni funzionano comunque.</p>
+    <h3>La Casa in alto</h3>
+    <p>Il selettore ricorda la Casa nel browser: al prossimo accesso è già quella. L’unica cosa conservata è il nome breve della Casa, nessun dato personale. Tuturano porta la nota «dati provvisori»: alcune sue schede non sono ancora complete.</p>
+    <h3>Tastiera</h3>
+    <p>Si può usare tutto da tastiera: il tasto Tab passa dal salto alle destinazioni, al selettore della Casa, ad Aiuto ed Esci, poi a CHIEDI, MAPPA, OSSERVATORIO e alla coda delle proposte. Il riquadro giallo indica sempre dove sei.</p>
+
+    <p class="rinvio">La verifica di accessibilità delle tre applicazioni esterne (Onyx, Metabase, NocoDB) è rinviata alla settimana 2 del piano: qui è verificata la sola pagina Trasi Home.</p>
+  </section>
+
+  <footer class="piede">
+    <p>Trasi · rete delle Case di Quartiere di Brindisi. Questa pagina non conserva dati personali: la Casa scelta resta nel browser.</p>
+  </footer>
 </main>
-
-<section id="aiuto" aria-labelledby="aiuto-titolo">
-  <h2 id="aiuto-titolo">Aiuto</h2>
-  <p>Trasi è la porta unica della rete delle Case di Quartiere di Brindisi: da qui si aprono le quattro destinazioni del lavoro quotidiano. Ogni riquadro apre il servizio che serve, con la Casa già impostata.</p>
-  <dl class="aiuto-elenco">
-    <dt>CHIEDI</dt>
-    <dd>Chat con l’assistente della rete. Ogni risposta dichiara da dove viene il dato: memoria della rete (KB) o fonte esterna (OpenStreetMap). La Casa dell’operatore arriva dall’identità con cui si è entrati in chat.</dd>
-    <dt>MAPPA</dt>
-    <dd>Dashboard «Mappa»: dove sono le Case e i luoghi della rete, con il raggio di vicinanza.</dd>
-    <dt>REGISTRA / AGGIORNA</dt>
-    <dd>Il servizio di registro (NocoDB) non è ancora attivo in questa installazione: il collegamento è predisposto e la Casa è già nella destinazione. Fino ad allora le modifiche passano dalle proposte in chat e dalla coda di approvazione.</dd>
-    <dt>OSSERVATORIO</dt>
-    <dd>Dashboard «Casa»: come sta andando la Casa di Quartiere, con i conteggi sotto la soglia di riservatezza mostrati come «&lt;5». La coda delle proposte «Da approvare» è il posto dove finisce tutto ciò che non è della propria Casa.</dd>
-  </dl>
-  <h3>La riga «Oggi»</h3>
-  <p>È una lettura della memoria della rete per la Casa scelta: eventi, schede in scadenza, proposte. Se il servizio dati non risponde entro 3 secondi la riga mostra «dati non disponibili»: è un’informazione, non un guasto. La riga si aggiorna anche cambiando Casa nel selettore.</p>
-  <h3>La Casa scelta</h3>
-  <p>Il selettore resta memorizzato nel browser (una sola informazione: lo slug della Casa, nessun dato personale) e non viene inviato altrove.</p>
-  <h3>Tastiera e lettura dello schermo</h3>
-  <p>L’ordine di tabulazione è: salto ai riquadri, selettore Casa, Aiuto, Esci, poi CHIEDI, MAPPA, REGISTRA/AGGIORNA, OSSERVATORIO e la coda delle proposte. Il focus è sempre visibile. Il carattere di base è di 16 px e i contrasti sono conformi a WCAG 2.1 AA.</p>
-  <p class="rinvio">La verifica di accessibilità delle tre applicazioni esterne (Onyx, Metabase, NocoDB) è rinviata alla settimana 2 del piano: qui è verificata la sola pagina Trasi Home.</p>
-</section>
-
-<footer class="piede">
-  <p>Trasi · rete delle Case di Quartiere di Brindisi. Questa pagina non conserva dati personali: la Casa scelta resta nel browser.</p>
-</footer>
 
 <script src="home.js"></script>
 </body>

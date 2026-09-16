@@ -830,12 +830,12 @@ il `AbortController` esiste per gestire.
 
 ### 10.4 · Il contratto degli `href` (e la Casa scelta)
 
-I quattro riquadri e la coda delle proposte portano lo slug della Casa in `?casa=<slug>`. Gli
+Le destinazioni e la coda delle proposte portano lo slug della Casa in `?casa=<slug>`. Gli
 indirizzi sono scritti una volta sola, in `data-modello`, con `{casa}` al posto dello slug; cambiarli
 significa cambiare quel solo attributo (e l'attributo `href` statico, che è la destinazione
 predefinita senza JS).
 
-| Riquadro | Modello dell'`href` | Destinazione |
+| Destinazione | Modello dell'`href` | Destinazione reale |
 |---|---|---|
 | CHIEDI | `//onyx.lascuolaopensource.org/app?agentId=2&casa={casa}` | Onyx, assistente «Trasi Casa» preselezionato (`agentId` 1=Presidio, 2=Casa, 3=Rete, 4=Staff PN) |
 | MAPPA | `/metabase/dashboard/4?casa={casa}` | dashboard «Trasi · Mappa» |
@@ -884,13 +884,21 @@ $ # href dopo il ricarico, con la Casa Bozzano:
   `/api/me` passa da `200` a `403`, mentre la pagina resta la Home e mostra «Sessione della chat
   chiusa.». Un logout unico per i tre servizi richiederebbe un SSO: S2.
 - **Non è un cruscotto.** Non mostra numeri propri e non dà istruzioni (V6): la riga «Oggi» è una
-  lettura della memoria della rete, i riquadri sono porte.
+  lettura della memoria della rete, le destinazioni sono porte.
+- **La coda delle proposte è una riga, non un riquadro.** Il conteggio sta in testa (quante ne
+  aspettano una decisione, e da quanto aspetta la più vecchia) e anche sul riquadro OSSERVATORIO,
+  perché è là che si decide. Se la lettura fallisce, la riga **sparisce**: non sapendo quante
+  proposte ci sono, dire «nessuna in attesa» sarebbe falso.
+- **REGISTRA / AGGIORNA e la coda sono dichiarati inattivi.** NocoDB è in esecuzione ma non ha
+  ancora le basi collegate (`nc_bases_v2` e `nc_users_v2` sono vuote, verificato): il collegamento è
+  predisposto e la nota dice che per ora si approva dalla chat. Senza la nota l'operatore atterrerebbe
+  su una registrazione e leggerebbe un guasto dove c'è un servizio non ancora configurato.
 - **Non conserva dati personali** (V5): in `localStorage` c'è solo lo slug della Casa.
 
 ### 10.7 · Verifica di accessibilità
 
-Vedi **`deployment/home/WCAG.md`**: axe-core → **0 violazioni** WCAG 2.1 A/AA, Lighthouse
-accessibilità **100/100**, 14 coppie di contrasto misurate (minimo **7,99:1**), ordine di tabulazione
-CHIEDI → MAPPA → REGISTRA → OSSERVATORIO verificato con `Tab` reale, reflow a 320 px e zoom 200%
-senza scorrimento orizzontale. La verifica WCAG delle tre applicazioni esterne è **rinviata a S2**
-(§9 e App. A V-08): non è fatta.
+Vedi **`deployment/home/WCAG.md`** (rifatta dopo la revisione della veste): axe-core → **0
+violazioni** WCAG 2.1 A/AA **in tutti e quattro gli stati** della pagina, 12 coppie di contrasto
+misurate (minimo **6,71:1**), ordine di tabulazione verificato con `Tab` reale (salta → Casa → Aiuto →
+Esci → coda → CHIEDI → MAPPA → OSSERVATORIO), reflow a 320 px senza scorrimento, bersagli ≥ 24×24.
+La verifica WCAG delle tre applicazioni esterne è **rinviata a S2** (§9 e App. A V-08): non è fatta.

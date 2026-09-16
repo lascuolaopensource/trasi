@@ -14,7 +14,6 @@ Due livelli, per due domande diverse.
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import date
 from typing import Any
 
@@ -61,6 +60,8 @@ class SessioneFinta:
         self.eseguite.append((sql, args))
         if "INSERT INTO trasi.richiesta" in sql:
             return 777
+        if "INSERT INTO trasi.evento" in sql:
+            return 888
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
@@ -227,24 +228,17 @@ def test_proponi_modifica_non_scrive_il_dominio_e_non_sceglie_l_approvatore(app_
     assert not [c for c in sessione_finta.eseguite if any(
         parola in c[0].upper() for parola in ("INSERT INTO TRASI.LUOGO", "UPDATE TRASI.LUOGO", "INSERT INTO TRASI.SCHEDA", "UPDATE TRASI.SCHEDA")
     )], "lo shim non scrive il dominio"
-
-    # Il valore legato è il **dizionario** del payload, non una stringa JSON che lo rappresenta.
+    # Il payload arriva al driver come **dizionario**, non come stringa JSON: è il codec `jsonb` del pool a
+    # serializzarlo. Passare qui una stringa produceva `jsonb_typeof(payload) = 'string'` nel database — la
+    # proposta si creava e poi non era applicabile (`cannot call jsonb_each on a non-object`).
     #
-    # La differenza non è stilistica ed è il motivo per cui questa riga è cambiata: il codec `jsonb`
-    # è registrato su ogni connessione del pool (`db._prepara_connessione`, `encoder=json.dumps`),
-    # quindi serializzare il payload nello shim *e* lasciarlo serializzare al codec produceva una
-    # **doppia codifica** — una stringa JSON dentro un `jsonb`. `json.loads` qui accettava entrambe
-    # le forme, quindi il test passava; sul database la proposta finiva con `jsonb_typeof(payload)`
-    # = `'string'` e `applica_proposte_approvate` la rifiutava per sempre con
-    # `cannot call jsonb_each on a non-object`. Il test verificava la forma del valore in Python,
-    # non ciò che il database ne avrebbe fatto: ora verifica il valore che il codec deve ricevere.
-    payload_legato = insert[0][1][4]
-    assert payload_legato == {"orari": {"lun": ["09:00", "13:00"]}}, (
-        f"il payload va passato come dizionario (il codec jsonb lo serializza): {payload_legato!r}"
-    )
-    assert not isinstance(payload_legato, str), (
-        "una stringa qui è la doppia codifica che rende la proposta inapplicabile"
-    )
+    # Perché serve un assert esplicito sul **tipo**: la forma precedente di questo test faceva `json.loads`
+    # sul valore legato, che accetta sia il dizionario sia la stringa che lo rappresenta — quindi passava in
+    # entrambi i casi e non copriva nulla. Il difetto era largo (44 delle 46 proposte in database avevano
+    # `jsonb_typeof(payload) = 'string'`) e nessun test lo vedeva, perché le fixture scrivono il payload in
+    # SQL, dove `$5::jsonb` su una stringa è la cosa giusta.
+    assert insert[0][1][4] == {"orari": {"lun": ["09:00", "13:00"]}}
+    assert isinstance(insert[0][1][4], dict), "il payload deve essere un oggetto JSON, non una stringa"
 
 
 def test_proponi_modifica_motivazione_81_char_422(app_cliente):
@@ -645,3 +639,150 @@ def test_registra_richiesta_non_scrive_su_altra_casa(client_reale):
 async def _ripulisci(*ids: int) -> None:
     """Rimuove le proposte di prova (via connessione amministrativa: nessun ruolo applicativo ha `DELETE`)."""
     await ambiente.pulisci(*ids)
+
+
+# --- `crea_evento` --------------------------------------------------------------------------------------------
+
+
+def _evento(**extra: Any) -> dict[str, Any]:
+    """Un corpo valido di `crea_evento`, con i campi da variare nel test."""
+    corpo = {
+        "titolo": "Prove generali del coro",
+        "inizio": "2026-10-20T18:30:00+02:00",
+        "fine": "2026-10-20T20:00:00+02:00",
+        "luogo_testo": "Sala grande",
+    }
+    corpo.update(extra)
+    return corpo
+
+
+def test_crea_evento_salva_la_casa_dell_identita(app_cliente):
+    """`casa_id` viene dall'identità: la INSERT passa il `casa_id` della sessione, non un valore del corpo."""
+    sessione_finta = SessioneFinta(casa_id=5)
+    client = app_cliente(sessione_finta)
+
+    risposta = client.post(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/eventi", headers=_intestazioni(), json=_evento()
+    )
+
+    assert risposta.status_code == 201
+    corpo = risposta.json()
+    assert corpo["evento_id"] == 888
+    assert corpo["badge"].startswith("[KB · ")
+    insert = [c for c in sessione_finta.eseguite if "INSERT INTO trasi.evento" in c[0]]
+    assert insert, "nessuna INSERT eseguita"
+    assert insert[0][1][0] == 5, "la Casa deve venire dall'identità (5), non dal corpo"
+
+
+@pytest.mark.parametrize("campo", ["casa_id", "fonte_id", "uid_ical", "annullato", "note_interne"])
+def test_crea_evento_campo_extra_422(app_cliente, campo):
+    """Nessun campo fuori dal modello è ammesso: `extra="forbid"` respinge anche `casa_id` (mai dal corpo)."""
+    client = app_cliente(SessioneFinta())
+
+    risposta = client.post(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/eventi",
+        headers=_intestazioni(),
+        json=_evento(**{campo: "x"}),
+    )
+
+    assert risposta.status_code == 422
+
+
+def test_crea_evento_fine_prima_dell_inizio_422(app_cliente):
+    """`fine` precedente a `inizio` viola il CHECK `evento_fine_dopo_inizio`: il contratto lo dichiara 422."""
+    sessione_finta = SessioneFinta()
+    client = app_cliente(sessione_finta)
+
+    risposta = client.post(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/eventi",
+        headers=_intestazioni(),
+        json=_evento(fine="2026-10-20T17:00:00+02:00"),
+    )
+
+    assert risposta.status_code == 422
+    assert "fine" in risposta.json()["detail"]
+    assert not [c for c in sessione_finta.eseguite if "INSERT" in c[0]]
+
+
+def test_crea_evento_dato_personale_nella_descrizione_422(app_cliente):
+    """Il filtro anti-PII (V5) vale sui campi testuali dell'evento: un telefono nella descrizione è 422."""
+    sessione_finta = SessioneFinta()
+    client = app_cliente(sessione_finta)
+
+    risposta = client.post(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/eventi",
+        headers=_intestazioni(),
+        json=_evento(descrizione="info: chiamare il 340 1234567"),
+    )
+
+    assert risposta.status_code == 422
+    assert risposta.json()["detail"].startswith("dato_personale_sospetto")
+    assert not [c for c in sessione_finta.eseguite if "INSERT" in c[0]]
+
+
+def test_crea_evento_ruolo_senza_casa_403(app_cliente):
+    """Chi non è legato a una Casa (`rete`) non può creare un evento: non esiste una Casa a cui assegnarlo."""
+    sessione_finta = SessioneFinta(casa_id=None, ruolo="rete")
+    client = app_cliente(sessione_finta)
+
+    risposta = client.post(
+        f"/v1/u/{ambiente.EMAIL_RETE}/eventi", headers=_intestazioni(), json=_evento()
+    )
+
+    assert risposta.status_code == 403
+    assert not [c for c in sessione_finta.eseguite if "INSERT" in c[0]]
+
+
+@pytest.mark.live
+def test_crea_evento_scrive_l_evento_e_lo_ritrova_in_eventi_oggi(client_reale):
+    """Opzione A: l'evento creato è subito leggibile da `eventi_oggi`, senza passare da proposta/approvazione.
+
+    È il criterio osservabile della user story: «una volta creato, l'operatore può chiedere subito se esiste». La
+    data è nel futuro per non dipendere da eventi reali; la riga è rimossa alla fine via connessione amministrativa
+    (nessun ruolo applicativo ha DELETE sul dominio, V4 resta intatto sulle cancellazioni).
+    """
+    if not client_reale:
+        pytest.skip("database non raggiungibile")
+
+    inizio = "2026-12-15T18:30:00+01:00"
+    titolo = "Evento di prova crea_evento (rimosso dal test)"
+
+    risposta = _post(
+        client_reale,
+        ambiente.EMAIL_SANBAO,
+        "eventi",
+        {"titolo": titolo, "inizio": inizio, "luogo_testo": "Sala di prova"},
+    )
+
+    assert risposta.status_code == 201
+    evento_id = risposta.json()["evento_id"]
+    try:
+        # La stessa sessione dell'operatore rilegge il proprio calendario: RLS vera, nessun trucco.
+        lettura = client_reale.get(
+            f"/v1/u/{ambiente.EMAIL_SANBAO}/eventi_oggi?casa=san-bao&data=2026-12-15",
+            headers=_intestazioni(),
+        )
+        assert lettura.status_code == 200
+        eventi = lettura.json()["eventi"]
+        assert [e["titolo"] for e in eventi] == [titolo]
+        assert eventi[0]["provenienza"] == "kb"
+
+        # L'audit non attribuisce la scrittura umana a una fonte automatica: nessuna riga `ical_upsert`.
+        async def audit_onesto() -> bool:
+            conn = await ambiente.connessione_amministratore()
+            try:
+                return not await conn.fetchval(
+                    """
+                    SELECT EXISTS (
+                      SELECT 1 FROM trasi.audit
+                      WHERE azione = 'ical_upsert' AND entita = 'evento' AND entita_id = $1
+                    )
+                    """,
+                    evento_id,
+                )
+            finally:
+                await conn.close()
+
+        assert asyncio.run(audit_onesto()), "l'evento manuale è registrato come upsert iCal (provenienza falsificata)"
+    finally:
+        asyncio.run(ambiente.pulisci_eventi(evento_id))

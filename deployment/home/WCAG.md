@@ -2,8 +2,13 @@
 
 Pagina verificata: **Trasi Home** (`deployment/home/`, servita da Caddy all'indirizzo
 `trasi.lascuolaopensource.org`). Data della misura: 2026-09-16. Strumenti: axe-core 4.13.0 (regole
-WCAG 2.1 A/AA), Lighthouse 12 (categoria accessibilità), misure dirette sul DOM (contrasti,
-ordine di tabulazione, `Emulation.setDeviceMetricsOverride` per reflow e zoom).
+WCAG 2.1 A/AA), misure dirette sul DOM in Chrome 150 (contrasti, dimensioni di carattere, ordine di
+tabulazione, bersagli, reflow).
+
+**Questa scheda è stata rifatta** dopo la revisione della veste (design system, `design/`): la
+gerarchia delle destinazioni è cambiata, la riga «Oggi» e la coda delle proposte sono salite in una
+fascia di stato in testa, ed è entrato il primo elemento non testuale della pagina — il logo della
+rete. Le misure qui sotto sono quelle della pagina **attuale**, non della precedente.
 
 **Cosa questa pagina copre e cosa no.** Qui è verificata **una sola** pagina: la Home statica, che è
 un deliverable del blocco B6. La verifica WCAG delle **tre applicazioni esterne** (Onyx, Metabase,
@@ -17,15 +22,17 @@ settimana 2 con una checklist dedicata.
 
 | Verifica | Strumento | Esito |
 |---|---|---|
-| Violazioni WCAG 2.1 A/AA | axe-core 4.13.0 | **0 violazioni**, 0 «incomplete», 42 controlli superati |
-| Punteggio accessibilità | Lighthouse 12 | **100 / 100** |
-| Contrasti (ogni coppia testo/sfondo) | misura sul DOM | **14/14 ≥ 4,5:1** (minimo misurato **7,99:1**) |
-| Ordine di tabulazione | `Tab` reale, 10 pressioni | CHIEDI → MAPPA → REGISTRA → OSSERVATORIO ✔ |
-| Focus visibile | `ComputedStyle` sull'elemento attivo | contorno **3 px** su tutti i 9 elementi focalizzabili |
-| Font di base | `ComputedStyle` | **16 px** (nessun testo sotto i 16 px) |
-| Reflow 320 px (1.4.10) | override metriche CDP | nessuno scorrimento orizzontale |
-| Zoom 200% (1.4.4) | override metriche CDP | nessuno scorrimento orizzontale |
+| Violazioni WCAG 2.1 A/AA | axe-core 4.13.0 | **0 violazioni**, 0 «incomplete», 22 controlli superati |
+| Contrasti (ogni coppia testo/sfondo) | misura sul DOM | **12/12 ≥ 4,5:1** (minimo misurato **6,71:1**) |
+| Ordine di tabulazione | `Tab` reale, 9 pressioni | salta → Casa → Aiuto → Esci → coda → CHIEDI → MAPPA → OSSERVATORIO ✔ |
+| Focus visibile | `ComputedStyle` sull'elemento attivo | **3 px + anello 6 px** su tutti gli elementi focalizzabili |
+| Font di base | `ComputedStyle` su ogni nodo di testo | **16 px**; 15 px ammesso solo su etichette e note |
+| Bersagli | `getBoundingClientRect` | tutti ≥ 24×24 (WCAG 2.2 · 2.5.8) |
+| Reflow 320 px (1.4.10) | viewport 320 px | `scrollWidth` = 320: **nessuno scorrimento** |
 | `lang="it"` | ispezione | presente, valido |
+
+La verifica è stata ripetuta su **tutti e quattro gli stati** della pagina (dati letti, coda vuota,
+coda con proposte ferme, shim che non risponde): 0 violazioni in ognuno.
 
 ---
 
@@ -33,81 +40,117 @@ settimana 2 con una checklist dedicata.
 
 ### 1.1.1 Contenuto non testuale (A)
 
-Le uniche immagini sono caratteri tipografici; non ci sono `img`, `svg` decorativi senza
-alternativa, né immagini di testo. Il simbolo `·` dell'intestazione è `aria-hidden="true"`.
+La pagina ha **un'immagine**: il logo «Case di Quartiere Brindisi» nella testata
+(`assets/logo-case-di-quartiere.png`, 203×88 px nella risorsa, resa a 44 px di altezza). Ha
+`alt=""`: è **decorativa**, perché accanto c'è il testo «TRASI · Rete delle Case di Quartiere di
+Brindisi», che dice la stessa cosa. Ripetere il nome nell'`alt` farebbe annunciare due volte la
+stessa informazione a un lettore di schermo, ed è il motivo per cui `alt=""` è la scelta corretta
+qui e non una dimenticanza.
+
+Il logo ha `width`/`height` espliciti nell'HTML: lo spazio è riservato prima del caricamento e la
+testata non si muove (è anche la ragione per cui non c'è disallineamento al primo paint).
+
+Non ci sono altre immagini, né icone, né immagini di testo: le destinazioni sono parole.
 **Esito: conforme.** (Verificato da axe: 0 violazioni su `image-alt`, `svg-img-alt`.)
 
 ### 1.3.1 Informazioni e correlazioni (A) · 1.3.2 Sequenza significativa (A)
 
-Struttura semantica: `<header>` → `<main>` con `<h1>` → `<ul>` dei quattro riquadri → `<section id="aiuto">`
-→ `<footer>`. I riquadri sono una lista reale (`<ul>/<li>`), non una griglia di `div`: la sequenza
-è quella che si legge. I campi del selettore hanno `<label for="selettore-casa">` associata.
+Struttura semantica: `<header>` → `<main>` con la fascia di stato (`role="status"` per «Oggi», una
+`div` per la coda) → `<h1>` → le destinazioni → `<section id="aiuto">` → `<footer>`. Il selettore ha
+`<label for="selettore-casa">` associata, ora **visibile** (prima era solo per i lettori di schermo:
+anche chi vede ha bisogno di sapere cos'è quel menu).
 
-Disposizione **2×2**, come il disegno di §4.3 dell'architettura (CHIEDI/MAPPA in alto,
-REGISTRA/OSSERVATORIO in basso): misurata sul DOM, i quattro riquadri hanno `top` 157 px per i primi
-due e 307 px per gli altri due, con la stessa `left` a coppie. L'ordine visivo coincide con l'ordine
-del DOM e con l'ordine di tabulazione (2.4.3).
-**Esito: conforme** (axe: 0 violazioni su `list`, `listitem`, `label`, `heading-order`, `region`).
+**La disposizione non è più 2×2.** La gerarchia segue la frequenza d'uso reale: CHIEDI occupa tutta
+la larghezza (titolo 36 px), MAPPA e OSSERVATORIO stanno affiancati, REGISTRA/AGGIORNA — che è
+predisposto e non attivo — scende al terzo livello a tutta larghezza. Misurato sul DOM a 1280 px:
+
+| Destinazione | Larghezza | Titolo | Nota |
+|---|---|---|---|
+| CHIEDI | 944 px | 36 px | destinazione principale |
+| MAPPA | 462 px | 20 px | affiancata a OSSERVATORIO |
+| OSSERVATORIO | 462 px | 20 px | idem |
+| REGISTRA / AGGIORNA | 944 px | 20 px | spenta, dichiarata in parole |
+
+L'ordine del DOM, quello visivo e quello di tabulazione **coincidono** (2.4.3): CHIEDI, MAPPA,
+OSSERVATORIO, poi REGISTRA. La gerarchia è affidata alla **dimensione**, non al colore, quindi resta
+leggibile in scala di grigi e da chi non distingue i colori.
+
+REGISTRA/AGGIORNA non è un `<a>` (non porta da nessuna parte): è una `div` con l'etichetta «Servizio
+non ancora attivo». Non è `disabled` — che lo renderebbe illeggibile e non spiegherebbe nulla.
+**Esito: conforme** (axe: 0 violazioni su `list`, `label`, `heading-order`, `region`).
 
 ### 1.4.3 Contrasto minimo (AA) — ⚠️ misure reali
 
 Misura su ogni nodo di testo visibile: colore calcolato del testo contro lo sfondo **effettivo**
 (risalendo i genitori, perché `background-color` non è ereditato). Soglia 4,5:1 per il testo normale,
-3:1 per il testo grande (≥ 24 px, o ≥ 18,66 px in grassetto).
+3:1 per il testo grande.
 
-| Elemento | Testo | Colore | Sfondo | px | Rapporto | Soglia | Esito |
-|---|---|---|---|---|---|---|---|
-| `h1.titolo` | La porta della rete… | `rgb(74,74,74)` | `rgb(245,243,238)` | 22 | **7,99** | 4,5 | PASS |
-| `span.nota-inattiva` | (servizio non ancora attivo) | `rgb(74,74,74)` | `rgb(245,243,238)` | 16 | **7,99** | 4,5 | PASS |
-| `p.stato-inattivo` | Servizio non ancora attivo | `rgb(74,56,0)` | `rgb(255,233,168)` | 16 | **9,41** | 4,5 | PASS |
-| `p.rinvio` | La verifica di accessibilità… | `rgb(74,56,0)` | `rgb(255,233,168)` | 16 | **9,41** | 4,5 | PASS |
-| `a#coda-proposte` | Coda delle proposte «Da approvare» | `rgb(18,58,92)` | `rgb(245,243,238)` | 16 | **10,61** | 4,5 | PASS |
-| `p.marchio` | Casa: | `rgb(255,255,255)` | `rgb(18,58,92)` | 18 | **11,76** | 4,5 | PASS |
-| `span.marchio-nome` | TRASI | `rgb(255,255,255)` | `rgb(18,58,92)` | 18 | **11,76** | 4,5 | PASS |
-| `a.azione` | Aiuto · Esci | `rgb(255,255,255)` | `rgb(18,58,92)` | 16 | **11,76** | 4,5 | PASS |
-| `h2.riquadro-titolo` | CHIEDI · MAPPA · … | `rgb(18,58,92)` | `rgb(255,255,255)` | 20 | **11,76** | 3 | PASS |
-| `h2#aiuto-titolo` | Aiuto | `rgb(18,58,92)` | `rgb(255,255,255)` | 22 | **11,76** | 3 | PASS |
-| `h3` | La riga «Oggi» | `rgb(18,58,92)` | `rgb(255,255,255)` | 18 | **11,76** | 4,5 | PASS |
-| `a.salta` | Salta ai riquadri | `rgb(28,28,28)` | `rgb(255,255,255)` | 16 | **17,04** | 4,5 | PASS |
-| `option` | San Bao · Bozzano · … | `rgb(28,28,28)` | `rgb(255,255,255)` | 16 | **17,04** | 4,5 | PASS |
-| `p#oggi.oggi` | Oggi a … | `rgb(28,28,28)` | `rgb(255,255,255)` | 17 | **17,04** | 4,5 | PASS |
-| `dt` | CHIEDI · MAPPA · … | `rgb(28,28,28)` | `rgb(255,255,255)` | 16 | **17,04** | 4,5 | PASS |
+| Elemento | Testo | Rapporto | Soglia | Esito |
+|---|---|---|---|---|
+| `body` | testo corrente su carta | **15,39** | 4,5 | PASS |
+| `p#oggi` | Oggi a … | **17,07** | 4,5 | PASS |
+| `p.coda-testo` | 7 proposte aspettano una decisione… | **8,90** | 4,5 | PASS |
+| `a.coda-azione` | Apri la coda delle proposte | **7,90** | 4,5 | PASS |
+| `span.principale-titolo` | CHIEDI (36 px) | **7,90** | 3 | PASS |
+| `span.destinazione-testo` | L'assistente della rete… | **17,07** | 4,5 | PASS |
+| `span.marchio-nome` | TRASI su testata blu | **11,12** | 4,5 | PASS |
+| `select#selettore-casa` | San Bao | **17,07** | 4,5 | PASS |
+| `span.etichetta-attenzione` | Servizio non ancora attivo | **6,71** | 4,5 | PASS |
+| `span.destinazione-titolo` (spenta) | REGISTRA / AGGIORNA | **7,60** | 4,5 | PASS |
+| `span.destinazione-nota` | si apre con San Bao già impostata | **8,90** | 4,5 | PASS |
+| `p.piede` | Trasi · rete delle Case… | **8,03** | 4,5 | PASS |
 
-**Minimo misurato: 7,99:1** — ben oltre il 4,5:1 richiesto. Nessun elemento sotto soglia.
-**Esito: conforme.** (axe: 0 violazioni su `color-contrast`; Lighthouse: audit superato.)
+**Minimo misurato: 6,71:1** — sopra il 4,5:1 richiesto. La coppia più bassa è l'etichetta «Servizio
+non ancora attivo» (testo `--sole-scuro` su `--attenzione-sfondo`): è la stessa del design system, che
+la dichiara a 6,71:1.
+
+**I tre colori di marca non portano mai testo.** Mare `#0b90cb`, terra `#cc7e5b` e sole `#f6af37`
+stanno fra 1,9:1 e 3,6:1 su bianco: vivono nei filetti e negli sfondi, mentre per il testo ci sono le
+varianti profonde. Non è una preferenza: un titolo in mare di marca sarebbe illeggibile.
+
+**Nessun rosso, da nessuna parte.** In Trasi nulla è un allarme rivolto a una persona: l'attenzione è
+giallo sole, e accanto c'è sempre la parola.
+**Esito: conforme.** (axe: 0 violazioni su `color-contrast`.)
 
 ### 1.4.4 Ridimensionamento del testo (AA)
 
 Il font di base è dichiarato in `html { font-size: 16px }` e tutte le dimensioni derivate usano `rem`,
-quindi il testo scala con le preferenze del browser senza rompere il layout. La misura minima su
-tutti gli elementi di testo è **16 px**.
+quindi il testo scala con le preferenze del browser senza rompere il layout.
+
+Misurato su **ogni** nodo di testo della pagina, il minimo è **15 px**, su nove elementi che sono
+tutti etichette o note e mai testo corrente:
+
+| Elemento | px | Cos'è |
+|---|---|---|
+| `label.casa-etichetta` | 15 | etichetta del selettore |
+| `span.marchio-sotto` | 15 | sottotitolo della testata |
+| `p.casa-nota` | 15 | nota «dati provvisori» |
+| `a.azione`, `button.azione` | 15 | Aiuto ed Esci |
+| `span.destinazione-nota` | 15 | nota di una destinazione |
+| `span.etichetta-attenzione` | 15 | «Servizio non ancora attivo» |
+| `span.esempio-glossa` | 15 | glossa dell'etichetta di provenienza |
+
+Il testo corrente è a **16 px** (corpo, destinazioni, coda) o **17 px** (riga «Oggi»), e nessun
+paragrafo scende sotto i 16. La WCAG 2.1 non fissa una dimensione minima di carattere — chiede che il
+testo possa essere ingrandito al 200% senza perdita (1.4.4) e che il contrasto regga (1.4.3): qui
+entrambe le cose sono verificate, e il 15 px resta su testo breve che non è fatto per essere letto di
+seguito.
 **Esito: conforme.**
 
-### 1.4.10 Reflow (AA) — ⚠️ un difetto reale, trovato e corretto
+### 1.4.10 Reflow (AA)
 
-Alla prima misura a **320 px** di larghezza (equivalente a 400% di zoom su 1280 px) la pagina
-**scorreva orizzontalmente di 24 px**: `scrollWidth` 329 contro `clientWidth` 305. La causa, isolata
-elemento per elemento, era il `<select>` dell'intestazione, che non poteva restringersi sotto la
-larghezza della sua voce più lunga («Centro di Aggregazione Bozzano») e spingeva fuori il contenitore.
+A 320 px di larghezza (equivalente a 400% di zoom su 1280 px) la pagina **non scorre
+orizzontalmente**: `scrollWidth` 320 contro `innerWidth` 320. Misurato con viewport reale a 320 px,
+leggendo `document.documentElement.scrollWidth`.
 
-Corretto in `style.css` con `min-width: 0` su `.marchio` e `#selettore-casa` (`flex: 1 1 auto;
-max-width: min(22rem, 100%)`), e con `grid-template-columns: repeat(2, minmax(0, 1fr))` sulla griglia
-dei riquadri (lo `0` nel `minmax` è la stessa protezione: senza, le colonne non scendono sotto la
-larghezza del contenuto). Sotto i 40 rem la griglia passa a una colonna sola. Rimisurato:
+Sotto i 40 rem (640 px) MAPPA e OSSERVATORIO passano in colonna singola — affiancarli taglierebbe il
+testo — e il selettore della Casa prende la larghezza disponibile (272 px su 320) senza spingere
+fuori il contenitore, grazie a `min-width: 0` e `max-width: min(22rem, 100%)`. La griglia usa
+`minmax(0, 1fr)` e non `1fr`: senza lo zero minimo le colonne non scendono sotto la larghezza del
+contenuto, ed è esattamente il difetto trovato nella versione precedente di questa pagina (§6).
+**Esito: conforme.**### 1.4.11 Contrasto non testuale (AA)
 
-| Larghezza viewport | `clientWidth` | `scrollWidth` | Scorrimento orizzontale | Elementi fuori |
-|---|---|---|---|---|
-| 320 px | 320 | 320 | **no** | nessuno |
-| 360 px | 360 | 360 | **no** | nessuno |
-| 400 px | 385 | 385 | **no** | nessuno |
-| 640 px (zoom 200% su 1280) | 625 | 625 | **no** | nessuno |
-
-**Esito: conforme** (dopo la correzione). Senza la misura, il difetto non si sarebbe visto: la pagina
-«sembrava» a posto perché a 1280 px non c'è alcun problema.
-
-### 1.4.11 Contrasto non testuale (AA)
-
-I bordi dei riquadri (`--bordo: #8a8377` su `--superficie: #ffffff`) e i contorni dei pulsanti
+I bordi delle destinazioni (`--bordo: #8a8377` su `--superficie: #ffffff`) e i contorni dei pulsanti
 (`#ffffff` su `#123a5c`, e viceversa al passaggio del mouse) superano 3:1. Il contorno di focus è
 giallo `#ffd400`: sul fondo chiaro ha rapporto **1,27:1**, che da solo **non** basta come indicatore
 di stato — per questo non è usato da solo, ma sempre accoppiato a un secondo anello scuro `#10233c`
@@ -126,53 +169,59 @@ controlli definite in `px` e non in `em` compressi. **Esito: conforme.**
 
 ### 2.1.1 Tastiera (A) · 2.1.2 Nessuna trappola da tastiera (A) · 2.4.3 Ordine di focus (A) — ⚠️ misure reali
 
-Prova eseguita con `Tab` reale (10 pressioni consecutive), leggendo `document.activeElement` e lo
-stile calcolato a ogni passo:
+Prova eseguita con `Tab` reale, leggendo `document.activeElement` e lo stile calcolato a ogni passo:
 
-| # | Elemento attivo | testo | Contorno misurato |
-|---|---|---|---|
-| 1 | `a.salta` | Salta ai riquadri | `3px solid rgb(255,212,0)` + ombra `rgb(16,35,60) 0 0 0 6px` |
-| 2 | `select#selettore-casa` | San Bao | idem |
-| 3 | `a.azione` | Aiuto | idem |
-| 4 | `button.azione` | Esci | idem |
-| 5 | `a#riquadro-chiedi` | CHIEDI | idem |
-| 6 | `a#riquadro-mappa` | MAPPA | idem |
-| 7 | `a#riquadro-registra` | REGISTRA / AGGIORNA | idem |
-| 8 | `a#riquadro-osservatorio` | OSSERVATORIO | idem |
-| 9 | `a#coda-proposte` | Coda delle proposte «Da approvare» | idem |
-| 10 | `body` | — | (fine del ciclo: si rientra dal primo elemento) |
+| # | Elemento attivo | Testo |
+|---|---|---|
+| 1 | `a.salta` | Salta alle destinazioni |
+| 2 | `select#selettore-casa` | San Bao |
+| 3 | `a.azione` | Aiuto |
+| 4 | `button.azione` | Esci |
+| 5 | `a#coda-azione` | Apri la coda delle proposte |
+| 6 | `a#riquadro-chiedi` | CHIEDI |
+| 7 | `a#riquadro-mappa` | MAPPA |
+| 8 | `a#riquadro-osservatorio` | OSSERVATORIO |
+| 9 | `body` | (fine del ciclo: si rientra dal primo elemento) |
 
-L'ordine **CHIEDI → MAPPA → REGISTRA → OSSERVATORIO** è esattamente quello richiesto e coincide con
-l'ordine del DOM. Il ciclo si chiude e riparte: **nessuna trappola**. Tutti i controlli sono
-raggiungibili, compresi [Aiuto] ed [Esci].
-**Esito: conforme.**
+REGISTRA / AGGIORNA **non è nell'ordine di tabulazione**, ed è corretto: non è un collegamento, non
+porta da nessuna parte, e un elemento non attivo che si prende un `Tab` obbliga a un passaggio in più
+per arrivare a quello che serve. Il suo stato è dichiarato in parole, che è raggiungibile dalla
+lettura normale della pagina.
 
-### 2.4.1 Bypass dei blocchi (A)
+La coda delle proposte viene **prima** delle destinazioni: è l'unica cosa che può richiedere
+un'attenzione, e sta in testa alla fascia di stato.
 
-Un collegamento «Salta ai riquadri» è il **primo** elemento focalizzabile e porta a `#riquadri`
-(`<main>`). È visibile quando riceve il focus (`.salta:focus { left: 0 }`).
+Il ciclo si chiude e riparte: **nessuna trappola**. Tutti i controlli sono raggiungibili, compresi
+[Aiuto] ed [Esci]. Se la coda è vuota o lo shim non risponde, il collegamento non c'è e l'ordine
+scorre direttamente alle destinazioni: non resta un elemento focalizzabile che non porta a nulla.
+**Esito: conforme.**### 2.4.1 Bypass dei blocchi (A)
+
+Un collegamento «Salta alle destinazioni» è il **primo** elemento focalizzabile e porta a
+`#destinazioni`, che contiene le quattro destinazioni: salta la testata e la fascia di stato, cioè
+tutto ciò che si ripete a ogni apertura. È visibile quando riceve il focus (`.salta:focus { left: 0 }`).
 **Esito: conforme** (axe: 0 violazioni su `bypass`).
 
 ### 2.4.4 Scopo del collegamento (A) · 2.4.6 Intestazioni ed etichette (AA)
 
-Ogni collegamento ha un testo che ne dichiara la destinazione: «CHIEDI», «MAPPA», «REGISTRA /
-AGGIORNA», «OSSERVATORIO», «Coda delle proposte «Da approvare»», «Aiuto», «Esci». Le intestazioni
-descrivono l'argomento (`h1` = scopo della pagina, `h2` = i quattro riquadri, `h3` nella sezione
+Ogni collegamento ha un testo che ne dichiara la destinazione: «CHIEDI», «MAPPA»,
+«OSSERVATORIO», «Apri la coda delle proposte», «Aiuto», «Esci». Le intestazioni
+descrivono l'argomento (`h1` = scopo della pagina, `h2` e `h3` delle destinazioni e della sezione
 Aiuto). Il pulsante [Esci] ha testo visibile, non una sola icona.
 **Esito: conforme.**
 
 ### 2.4.7 Focus visibile (AA) — ⚠️ misure reali
 
-Su **tutti** i 9 elementi focalizzabili, il focus calcolato è `outline: 3px solid #ffd400`
-(≥ 2 px richiesti) più un secondo anello `box-shadow: 0 0 0 6px #10233c`. Il doppio anello serve
-perché il giallo da solo, sulla testata blu, non si distingue; l'anello scuro sì. Misurato su ogni
-elemento della tabella al punto 2.1.1.
-**Esito: conforme.**
+Su tutti gli elementi focalizzabili il focus calcolato è
+`outline: 3px solid rgb(246, 175, 55)` (≥ 2 px richiesti) più un secondo anello
+`box-shadow: rgb(4, 48, 68) 0 0 0 6px`. Il doppio anello serve perché il giallo da solo, sulla testata
+blu notte, non si distingue dallo sfondo; l'anello scuro sì. Il giallo è quello del marchio
+(`#f6af37`), non un giallo generico: la pagina precedente usava `#ffd400`.
+**Esito: conforme.**### 2.5.3 Etichetta nel nome (A)
 
-### 2.5.3 Etichetta nel nome (A)
-
-Il `<select>` ha `<label for="selettore-casa">Casa di riferimento</label>` (visivamente nascosta con
-la tecnica del testo ritagliato, presente nella struttura di accessibilità). I pulsanti hanno testo.
+Il `<select>` ha `<label for="selettore-casa">Casa di riferimento</label>`, **visibile**: prima era
+nascosta con la tecnica del testo ritagliato e riservata ai lettori di schermo, ma anche chi vede ha
+bisogno di sapere cos'è quel menu. Le destinazioni hanno il nome come testo del collegamento («CHIEDI»,
+«MAPPA», «OSSERVATORIO»), il `select` e i pulsanti hanno testo visibile.
 **Esito: conforme** (axe: 0 violazioni su `label`, `select-name`, `button-name`).
 
 ---
@@ -186,7 +235,7 @@ la tecnica del testo ritagliato, presente nella struttura di accessibilità). I 
 
 ### 3.2.1 Al focus (A) · 3.2.2 All'input (A)
 
-Nessun cambio di contesto automatico: cambiare Casa nel selettore riscrive gli `href` dei riquadri e
+Nessun cambio di contesto automatico: cambiare Casa nel selettore riscrive gli `href` delle destinazioni e
 aggiorna la riga «Oggi», ma **non naviga** e non apre finestre. Il focus resta dov'è.
 Il pulsante [Esci] naviga solo perché è un `<button type="submit">` dentro un `<form>`: è un'azione
 esplicita dell'operatore, non un cambio di contesto inatteso.
@@ -195,9 +244,16 @@ esplicita dell'operatore, non un cambio di contesto inatteso.
 ### 3.3.1 Identificazione dell'errore (A) · 3.3.2 Etichette o istruzioni (A)
 
 L'unico «errore» possibile è la riga «Oggi» che non riceve risposta: è comunicato in testo semplice
-(«Dati non disponibili: la memoria della rete non risponde in questo momento.»), mai con un codice o
-un messaggio tecnico, e mai solo con un colore (c'è anche un bordo laterale più scuro, ma il testo
-basta da solo). La sezione Aiuto spiega cosa significa.
+(«Dati non disponibili: la memoria della rete non risponde in questo momento.»), seguito da
+«È un'informazione, non un guasto: le destinazioni qui sotto funzionano.» Mai un codice o un
+messaggio tecnico, e mai solo un colore (c'è anche il filetto laterale, ma il testo basta da solo).
+La sezione Aiuto spiega cosa significa.
+
+**Quando la lettura fallisce, anche la coda sparisce.** Non sapendo quante proposte aspettano, la
+pagina **non** dice «Nessuna proposta in attesa»: sarebbe un'informazione falsa, e l'operatore
+potrebbe non controllare una coda che ha davvero proposte ferme. Sparire è più onesto che dire una
+cosa non vera — ed è la stessa scelta già fatta per il numero durante la lettura, quando il
+contenitore è nascosto per non mostrare il conteggio della Casa precedente.
 **Esito: conforme.**
 
 ---
@@ -216,8 +272,12 @@ sono collegamenti (non `div` con `onclick`), il `<select>` è un controllo di se
 ### 4.1.3 Messaggi di stato (AA)
 
 La riga «Oggi» è un `role="status"` (`aria-live="polite"`), quindi il passaggio da «Lettura dei dati
-di oggi in corso…» al testo (o a «Dati non disponibili») è annunciato senza rubare il focus.
-L'esito dell'uscita è anch'esso un `role="status"`.
+di oggi in corso…» al testo (o a «Dati non disponibili») è annunciato senza rubare il focus. L'esito
+dell'uscita è anch'esso un `role="status"`.
+
+La coda delle proposte **non** è una regione live: cambia insieme alla riga che è già annunciata, e
+due annunci simultanei per un solo cambiamento di Casa sarebbero rumore. Il conteggio sul riquadro
+OSSERVATORIO è testo normale, letto quando ci si arriva.
 **Esito: conforme.**
 
 ---
@@ -225,39 +285,66 @@ L'esito dell'uscita è anch'esso un `role="status"`.
 ## 5 · Come ripetere la verifica
 
 ```bash
-# 1 · axe-core e Lighthouse (la Home serve l'header Host)
-cd /tmp && npm install axe-core@4.13.0 lighthouse@12
-CHROME_PATH=/root/.omp/puppeteer/chrome/linux-150.0.7871.24/chrome-linux64/chrome \
-  ./node_modules/.bin/lighthouse --only-categories=accessibility \
-  --chrome-flags="--headless=new --no-sandbox" \
-  --output=json --output-path=/tmp/lighthouse-home.json \
-  'http://trasi.lascuolaopensource.org:8088/'
-jq '.categories.accessibility.score' /tmp/lighthouse-home.json   # atteso: 1
-
-# 2 · La Home servita, e la rotta della riga «Oggi»
+# 1 · La Home e la rotta della riga «Oggi» (Caddy sceglie il sito dall'header Host)
 curl -s -o /dev/null -w '%{http_code}\n' \
-  -H 'Host: trasi.lascuolaopensource.org' http://127.0.0.1:8088/     # atteso: 200
+  -H 'Host: trasi.lascuolaopensource.org' http://127.0.0.1:8088/            # atteso: 200
 curl -s -H 'Host: trasi.lascuolaopensource.org' \
-  'http://127.0.0.1:8088/api/shim/v1/u/rete@trasi.local/oggi?casa=bozzano'
+  'http://127.0.0.1:8088/api/shim/v1/u/rete@trasi.local/oggi?casa=bozzano'  # atteso: JSON
 ```
 
-Le prove di reflow e zoom usano `Emulation.setDeviceMetricsOverride` del protocollo CDP (`width`),
-non una finestra ridimensionata: è l'unico modo di misurare il reflow senza dipendere dalla
-dimensione effettiva della finestra, che in un browser headless non è affidabile.
+```bash
+# 2 · axe-core, contrasti, caratteri, tabulazione, bersagli — sulla pagina servita
+cd /tmp && npm install axe-core@4
+# in un browser headless (Chrome 150 in questo ambiente):
+#   pagina  = http://127.0.0.1:8088/  con l'header Host (v. sotto)
+#   script  = /tmp/axebanco/node_modules/axe-core/axe.min.js
+#   axe.run(document, { runOnly: { type: "tag",
+#              values: ["wcag2a","wcag2aa","wcag21a","wcag21aa"] } })
+```
 
----
+**Come si guarda la pagina su questa macchina.** Due vincoli, entrambi verificati, e vale la pena
+conoscerli perché fanno perdere tempo:
+
+1. Caddy sceglie il sito dall'header `Host`: su un host che non conosce risponde **200 con corpo
+   vuoto**, non 404. Quindi `http://127.0.0.1:8088/` da un browser non mostra la pagina, e sembra
+   rotta quando invece non lo è.
+2. Il dominio pubblico, da qui, risolve **solo in IPv6** e questa macchina non ha connettività IPv6
+   verso Cloudflare: il browser non lo raggiunge affatto.
+
+Per la verifica visiva serve quindi un banco che serva i file veri e inoltri `/api/shim/*` al Caddy
+vero portandogli l'header `Host`: è lo stesso percorso della riga «Oggi», con la chiave iniettata dal
+proxy. `curl` con `-H 'Host: …'` è invece sufficiente per tutte le misure che non richiedono un
+browser.
 
 ## 6 · Difetti reali trovati durante questa verifica
+
+**Della versione precedente (riportati perché sono lezioni, non storia):**
 
 1. **Scorrimento orizzontale a 320 px** (WCAG 1.4.10 Reflow) — il `<select>` della Casa non si
    restringeva sotto la voce più lunga e portava la pagina a 329 px su 305 disponibili. Corretto con
    `min-width: 0`. Trovato **solo** perché la misura è stata fatta a 320 px: a 1280 px la pagina è
-   indistinguibile da una corretta.
+   indistinguibile da una corretta. La protezione è rimasta (`minmax(0, 1fr)`, `min-width: 0`).
 2. **`aria-describedby` che puntava a un id inesistente** sul `<select>` — un riferimento rotto, che
    axe non segnala come violazione ma che i lettori di schermo annunciano come descrizione vuota.
-   Rimosso (l'etichetta `label` era già associata).
 
-Entrambi erano invisibili a occhio nudo e sono emersi dalle misure, non dalla lettura del codice.
+**Della revisione della veste (design system):**
+
+3. **La coda diceva «Nessuna proposta in attesa» quando la lettura falliva.** Con lo shim che non
+   risponde, la pagina affermava che la coda era vuota: un'informazione **falsa**, e della specie
+   peggiore — quella che induce a non controllare. Ora, se la lettura fallisce, la coda sparisce.
+   Trovato provando lo stato «shim fermo», non leggendo il codice.
+4. **La riga «Oggi» e la coda potevano nominare Case diverse.** Il `testo` della riga arriva dalla
+   vista e nomina la Casa della **risposta**; la coda la ricavava dal selettore. Se lo shim risponde
+   su una Casa diversa da quella richiesta (accade quando lo slug non è riconosciuto e lo shim ricade
+   sull'identità), le due righe si contraddicevano. Ora entrambe usano `dati.casa`, una sola fonte.
+5. **Un carattere cirillico in una classe CSS.** `esempio-glossа` conteneva una `а` di U+0430: la
+   regola non si applicava e la glossa restava senza stile. Invisibile a occhio, trovato
+   confrontando i codepoint dei file.
+6. **La pagina superava il tetto di 30 KB** (35.275 B) e il logo da solo ne pesava 67 KB contro un
+   limite di 30. Il logo è servito a 88 px di altezza — il doppio dei 44 px resi, per gli schermi
+   retina — invece che a 361 px: **8,8 KB invece di 67**, l'87% in meno. La pagina è rientrata a
+   30.698 B, e i commenti sono stati ridotti **senza** perdere le motivazioni: quelle che stavano già
+   in un documento (il design system, l'analisi IA) ora lo citano invece di ripeterlo.
 
 ---
 
@@ -270,3 +357,11 @@ Entrambi erano invisibili a occhio nudo e sono emersi dalle misure, non dalla le
 - **Utenti reali**: il piano prevede la sessione con operatori in B7 (US-01…US-08).
 - **Contrasto sui colori di sistema del `<select>` aperto**: la tendina è resa dal sistema
   operativo e non è misurabile dal DOM; il controllo chiuso è quello misurato al punto 1.4.3.
+- **Il logo come immagine di marca**: il manuale di identità visiva lo distribuisce come PNG e in
+  Janna LT Bold, un font che non è disponibile come webfont libero. Il logo resta quindi un'immagine
+  raster servita a 88 px per gli schermi retina; se arriva il file vettoriale, va sostituito.
+- **Zoom 200%**: verificato indirettamente dal reflow a 320 px (che è la stessa condizione in termini
+  di layout) e dal fatto che tutte le misure sono in `rem` con base 16 px dichiarata. La misura
+  esplicita a zoom 200% è stata fatta nella versione precedente della pagina con
+  `Emulation.setDeviceMetricsOverride`; con la nuova veste non è stata ripetuta con lo stesso
+  strumento, e non è dichiarata come rieseguita.

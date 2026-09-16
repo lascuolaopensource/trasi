@@ -197,6 +197,25 @@ async def pulisci(*ids_proposta: int) -> None:
         await conn.close()
 
 
+async def pulisci_eventi(*ids_evento: int) -> None:
+    """Rimuove gli eventi di prova creati da `crea_evento` (via connessione amministrativa).
+
+    Nessun ruolo applicativo ha `DELETE` sul dominio (V4, revoca di db/005): la pulizia delle fixture passa per
+    `trasi_owner`, come fa `pulisci` per le proposte. L'eventuale riga `audit` collegata va prima, come lì.
+    """
+    if not ids_evento:
+        return
+    conn = await connessione_amministratore()
+    try:
+        await conn.execute(
+            "DELETE FROM trasi.audit WHERE entita = 'evento' AND entita_id = ANY($1::integer[])",
+            list(ids_evento),
+        )
+        await conn.execute("DELETE FROM trasi.evento WHERE id = ANY($1::integer[])", list(ids_evento))
+    finally:
+        await conn.close()
+
+
 async def crea_proposta(
     conn: asyncpg.Connection,
     *,

@@ -197,6 +197,14 @@ CROSS JOIN LATERAL trasi.k_anon(r.cnt) a;
 -- ===========================================================================
 -- V6 · v_oggi_casa — riga «Oggi» della Home e risposta dell'endpoint `oggi`.
 -- Una riga per Casa: la vista non è filtrata per ruolo (owner-rights); il consumatore filtra su slug/id.
+--
+-- `giorni_piu_vecchia` è l'età (in giorni di calendario) della proposta più vecchia ancora in stato
+-- `'proposta'`: il numero dice *quante* proposte aspettano, l'età dice *da quanto* aspettano, e sono
+-- due cose diverse — «tre arrivate oggi» e «tre ferme da un mese» hanno lo stesso `proposte`.
+-- Vale 0, non NULL, quando la coda è vuota: il consumatore lo usa come booleano (`if (giorni)`), e
+-- «la più vecchia da 0 giorni» non ha nulla da mostrare. Un NULL obbligherebbe ogni consumatore a
+-- distinguere i due casi, e il giorno in cui uno lo dimenticasse la Home mostrerebbe «null giorni».
+-- (0 è anche il valore della più vecchia proposta creata oggi: nessuna ambiguità da sciogliere.)
 -- ===========================================================================
 DROP VIEW IF EXISTS trasi.v_oggi_casa;
 CREATE VIEW trasi.v_oggi_casa AS
@@ -204,6 +212,7 @@ SELECT c.id AS casa_id, c.slug, c.nome, current_date AS data,
        COALESCE(ev.n, 0)::integer AS eventi,
        COALESCE(sc.n, 0)::integer AS schede_in_scadenza,
        COALESCE(pr.n, 0)::integer AS proposte,
+       COALESCE(pv.giorni, 0)::integer AS giorni_piu_vecchia,
        format('Oggi a %s: %s %s · %s %s · %s %s',
               c.nome,
               COALESCE(ev.n,0), CASE WHEN COALESCE(ev.n,0) = 1 THEN 'evento' ELSE 'eventi' END,
@@ -222,7 +231,12 @@ LEFT JOIN LATERAL (
 LEFT JOIN LATERAL (
   SELECT count(*) AS n FROM trasi.proposta p
   WHERE p.casa_id = c.id AND p.stato = 'proposta'
-) pr ON true;
+) pr ON true
+LEFT JOIN LATERAL (
+  -- `min` su coda vuota è NULL → il COALESCE in SELECT esterno lo riporta a 0.
+  SELECT current_date - min(p.proposto_ts)::date AS giorni FROM trasi.proposta p
+  WHERE p.casa_id = c.id AND p.stato = 'proposta'
+) pv ON true;
 
 -- ===========================================================================
 -- V7 · v_mappa_case — pin delle 10 Case; lat/lon numerici (Metabase non usa geography) + raggio in tooltip.

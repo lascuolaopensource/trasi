@@ -1,0 +1,19 @@
+<!-- @dsCard group="Components" viewport="700x300" name="Stato" subtitle="Riga «Oggi» e coda delle proposte" -->
+<!doctype html><html lang="it"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>html,body{margin:0}body{background:var(--sfondo);color:var(--testo);font-family:var(--font-corpo);padding:16px}.fila{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.col{display:flex;flex-direction:column;gap:12px}</style></head><body><div id="root"></div>
+<script type="text/babel">
+const { RigaOggi, AvvisoCoda } = window.TrasiDesignSystem_18d101;
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <div className="col">
+    <RigaOggi testo="Oggi a San Bao: 2 eventi · 1 scheda in scadenza · 3 proposte" />
+    <RigaOggi stato="attesa" testo="Lettura dei dati di oggi in corso…" />
+    <RigaOggi stato="non-disponibile" testo="Dati non disponibili: la memoria della rete non risponde in questo momento." nota="È un'informazione, non un guasto: le destinazioni funzionano." />
+    <AvvisoCoda numero={3} giorniPiuVecchia={4} casa="San Bao" href="#coda" />
+    <AvvisoCoda numero={0} casa="San Bao" />
+  </div>
+);
+</script></body></html>

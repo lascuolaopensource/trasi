@@ -76,6 +76,7 @@ SELECT e.id, e.titolo, e.inizio, e.fine, e.luogo_testo,
        COALESCE(e.url, f.url) AS url,
        COALESCE(e.affidabilita, 2) AS affidabilita,
        f.nome AS fonte_nome, f.autorita AS fonte_autorita,
+       (e.uid_ical IS NULL AND e.fonte_id IS NULL) AS inserito_a_mano,
        c.nome AS casa_nome, c.slug AS casa_slug
 FROM trasi.evento e
 JOIN trasi.casa c ON c.id = e.casa_id
@@ -204,7 +205,11 @@ def _item_evento(riga) -> ItemEvento:
     `strftime('%H:%M')` diretto mostrerebbe l'evento delle 18:30 come «16:30» (verificato). Il badge porta la data
     locale dell'evento, che è il giorno in cui l'operatore lo vede in calendario.
     """
-    fonte = nome_fonte(riga["fonte_autorita"], riga["fonte_nome"])
+    fonte = (
+        "inserito dall'operatore"
+        if riga["inserito_a_mano"]
+        else nome_fonte(riga["fonte_autorita"], riga["fonte_nome"])
+    )
     inizio = riga["inizio"].astimezone(FUSO)
     fine = riga["fine"].astimezone(FUSO) if riga["fine"] else None
     return ItemEvento(

@@ -97,6 +97,14 @@ services:
     image: trasi-shim:local
     restart: unless-stopped
     mem_limit: 256m
+    # Senza questo, lo shim parte insieme a Postgres e il primo tentativo di connessione fallisce mentre il
+    # database sta ancora inizializzando: il pool restava `None` per sempre e ogni endpoint tranne `healthz`
+    # rispondeva 503 «database non raggiungibile» con il database invece vivo.
+    # `condition: service_healthy` rende il ritardo impossibile all'origine; il riavvio a caldo del pool
+    # (`pool_pronto`) copre comunque il caso in cui Postgres si riavvii dopo.
+    depends_on:
+      db_trasi:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL}
       TRASI_SHIM_KEY: ${TRASI_SHIM_KEY}
@@ -131,11 +139,12 @@ services:
     environment:
       PORT: "8080"
       NODE_OPTIONS: --max-old-space-size=768
-      # Il metadata di NocoDB sta nel volume nominato; le source per Casa (ruoli DB)
-      # si configurano in B1 e puntano a db_trasi.
       NC_TOOL_DIR: /usr/app/data
       NC_AUTH_JWT_SECRET: ${NOCODB_JWT_SECRET}
       NC_SITE_URL: ${NOCODB_SITE_URL}
+      # CE 2026 blocca "internal hosts" sulle sorgenti esterne; qui DB e NocoDB vivono
+      # nella stessa rete Docker privata (non esposti fuori dal loopback/host), quindi è sicuro.
+      NC_ALLOW_LOCAL_HOSTS: "true"
       TZ: ${TZ}
     volumes:
       - nocodb_data:/usr/app/data

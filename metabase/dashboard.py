@@ -269,6 +269,22 @@ CARDS_RETE: list[Card] = [
 
 CARDS_CASA: list[Card] = [
     Card(
+        "Casa · eventi in programma",
+        """
+        SELECT titolo AS "Evento", quando AS "Quando", luogo_testo AS "Dove",
+               fonte_nome AS "Origine", giorni_all_inizio AS "Fra (giorni)"
+          FROM trasi.v_eventi
+         WHERE true [[AND {{casa}}]]
+         ORDER BY inizio
+        """,
+        colonne=["Evento", "Quando", "Dove", "Origine", "Fra (giorni)"],
+        descrizione=(
+            "Gli eventi in programma di questa Casa, compresi quelli inseriti dall'operatore dalla "
+            "chat. È la schermata dove un evento appena scritto si vede subito."
+        ),
+        filtri={"casa": 646},   # v_eventi.casa_slug
+    ),
+    Card(
         "Casa · oggi",
         """
         SELECT nome AS "Casa", eventi AS "Eventi oggi",
@@ -441,13 +457,14 @@ TESTO_CASA = """
 ### Come si legge la dashboard della propria Casa
 
 **Cosa è stato osservato.** La riga «Oggi» riassume la giornata: eventi in programma, schede in
-scadenza, proposte in attesa di una decisione. Sotto, la coda delle proposte con da quanto tempo
-aspettano e chi le deve decidere, ciò che è scaduto o sta per scadere, e dove sono state indirizzate
-le persone.
+scadenza, proposte in attesa di una decisione. Sopra, gli eventi in programma di questa Casa — anche
+quelli inseriti poco fa dalla chat, che compaiono qui appena scritti. Sotto, la coda delle proposte
+con da quanto tempo aspettano e chi le deve decidere, ciò che è scaduto o sta per scadere, e dove
+sono state indirizzate le persone.
 
-**Su quale evidenza.** I dati vengono da `trasi.v_oggi_casa`, `v_proposte_aperte`, `v_scaduti`,
-`v_in_scadenza`, `v_destinazioni`. La coda è la stessa della vista «Da approvare» in NocoDB: una
-proposta decisa lì sparisce da qui.
+**Su quale evidenza.** I dati vengono da `trasi.v_eventi`, `v_oggi_casa`, `v_proposte_aperte`,
+`v_scaduti`, `v_in_scadenza`, `v_destinazioni`. La coda è la stessa della vista «Da approvare» in
+NocoDB: una proposta decisa lì sparisce da qui.
 
 **Cosa si potrebbe fare.** La coda mostra ogni proposta con la sua motivazione e il tempo di attesa:
 si può approvare o rifiutare dalla coda, leggendo il diff di ciò che cambia. Una proposta che scade

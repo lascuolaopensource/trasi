@@ -1,0 +1,385 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "components/base/**",
+              "components/chat/**",
+              "components/dati/**",
+              "components/destinazioni/**",
+              "components/navigazione/**",
+              "components/provenienza/**",
+              "components/stato/**",
+              "ui_kits/trasi-chiedi/**",
+              "ui_kits/trasi-home/**",
+              "ui_kits/trasi-mappa/**",
+              "ui_kits/trasi-osservatorio/**",
+              "ui_kits/trasi-registra/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='AvvisoCoda'] > JSXAttribute > JSXIdentifier[name!=/^(?:numero|giorniPiuVecchia|casa|href|azione|style|key|ref|className|style|children)$/]",
+        "message": "<AvvisoCoda> doesn't accept that prop. Declared props: numero, giorniPiuVecchia, casa, href, azione, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Bottone'] > JSXAttribute > JSXIdentifier[name!=/^(?:variante|dimensione|href|disabilitato|onClick|style|children|key|ref|className|style|children)$/]",
+        "message": "<Bottone> doesn't accept that prop. Declared props: variante, dimensione, href, disabilitato, onClick, style, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Bottone'] > JSXAttribute[name.name='variante'] > Literal[value!=/^(?:principale|secondaria|quieta|suScuro)$/]",
+        "message": "<Bottone> variante must be one of 'principale' | 'secondaria' | 'quieta' | 'suScuro'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Bottone'] > JSXAttribute[name.name='dimensione'] > Literal[value!=/^(?:normale|compatta)$/]",
+        "message": "<Bottone> dimensione must be one of 'normale' | 'compatta'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='CampoTesto'] > JSXAttribute > JSXIdentifier[name!=/^(?:id|etichetta|aiuto|valore|onChange|righe|segnaposto|larghezza|key|ref|className|style|children)$/]",
+        "message": "<CampoTesto> doesn't accept that prop. Declared props: id, etichetta, aiuto, valore, onChange, righe, segnaposto, larghezza."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Destinazione'] > JSXAttribute > JSXIdentifier[name!=/^(?:titolo|testo|href|variante|attivo|nota|contatore|style|children|key|ref|className|style|children)$/]",
+        "message": "<Destinazione> doesn't accept that prop. Declared props: titolo, testo, href, variante, attivo, nota, contatore, style, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Destinazione'] > JSXAttribute[name.name='variante'] > Literal[value!=/^(?:principale|secondaria)$/]",
+        "message": "<Destinazione> variante must be one of 'principale' | 'secondaria'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Etichetta'] > JSXAttribute > JSXIdentifier[name!=/^(?:tono|bordo|style|children|key|ref|className|style|children)$/]",
+        "message": "<Etichetta> doesn't accept that prop. Declared props: tono, bordo, style, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Etichetta'] > JSXAttribute[name.name='tono'] > Literal[value!=/^(?:attenzione|neutra|informativa)$/]",
+        "message": "<Etichetta> tono must be one of 'attenzione' | 'neutra' | 'informativa'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='EtichettaProvenienza'] > JSXAttribute > JSXIdentifier[name!=/^(?:tipo|fonte|data|affidabilita|ora|testo|glossa|style|key|ref|className|style|children)$/]",
+        "message": "<EtichettaProvenienza> doesn't accept that prop. Declared props: tipo, fonte, data, affidabilita, ora, testo, glossa, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='EtichettaProvenienza'] > JSXAttribute[name.name='tipo'] > Literal[value!=/^(?:kb|esterna)$/]",
+        "message": "<EtichettaProvenienza> tipo must be one of 'kb' | 'esterna'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Intestazione'] > JSXAttribute > JSXIdentifier[name!=/^(?:logo|sottotitolo|casa|azioni|style|key|ref|className|style|children)$/]",
+        "message": "<Intestazione> doesn't accept that prop. Declared props: logo, sottotitolo, casa, azioni, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='MessaggioChat'] > JSXAttribute > JSXIdentifier[name!=/^(?:autore|testo|provenienza|azioni|style|children|key|ref|className|style|children)$/]",
+        "message": "<MessaggioChat> doesn't accept that prop. Declared props: autore, testo, provenienza, azioni, style, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='MessaggioChat'] > JSXAttribute[name.name='autore'] > Literal[value!=/^(?:operatore|assistente)$/]",
+        "message": "<MessaggioChat> autore must be one of 'operatore' | 'assistente'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='RigaOggi'] > JSXAttribute > JSXIdentifier[name!=/^(?:stato|testo|nota|style|key|ref|className|style|children)$/]",
+        "message": "<RigaOggi> doesn't accept that prop. Declared props: stato, testo, nota, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='RigaOggi'] > JSXAttribute[name.name='stato'] > Literal[value!=/^(?:attesa|ok|non-disponibile)$/]",
+        "message": "<RigaOggi> stato must be one of 'attesa' | 'ok' | 'non-disponibile'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='SaltaContenuto'] > JSXAttribute > JSXIdentifier[name!=/^(?:href|children|key|ref|className|style|children)$/]",
+        "message": "<SaltaContenuto> doesn't accept that prop. Declared props: href, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Scheda'] > JSXAttribute > JSXIdentifier[name!=/^(?:filetto|elemento|padding|style|children|key|ref|className|style|children)$/]",
+        "message": "<Scheda> doesn't accept that prop. Declared props: filetto, elemento, padding, style, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Casa'] > JSXAttribute > JSXIdentifier[name!=/^(?:slug|nome|nota|key|ref|className|style|children)$/]",
+        "message": "<Casa> doesn't accept that prop. Declared props: slug, nome, nota."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Colonna'] > JSXAttribute > JSXIdentifier[name!=/^(?:titolo|key|ref|className|style|children)$/]",
+        "message": "<Colonna> doesn't accept that prop. Declared props: titolo."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {
+      "AvvisoCoda": {
+        "replaces": []
+      },
+      "Bottone": {
+        "replaces": []
+      },
+      "CampoTesto": {
+        "replaces": []
+      },
+      "Destinazione": {
+        "replaces": []
+      },
+      "Etichetta": {
+        "replaces": []
+      },
+      "EtichettaProvenienza": {
+        "replaces": []
+      },
+      "Intestazione": {
+        "replaces": []
+      },
+      "MessaggioChat": {
+        "replaces": []
+      },
+      "RigaOggi": {
+        "replaces": []
+      },
+      "SaltaContenuto": {
+        "replaces": []
+      },
+      "Scheda": {
+        "replaces": []
+      },
+      "Casa": {
+        "replaces": []
+      },
+      "Colonna": {
+        "replaces": []
+      }
+    },
+    "tokens": [
+      "--anello-focus",
+      "--anello-focus-esterno",
+      "--attenzione-sfondo",
+      "--attenzione-testo",
+      "--azione",
+      "--azione-hover",
+      "--azione-sfondo-hover",
+      "--bersaglio-min",
+      "--bianco",
+      "--bordo",
+      "--bordo-forte",
+      "--bordo-tenue",
+      "--carta",
+      "--coda-filetto",
+      "--coda-sfondo",
+      "--coda-testo",
+      "--contorno",
+      "--curva",
+      "--durata",
+      "--durata-immediata",
+      "--esterna-bordo",
+      "--esterna-sfondo",
+      "--esterna-testo",
+      "--filetto",
+      "--filetto-forte",
+      "--filetto-testata",
+      "--focus",
+      "--focus-contorno",
+      "--focus-offset",
+      "--font-corpo",
+      "--font-etichette",
+      "--font-mono",
+      "--font-sistema",
+      "--font-titoli",
+      "--gap-griglia",
+      "--grigio",
+      "--grigio-scuro",
+      "--inchiostro",
+      "--inchiostro-tenue",
+      "--interlinea",
+      "--interlinea-larga",
+      "--interlinea-stretta",
+      "--kb-bordo",
+      "--kb-sfondo",
+      "--kb-testo",
+      "--mare",
+      "--mare-inchiostro",
+      "--mare-medio",
+      "--mare-notte",
+      "--mare-profondo",
+      "--misura-lettura",
+      "--misura-testo",
+      "--ombra-livello",
+      "--ombra-nessuna",
+      "--padding-pagina",
+      "--padding-scheda",
+      "--padding-scheda-grande",
+      "--peso-forte",
+      "--peso-medio",
+      "--peso-normale",
+      "--raggio",
+      "--raggio-piccolo",
+      "--raggio-pillola",
+      "--s-1",
+      "--s-10",
+      "--s-12",
+      "--s-16",
+      "--s-2",
+      "--s-3",
+      "--s-4",
+      "--s-5",
+      "--s-6",
+      "--s-8",
+      "--sfondo",
+      "--sole",
+      "--sole-scuro",
+      "--sole-tenue",
+      "--spaziatura-destinazione",
+      "--spaziatura-marchio",
+      "--superficie",
+      "--superficie-incassata",
+      "--superficie-scheda",
+      "--t-corpo",
+      "--t-corpo-grande",
+      "--t-guida",
+      "--t-minuto",
+      "--t-titolo-l",
+      "--t-titolo-m",
+      "--t-titolo-s",
+      "--t-titolo-xl",
+      "--terra",
+      "--terra-profondo",
+      "--terra-scuro",
+      "--testata",
+      "--testata-bordo",
+      "--testo",
+      "--testo-su-scuro",
+      "--testo-tenue",
+      "--transizione-stato"
+    ],
+    "tokenKinds": {
+      "--mare": "color",
+      "--terra": "color",
+      "--sole": "color",
+      "--mare-medio": "color",
+      "--mare-profondo": "color",
+      "--mare-notte": "color",
+      "--mare-inchiostro": "color",
+      "--terra-profondo": "color",
+      "--terra-scuro": "color",
+      "--sole-tenue": "color",
+      "--sole-scuro": "color",
+      "--inchiostro": "color",
+      "--inchiostro-tenue": "color",
+      "--grigio": "color",
+      "--grigio-scuro": "color",
+      "--carta": "color",
+      "--superficie": "color",
+      "--bianco": "color",
+      "--sfondo": "color",
+      "--superficie-scheda": "color",
+      "--superficie-incassata": "color",
+      "--testo": "color",
+      "--testo-tenue": "color",
+      "--testo-su-scuro": "color",
+      "--testata": "color",
+      "--testata-bordo": "color",
+      "--azione": "color",
+      "--azione-hover": "color",
+      "--azione-sfondo-hover": "color",
+      "--bordo": "color",
+      "--bordo-tenue": "color",
+      "--bordo-forte": "color",
+      "--kb-testo": "color",
+      "--kb-bordo": "color",
+      "--kb-sfondo": "color",
+      "--esterna-testo": "color",
+      "--esterna-bordo": "color",
+      "--esterna-sfondo": "color",
+      "--attenzione-testo": "color",
+      "--attenzione-sfondo": "color",
+      "--coda-testo": "color",
+      "--coda-filetto": "color",
+      "--coda-sfondo": "color",
+      "--focus": "color",
+      "--focus-contorno": "color",
+      "--font-sistema": "font",
+      "--font-mono": "font",
+      "--font-corpo": "font",
+      "--font-titoli": "font",
+      "--font-etichette": "font",
+      "--peso-normale": "font",
+      "--peso-medio": "font",
+      "--peso-forte": "font",
+      "--t-corpo": "spacing",
+      "--t-corpo-grande": "spacing",
+      "--t-guida": "spacing",
+      "--t-titolo-s": "spacing",
+      "--t-titolo-m": "spacing",
+      "--t-titolo-l": "spacing",
+      "--t-titolo-xl": "spacing",
+      "--t-minuto": "spacing",
+      "--interlinea-stretta": "font",
+      "--interlinea": "font",
+      "--interlinea-larga": "font",
+      "--spaziatura-marchio": "spacing",
+      "--spaziatura-destinazione": "spacing",
+      "--misura-lettura": "spacing",
+      "--misura-testo": "spacing",
+      "--s-1": "spacing",
+      "--s-2": "spacing",
+      "--s-3": "spacing",
+      "--s-4": "spacing",
+      "--s-5": "spacing",
+      "--s-6": "spacing",
+      "--s-8": "spacing",
+      "--s-10": "spacing",
+      "--s-12": "spacing",
+      "--s-16": "spacing",
+      "--padding-scheda": "spacing",
+      "--padding-scheda-grande": "spacing",
+      "--gap-griglia": "spacing",
+      "--padding-pagina": "spacing",
+      "--bersaglio-min": "spacing",
+      "--raggio-piccolo": "spacing",
+      "--raggio": "spacing",
+      "--raggio-pillola": "spacing",
+      "--filetto": "spacing",
+      "--contorno": "spacing",
+      "--filetto-forte": "spacing",
+      "--filetto-testata": "spacing",
+      "--ombra-nessuna": "shadow",
+      "--ombra-livello": "shadow",
+      "--anello-focus": "color",
+      "--anello-focus-esterno": "color",
+      "--focus-offset": "spacing",
+      "--durata-immediata": "other",
+      "--durata": "other",
+      "--curva": "other",
+      "--transizione-stato": "color"
+    },
+    "fontFamilies": []
+  }
+}

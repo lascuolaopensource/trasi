@@ -13,7 +13,7 @@ Sei servizi, tutti `healthy`:
 | Servizio | Ruolo | Verifica |
 |---|---|---|
 | `trasi-db_trasi-1` | Postgres 16 + PostGIS 3.4.3 · 14 tabelle, 17 viste, RLS su tutto | `118 PASS / 0 FAIL` |
-| `trasi-shim-1` | 9 endpoint HTTP (identità, luoghi, proposte, biglietto) | `167 PASS` |
+| `trasi-shim-1` | **10 endpoint HTTP** (identità, luoghi, proposte, **crea_evento**, biglietto) | `183 PASS` |
 | `trasi-searxng-1` | Ricerca web con filtro sull'allow-list | 200, `format=json` |
 | `trasi-metabase-1` | 3 dashboard + 40 card-alert | k-anonimato, 40 query concorrenti |
 | `trasi-automazioni-1` | Cron: export KB, fonti, alert, applica proposte | job eseguito, `flusso_run` |
@@ -29,9 +29,15 @@ Operatore → Trasi Home (Casa preselezionata)
           → CHIEDI → assistente con badge KB/Esterna
           → vicino_a → KB + OpenStreetMap etichettati
           → biglietto A6 / registra_richiesta
+          → **crea_evento → evento subito leggibile da eventi_oggi (scrittura diretta, opzione A)**
           → segnalazione → PROPOSTA → approvazione → applica (05:00)
           → audit → export KB → la chat cita il dato
 ```
+
+**Decisione S2 (opzione A)**: l'operatore della Casa è anche il gestore. Per gli **eventi della propria Casa** il
+ciclo proposta→approvazione non ha un secondo umano: `POST /eventi` scrive direttamente il dominio, protetto da RLS
+(`evento_ins_casa`) e filtro anti-PII, con audit dai trigger di dominio. Il ciclo mediato resta per luoghi e
+territorio, dove un secondo decisore (AT/rete) esiste davvero.
 
 ---
 

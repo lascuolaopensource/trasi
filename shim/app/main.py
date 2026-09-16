@@ -38,6 +38,7 @@ FIRMA_OPERAZIONI: tuple[tuple[str, str], ...] = (
     ("eventi_oggi", "GET"),
     ("vicino_a", "GET"),
     ("registra_richiesta", "POST"),
+    ("crea_evento", "POST"),
     ("proponi_modifica", "POST"),
     ("approva_proposta", "POST"),
     ("biglietto", "GET"),

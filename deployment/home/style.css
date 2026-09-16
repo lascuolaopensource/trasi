@@ -1,49 +1,48 @@
-/* Trasi Home — foglio di stile unico, senza dipendenze esterne (zero CDN).
-   Palette neutra, token in :root. I valori di contrasto sono misurati e
-   riportati in docs/wcag-home.md: ogni coppia testo/sfondo è >= 4,5:1. */
+/* Trasi Home — foglio unico, zero CDN. Contrasti in `docs/wcag-home.md`; le due
+   regole non ovvie, in `design/readme.md`: i colori di marca non portano mai
+   testo, e non c'è rosso (nulla è un allarme verso una persona). */
 
 :root {
-  /* superfici */
-  --sfondo: #f5f3ee;
-  --superficie: #ffffff;
-  --testata: #123a5c;
-  --testata-testo: #ffffff;
-  --testata-bordo: #0b2740;
+  /* I colori di marca non portano mai testo (su bianco: 1,9-3,6:1): stanno nei
+     filetti. Per il testo le varianti profonde, con i contrasti in
+     `docs/wcag-home.md`. Non c'e' rosso: nulla e' un allarme verso una persona. */
+  --mare: #0b90cb; --terra: #cc7e5b;
+  --testo: #1c1c1a; --testo-tenue: #4a4a46; --carta: #f5f3ee;
+  --superficie: #ffffff; --superficie-incassata: #efede6;
+  --testata: #06405a; --testata-bordo: #043044;
+  --azione: #07577b; --azione-sfondo-hover: #eaf2f7; --azione-attiva: #043044;
+  --bordo: #8a8377; --bordo-tenue: #c9c3b6; --bordo-forte: #06405a;
+  --kb-testo: #07577b; --esterna-testo: #7a3d20; --coda-testo: #7a3d20;
+  --attenzione-testo: #6b4a00; --attenzione-sfondo: #ffe9a8;
+  --focus: #f6af37; --focus-contorno: #043044;
+  /* Di sistema: nessun font remoto. Il monospaziato serve solo alle etichette di
+     provenienza, che sono stringhe da citare carattere per carattere. */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
+  --s-6: 24px; --s-8: 32px;
+  --raggio: 10px; --raggio-piccolo: 4px; --bersaglio-min: 44px;
+  --misura-lettura: 62rem; --misura-testo: 36rem;
+  --transizione: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+}
 
-  /* testo */
-  --testo: #1c1c1c;
-  --testo-tenue: #4a4a4a;
-  --bordo: #8a8377;
-  --bordo-tenue: #c9c3b6;
-
-  /* segnalazione di stato «non attivo» (testo scuro su giallo: 8,6:1) */
-  --attenzione: #4a3800;
-  --attenzione-sfondo: #ffe9a8;
-
-  /* focus: due tonalità, così il contorno resta visibile sia sulle
-     superfici chiare sia sulla testata scura (>= 3:1 su entrambe) */
-  --focus: #ffd400;
-  --focus-contorno: #10233c;
-
-  --raggio: 10px;
-  --spazio: 16px;
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  :root { --transizione: none; }
 }
 
 * { box-sizing: border-box; }
 
 html { font-size: 16px; }          /* base >= 16 px (nessuna riduzione con rem) */
 
-body {
-  margin: 0;
-  background: var(--sfondo);
-  color: var(--testo);
-  font-family: var(--font);
-  font-size: 1rem;
-  line-height: 1.5;
+body { margin: 0; 
+background: var(--carta); 
+color: var(--testo); 
+font-family: var(--font); 
+font-size: 1rem; 
+line-height: 1.5; 
 }
 
-/* ---------------------------------------------------------------- tastiera */
+/* ===== Tastiera ===== */
 
 .salta {
   position: absolute;
@@ -59,325 +58,286 @@ body {
 }
 .salta:focus { left: 0; }
 
-/* Il focus è sempre visibile: contorno 3 px (>= 2 px richiesti) in giallo,
-   con un secondo anello scuro che lo stacca anche dalla testata blu. */
-:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 6px var(--focus-contorno);
-}
-a:focus-visible,
-button:focus-visible,
-select:focus-visible { border-radius: var(--raggio); }
+/* Focus: due anelli, visibile su carta e su testata blu. */
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--focus-contorno); }
 
-/* ---------------------------------------------------------------- testata */
+/* ===== Testata ===== */
 
 .testata {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spazio);
-  align-items: center;
+  gap: var(--s-4) var(--s-6);
+  align-items: flex-end;
   justify-content: space-between;
-  padding: var(--spazio) 24px;
+  padding: var(--s-4) 24px;
   background: var(--testata);
-  color: var(--testata-testo);
+  color: #ffffff;
   border-bottom: 4px solid var(--testata-bordo);
 }
 
-.marchio {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  /* `min-width: 0`: senza, il <select> non può restringersi sotto la larghezza
-     della voce più lunga e a 320 px di viewport (WCAG 1.4.10 Reflow) esce
-     dallo schermo. Il testo della voce lunga viene troncato dal controllo:
-     è il comportamento atteso di un select stretto, non una perdita. */
-  min-width: 0;
-  margin: 0;
-  font-size: 1.125rem;
-}
-.marchio-nome { font-weight: 700; letter-spacing: .12em; }
-.marchio-sep { opacity: .7; }
+.marchio { display: flex; align-items: center; gap: var(--s-4); min-width: 0; margin: 0; }
+/* `width`/`height` nell'HTML riservano lo spazio: la testata non si muove. */
+.marchio-logo { height: 44px; width: auto; }
 
-.etichetta-casa {
-  position: absolute;
-  width: 1px; height: 1px;
-  margin: -1px; padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
+.marchio-testo { display: flex; flex-direction: column; min-width: 0; }
+.marchio-nome { font-size: 1.375rem; font-weight: 700; letter-spacing: .12em;
+  line-height: 1.2; }
+.marchio-sotto { font-size: .9375rem; color: rgba(255, 255, 255, .86); }
+
+.casa { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.casa-etichetta { font-size: .9375rem; 
+font-weight: 600; 
+color: rgba(255, 255, 255, .86); 
+letter-spacing: .02em; 
 }
 
 #selettore-casa {
-  flex: 1 1 auto;
   min-width: 0;
+  min-height: var(--bersaglio-min);
   max-width: min(22rem, 100%);
   padding: 8px 10px;
   font: inherit;
   font-size: 1rem;
+  font-weight: 600;
   color: var(--testo);
   background: var(--superficie);
   border: 2px solid var(--testata-bordo);
   border-radius: var(--raggio);
 }
-
-.azioni {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+.casa-nota { max-width: min(22rem, 100%); 
+margin: 0; 
+font-size: .9375rem; 
+color: var(--attenzione-sfondo); 
 }
+.casa-nota[hidden] { display: none; }
+
+.azioni { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 
 .azione {
-  display: inline-block;
-  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 12px;
   font: inherit;
-  font-size: 1rem;
+  font-size: .9375rem;
   font-weight: 600;
-  color: var(--testata-testo);
+  color: #ffffff;
   background: transparent;
-  border: 2px solid var(--testata-testo);
+  border: 2px solid #ffffff;
   border-radius: var(--raggio);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+  transition: var(--transizione);
 }
 .azione:hover { background: var(--superficie); color: var(--testata); }
 
-.esito-uscita {
-  flex-basis: 100%;
-  margin: 0;
-  padding: 6px 10px;
-  color: var(--testata-testo);
-  background: var(--testata-bordo);
-  border-radius: var(--raggio);
+.esito-uscita { flex-basis: 100%; 
+margin: 0; 
+padding: 6px 10px; 
+color: #ffffff; 
+background: var(--testata-bordo); 
+border-radius: var(--raggio); 
 }
 .esito-uscita[hidden] { display: none; }
 
-/* ---------------------------------------------------------------- corpo */
+/* ===== Corpo ===== */
 
-main {
-  max-width: 62rem;
-  margin: 0 auto;
-  padding: 24px;
-}
+main { max-width: var(--misura-lettura); margin: 0 auto; padding: 24px; }
 
-.titolo {
-  margin: 0 0 20px;
-  font-size: 1.375rem;
-  font-weight: 600;
-  color: var(--testo-tenue);
-}
+/* Le due sole che cambiano da sole, in testa: si leggono prima di scegliere. */
+.fascia { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-6); }
 
-.riquadri {
-  display: grid;
-  /* Due colonne, come il disegno di §4.3 dell'architettura: CHIEDI/MAPPA,
-     REGISTRA/OSSERVATORIO. `minmax(0, 1fr)` (non `1fr`): senza lo zero minimo
-     le colonne non possono scendere sotto la larghezza del contenuto, ed è
-     la stessa causa del reflow rotto a 320 px. */
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+.oggi {
   margin: 0;
-  padding: 0;
-  list-style: none;
+  padding: var(--s-3) var(--s-4);
+  background: var(--superficie);
+  border: 2px solid var(--bordo-tenue);
+  border-left: 4px solid var(--mare);
+  border-radius: var(--raggio);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+/* «Oggi» non è un titolo: è la parola che dice che cos'è quella riga. */
+.oggi::before { content: "OGGI"; 
+margin-right: var(--s-2); 
+font-size: .9375rem; 
+font-weight: 700; 
+letter-spacing: .06em; 
+color: var(--testo-tenue); 
+}
+.oggi[data-stato="attesa"] { border-left-color: var(--bordo); color: var(--testo-tenue); }
+.oggi[data-stato="non-disponibile"] { border-left-color: #f6af37; }
+.oggi-nota { display: block; 
+margin-top: var(--s-1); 
+font-size: .9375rem; 
+color: var(--testo-tenue); 
 }
 
-/* Sotto i 40 rem la griglia diventa una colonna sola: due riquadri da 17 rem
-   più lo spazio non ci stanno, e affiancarli comunque taglierebbe il testo. */
-@media (max-width: 40rem) {
-  .riquadri { grid-template-columns: minmax(0, 1fr); }
+.coda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  background: var(--superficie);
+  border: 2px solid var(--bordo-tenue);
+  border-left: 4px solid var(--terra);
+  border-radius: var(--raggio);
+  font-size: 1rem;
+}
+/* Coda vuota: filetto spento, testo tenue. Non è uno spazio da riempire. */
+.coda[data-vuota="si"] { border-left-color: var(--bordo-tenue); }
+.coda[data-vuota="si"] .coda-testo { color: var(--testo-tenue); }
+.coda[hidden] { display: none; }
+.coda-testo { margin: 0; }
+.coda-numero { font-weight: 700; color: var(--coda-testo); }
+.coda-quando { color: var(--testo-tenue); }
+.coda-azione { color: var(--azione); font-weight: 600; text-underline-offset: 3px; }
+.coda-azione:hover { color: var(--azione-attiva); }
+
+/* ===== Destinazioni ===== */
+
+.titolo { margin: 0 0 var(--s-5); 
+font-size: 1.375rem; 
+font-weight: 600; 
+color: var(--testo-tenue); 
 }
 
-.cella { display: flex; flex-direction: column; gap: 8px; }
-
-.riquadro {
-  display: block;
-  flex: 1;
-  padding: 20px;
+.destinazione {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  height: 100%;
+  padding: var(--s-5);
   background: var(--superficie);
   color: var(--testo);
   border: 2px solid var(--bordo);
   border-radius: var(--raggio);
   text-decoration: none;
+  transition: var(--transizione);
 }
-.riquadro:hover { border-color: var(--testata); background: #f0f5fa; }
+.destinazione:hover { border-color: var(--bordo-forte);
+  background: var(--azione-sfondo-hover); }
 
-.riquadro-titolo {
-  margin: 0 0 8px;
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: .06em;
-  color: var(--testata);
+/* La gerarchia si legge dalla dimensione, non dal colore. */
+.destinazione.principale { padding: var(--s-8); 
+margin-bottom: var(--s-5); 
+border-color: var(--bordo-forte); 
+}
+.principale-testo { font-size: 1.125rem; }
+
+.destinazione-titolo { font-size: 1.25rem; 
+font-weight: 700; 
+letter-spacing: .06em; 
+line-height: 1.2; 
+color: var(--azione); 
+}
+.principale-titolo { font-size: 2.25rem; }
+
+.destinazione-intestazione { display: flex; 
+flex-wrap: wrap; 
+align-items: baseline; 
+justify-content: space-between; 
+gap: var(--s-2); 
+}
+.destinazione-contatore { font-size: 1rem; font-weight: 600; color: var(--coda-testo); }
+.destinazione-contatore[hidden] { display: none; }
+
+.destinazione-testo { margin: 0; max-width: var(--misura-testo); }
+.nota { font-size: .9375rem; color: var(--testo-tenue); }
+
+.coppia {
+  display: grid;
+  /* `minmax(0, 1fr)`, non `1fr`: senza lo zero le colonne non scendono sotto il
+     contenuto e a 320 px (WCAG 1.4.10) la pagina esce dallo schermo. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-5);
+  margin-bottom: var(--s-5);
 }
 
-.riquadro-testo { margin: 0; }
+/* Sotto i 40 rem le due colonne non ci stanno. */
+@media (max-width: 40rem) {
+  .coppia { grid-template-columns: minmax(0, 1fr); }
+  .destinazione.principale { padding: var(--s-5); }
+  .principale-titolo { font-size: 1.75rem; }
+}
 
-.stato-inattivo {
-  display: inline-block;
-  margin: 12px 0 0;
+/* REGISTRA/AGGIORNA: spento, non `disabled` (illeggibile, non spiega nulla). */
+.destinazione.spenta { background: var(--superficie-incassata); 
+border-color: var(--bordo-tenue); 
+cursor: default; 
+}
+.destinazione.spenta .destinazione-titolo { color: var(--testo-tenue); }
+
+.etichetta-attenzione {
+  align-self: flex-start;
+  margin-top: var(--s-2);
   padding: 2px 8px;
-  color: var(--attenzione);
+  color: var(--attenzione-testo);
   background: var(--attenzione-sfondo);
-  border-radius: 4px;
-  font-size: 1rem;
+  border-radius: var(--raggio-piccolo);
+  font-size: .9375rem;
   font-weight: 600;
+  line-height: 1.45;
 }
 
-.coda { margin: 0; padding-left: 4px; }
-.coda a { color: var(--testata); text-underline-offset: 3px; }
-.coda a:hover { color: var(--testata-bordo); }
-.nota-inattiva { color: var(--testo-tenue); }
+/* ===== Aiuto ===== */
 
-/* Riga «Oggi» */
-.oggi {
-  margin: 24px 0 0;
-  padding: 16px 18px;
-  background: var(--superficie);
-  border: 2px solid var(--bordo-tenue);
-  border-left: 6px solid var(--testata);
-  border-radius: var(--raggio);
-  font-size: 1.0625rem;
+#aiuto { margin: var(--s-6) 0; 
+padding: var(--s-6); 
+background: var(--superficie); 
+border: 2px solid var(--bordo-tenue); 
+border-radius: var(--raggio); 
 }
-.oggi[data-stato="non-disponibile"] {
-  border-left-color: var(--attenzione);
-  color: var(--testo);
+#aiuto h2 { margin: 0 0 var(--s-3); font-size: 1.375rem; color: var(--azione); }
+#aiuto h3 { margin: var(--s-5) 0 6px; font-size: 1.125rem; color: var(--azione); }
+#aiuto p { margin: 0 0 10px; max-width: var(--misura-testo); line-height: 1.6; }
+
+/* Etichetta di provenienza (in Aiuto). KB/Esterna non è affidata al colore: la
+   portano la parola, il tratto del bordo e la glossa. */
+.esempio { display: flex; 
+flex-wrap: wrap; 
+align-items: baseline; 
+gap: var(--s-2); 
+margin: 0 0 10px; 
+}
+.esempio-etichetta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: .9375rem;
+  line-height: 1.5;
+  color: var(--kb-testo);
+  background: var(--azione-sfondo-hover);
+  border: 1px solid var(--azione);
+  border-left: 2px solid var(--azione);
+  border-radius: var(--raggio-piccolo);
+}
+.esempio-etichetta.esterna { color: var(--esterna-testo); background: #fbf0ea;
+  border-style: dashed; border-left-style: solid; }
+.esempio-glossa { font-size: .9375rem; color: var(--testo-tenue); }
+
+.rinvio { margin-top: var(--s-5); 
+padding: 12px 14px; 
+background: var(--attenzione-sfondo); 
+color: var(--attenzione-testo); 
+border-radius: var(--raggio); 
 }
 
-/* ---------------------------------------------------------------- aiuto */
+/* ===== Piede ===== */
 
-#aiuto {
-  max-width: 62rem;
-  margin: 0 auto 24px;
-  padding: 24px;
-  background: var(--superficie);
-  border: 2px solid var(--bordo-tenue);
-  border-radius: var(--raggio);
-}
-#aiuto h2 { margin: 0 0 12px; font-size: 1.375rem; color: var(--testata); }
-#aiuto h3 { margin: 20px 0 6px; font-size: 1.125rem; color: var(--testata); }
-#aiuto p { margin: 0 0 10px; }
-
-.aiuto-elenco { margin: 0; }
-.aiuto-elenco dt { font-weight: 700; margin-top: 12px; }
-.aiuto-elenco dd { margin: 2px 0 0 0; }
-
-.rinvio {
-  margin-top: 18px;
-  padding: 12px 14px;
-  background: var(--attenzione-sfondo);
-  color: var(--attenzione);
-  border-radius: var(--raggio);
-}
-
-/* ---------------------------------------------------------------- piede */
-
-.piede {
-  padding: 20px 24px 32px;
-  color: var(--testo-tenue);
-  text-align: center;
-}
+.piede { padding: var(--s-4) 0 var(--s-8); color: var(--testo-tenue); }
 .piede p { margin: 0; }
 
-/* ---------------------------------------------------------------- stampa */
+/* ===== Stampa ===== */
 
 @media print {
-  .saltare, .azioni { display: none; }
+  .salta, .azioni, .fascia { display: none; }
   body { background: #fff; }
-  .riquadro { break-inside: avoid; }
+  .destinazione, #aiuto { break-inside: avoid; }
 }
-
-/* ------------------------------------------------------- area operatore */
-
-.modulo { max-width: 34rem; }
-.modulo p { margin: 0 0 14px; }
-.etichetta { display: block; font-weight: 600; margin-bottom: 4px; }
-.modulo select, .modulo input, .modulo textarea,
-.chat-modulo textarea {
-  width: 100%;
-  padding: 10px 12px;
-  font: inherit;
-  color: var(--testo);
-  background: var(--superficie);
-  border: 2px solid var(--bordo);
-  border-radius: 6px;
-}
-.modulo-in-linea { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
-.modulo-in-linea input { max-width: 18rem; }
-
-.riquadro-azione {
-  display: inline-block;
-  padding: 10px 16px;
-  font: inherit;
-  font-weight: 600;
-  color: var(--superficie);
-  background: var(--testata);
-  border: 2px solid var(--testata-bordo);
-  border-radius: 6px;
-  cursor: pointer;
-}
-.riquadro-azione:hover { background: var(--testata-bordo); }
-
-.messaggio-errore {
-  padding: 10px 14px;
-  background: var(--attenzione-sfondo);
-  color: var(--attenzione);
-  border-radius: var(--raggio);
-}
-.messaggio-ok { padding: 10px 14px; background: #e0efe0; color: #1e4a1e; border-radius: var(--raggio); }
-.messaggio-nota { color: var(--testo-tenue); }
-
-.linguette { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
-.linguetta {
-  padding: 10px 16px;
-  font: inherit;
-  font-weight: 600;
-  background: var(--superficie);
-  border: 2px solid var(--bordo);
-  border-radius: var(--raggio);
-  cursor: pointer;
-}
-.linguetta[aria-pressed="true"] { background: var(--testata); color: var(--superficie); border-color: var(--testata-bordo); }
-
-.chat-registro { list-style: none; margin: 0 0 14px; padding: 0; max-width: 62rem; }
-.chat-battuta { margin: 0 0 10px; padding: 10px 14px; border-radius: var(--raggio); max-width: 46rem; }
-.chat-operatore { background: var(--superficie); border: 2px solid var(--bordo-tenue); margin-left: 3rem; }
-.chat-assistente { background: #eef3f8; border: 2px solid #b9c9da; margin-right: 3rem; }
-.chat-chi { display: block; font-size: 0.875rem; font-weight: 700; color: var(--testo-tenue); }
-.chat-testo { margin: 4px 0 0; white-space: pre-wrap; }
-.chat-modulo { max-width: 46rem; }
-
-.tabella { border-collapse: collapse; width: 100%; max-width: 62rem; }
-.tabella th, .tabella td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--bordo-tenue); }
-.tabella th { color: var(--testata); }
-.solo-lettore { position: absolute; left: -9999px; }
-.elenco-movimenti li, .elenco-messaggi li { margin-bottom: 8px; }
-
-/* Messaggio non ancora letto: il destinatario lo distingue a colpo d'occhio.
-   Il rilievo è deliberatamente debole (un bordo a sinistra, non un colore di
-   sfondo acceso): la bacheca è un canale operativo, non una casella di posta da
-   svuotare, e un messaggio non letto non è un allarme. */
-.messaggio-non-letto {
-  border-left: 3px solid var(--testata);
-  padding-left: 8px;
-}
-
-/* ====================== INIZIO BLOCCO TEST ======================
-   Stili del pannello di collaudo: rimuovere al rilascio con i blocchi
-   omonimi in index.html e home.js. */
-.pannello-test {
-  max-width: 62rem;
-  margin: 18px auto 0;
-  padding: 18px 20px;
-  background: #fffef4;
-  border: 2px dashed var(--bordo);
-  border-radius: var(--raggio);
-}
-.pannello-test h2 { margin: 0 0 10px; font-size: 1.125rem; color: var(--attenzione); }
-.test-righe { margin: 0; }
-.test-righe dt { font-weight: 700; margin-top: 12px; }
-.test-righe dd { margin: 4px 0 0; }
-.test-righe output { margin-left: 10px; color: var(--testo-tenue); }
-#test-metabase-frame { width: 100%; max-width: 62rem; height: 300px; border: 2px solid var(--bordo-tenue); border-radius: var(--raggio); margin-top: 8px; }
-/* ======================= FINE BLOCCO TEST ======================== */
