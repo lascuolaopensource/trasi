@@ -121,9 +121,16 @@ services:
   nocodb:
     image: nocodb/nocodb:2026.09.0
     restart: unless-stopped
-    mem_limit: 512m
+    # `mem_limit` 1g con heap Node **esplicito**. NocoDB è Node.js: con 512m andava in
+    # «JavaScript heap out of memory» durante l'avvio (16 riavvii, `exit=0` e `OOMKilled=false` —
+    # moriva *dentro* il processo per limite di heap, non ucciso dal kernel, quindi il sintomo era
+    # un container che si riavviava senza un errore di sistema da leggere).
+    # `--max-old-space-size` fissa l'heap sotto il tetto del container, lasciando spazio al resto
+    # del runtime: è lo stesso criterio di `-Xmx` per Metabase.
+    mem_limit: 1g
     environment:
       PORT: "8080"
+      NODE_OPTIONS: --max-old-space-size=768
       # Il metadata di NocoDB sta nel volume nominato; le source per Casa (ruoli DB)
       # si configurano in B1 e puntano a db_trasi.
       NC_TOOL_DIR: /usr/app/data
