@@ -1,0 +1,13 @@
+/* Movimento — il minimo indispensabile.
+   Cambiano solo colore di sfondo, bordo e testo. Nessuna trasformazione,
+   nessuna animazione d'ingresso: la pagina si apre già ferma. */
+:root {
+  --durata-immediata: 80ms; /* @kind other */
+  --durata: 120ms; /* @kind other */
+  --curva: ease-out; /* @kind other */
+  --transizione-stato: background-color var(--durata) var(--curva), border-color var(--durata) var(--curva), color var(--durata) var(--curva);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --durata-immediata: 0ms; /* @kind other */ --durata: 0ms; /* @kind other */ }
+}

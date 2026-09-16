@@ -1,0 +1,77 @@
+/* Colori — Trasi.
+   I tre colori di marca vengono dal manuale «Case di Quartiere Brindisi»
+   (mare, sole, terra), campionati dal logo:
+     mare  #0B90CB · terra #CC7E5B · sole #F6AF37 · nero #1D1D1B · grigio #858585
+   I colori di marca puri NON portano testo: su bianco stanno fra 1,9:1 e 3,6:1.
+   Per il testo esistono le varianti profonde, con il contrasto misurato in commento
+   (rapporto su --carta #F5F3EE / su --superficie #FFFFFF). */
+:root {
+  /* marca, per grafica e filetti — mai testo */
+  --mare: #0B90CB;            /* 3,23 / 3,58 — non testo */
+  --terra: #CC7E5B;           /* 2,83 / 3,13 — non testo */
+  --sole: #F6AF37;            /* 1,71 / 1,89 — non testo */
+
+  /* scala del mare */
+  --mare-medio: #0A6E9B;      /* 5,10 / 5,65 */
+  --mare-profondo: #07577B;   /* 7,12 / 7,90 */
+  --mare-notte: #06405A;      /* 10,03 / 11,12 */
+  --mare-inchiostro: #043044; /* 12,53 / 13,89 */
+
+  /* scala della terra */
+  --terra-profondo: #8E4A2A;  /* 5,99 / 6,64 */
+  --terra-scuro: #7A3D20;     /* 7,53 / 8,35 */
+
+  /* scala del sole */
+  --sole-tenue: #FFE9A8;      /* superficie di attenzione */
+  --sole-scuro: #6B4A00;      /* 7,27 / 8,06 — testo su --sole-tenue: 6,71 */
+
+  /* neutri */
+  --inchiostro: #1C1C1A;      /* 15,39 / 17,07 */
+  --inchiostro-tenue: #4A4A46;/* 8,03 / 8,90 */
+  --grigio: #858585;          /* grigio del logo — non testo su chiaro */
+  --grigio-scuro: #6B6B67;    /* 4,83 / 5,35 */
+  --carta: #F5F3EE;
+  --superficie: #FFFFFF;
+  --bianco: #FFFFFF;
+
+  /* ------------------------------------------------ alias semantici */
+  --sfondo: var(--carta);
+  --superficie-scheda: var(--superficie);
+  --superficie-incassata: #EFEDE6;
+
+  --testo: var(--inchiostro);            /* 15,39:1 su --sfondo */
+  --testo-tenue: var(--inchiostro-tenue);/* 8,03:1 su --sfondo */
+  --testo-su-scuro: var(--bianco);       /* 11,12:1 su --testata */
+
+  --testata: var(--mare-notte);
+  --testata-bordo: var(--mare-inchiostro);
+
+  --azione: var(--mare-profondo);        /* testo dei collegamenti: 7,12:1 */
+  --azione-hover: var(--mare-inchiostro);
+  --azione-sfondo-hover: #EAF2F7;
+
+  --bordo: #8A8377;                      /* 3,39:1 — contorni di controllo */
+  --bordo-tenue: #C9C3B6;                /* filetti decorativi */
+  --bordo-forte: var(--mare-notte);
+
+  /* provenienza: KB = la rete lo sa · Esterna = trovato fuori */
+  --kb-testo: var(--mare-profondo);
+  --kb-bordo: var(--mare-profondo);
+  --kb-sfondo: #EAF2F7;
+  --esterna-testo: var(--terra-scuro);   /* 7,53:1 su --sfondo */
+  --esterna-bordo: var(--terra-profondo);
+  --esterna-sfondo: #FBF0EA;
+
+  /* attenzione (servizio non attivo, dati provvisori) — mai rosso */
+  --attenzione-testo: var(--sole-scuro);
+  --attenzione-sfondo: var(--sole-tenue);
+
+  /* coda delle proposte: presenza, non allarme */
+  --coda-testo: var(--terra-scuro);
+  --coda-filetto: var(--terra);
+  --coda-sfondo: var(--superficie);
+
+  /* focus: due tonalità, visibile sia sulle superfici chiare sia sulla testata */
+  --focus: var(--sole);
+  --focus-contorno: var(--mare-inchiostro);
+}

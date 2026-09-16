@@ -1,0 +1,10 @@
+/* Focus visibile — regola unica, ereditata da tutte le superfici.
+   Due anelli: giallo sole + anello scuro, così il focus resta visibile
+   sia sulla carta chiara sia sulla testata blu. */
+:root { --focus-offset: 2px; }
+
+:focus-visible {
+  outline: var(--anello-focus);
+  outline-offset: var(--focus-offset);
+  box-shadow: var(--anello-focus-esterno);
+}

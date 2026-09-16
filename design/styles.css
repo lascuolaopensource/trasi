@@ -1,0 +1,8 @@
+/* Trasi · Rete delle Case di Quartiere di Brindisi — ingresso unico dei token.
+   Solo @import: ogni regola vive in un file di tokens/. */
+@import url("tokens/colori.css");
+@import url("tokens/tipografia.css");
+@import url("tokens/spaziature.css");
+@import url("tokens/bordi-ombre.css");
+@import url("tokens/focus.css");
+@import url("tokens/movimento.css");
