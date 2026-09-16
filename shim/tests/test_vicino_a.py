@@ -110,19 +110,29 @@ def test_vicino_a_senza_tipo_422(client, sessione_finta):
 
 
 @pytest.mark.live
-def test_vicino_a_casa_inesistente_422(client, db_vivo):
-    """Una Casa fuori dal vocabolario `casa.slug` è un parametro non ammesso, non un 404 inventato.
+def test_vicino_a_casa_inesistente_ricade_sull_identita(client, db_vivo):
+    """Una Casa che non esiste non fa fallire la chiamata se l'operatore ha una Casa propria.
 
-    Il contratto congelato di `vicino_a` non dichiara un 404 e la descrizione di `casa` rinvia al vocabolario: la
-    scelta è 422, coerente con `tipo`. Un 404 non dichiarato romperebbe il contratto già registrato in Onyx.
+    Il comportamento è cambiato il 2026-09-16 dopo aver visto il difetto **nel percorso
+    end-to-end**: il modello, vedendo `casa` nel contratto, tende a riempirlo e ci mette il nome
+    della Casa o il nome dell'applicazione («Trasi»), non lo slug. Con la semantica precedente
+    (422) l'assistente rispondeva «la rete non riconosce nessuna Casa con questo nome»: dichiarava
+    un guasto inesistente al posto di rispondere.
+
+    Ora vince l'identità — il dato che il sistema conosce con certezza — e la risposta è 200.
+    Per un ruolo **senza** Casa (es. `rete`) resta invece il 422: lì la Casa serve davvero e non
+    è deducibile (v. `test_vicino_a_rete_senza_casa_422`).
     """
     if not db_vivo:
         pytest.skip("database non raggiungibile")
 
     risposta = _vicino_a(client, "casa=casa-che-non-esiste&tipo=bar")
 
-    assert risposta.status_code == 422
-    assert "casa" in risposta.json()["detail"]
+    assert risposta.status_code == 200, (
+        "uno slug inesistente non deve rompere la chiamata quando l'operatore ha una Casa"
+    )
+    # E la Casa usata è quella dell'identità, non lo slug inventato.
+    assert risposta.json()["casa"] != "casa-che-non-esiste"
 
 
 @pytest.mark.live
@@ -746,3 +756,40 @@ def test_vicino_a_ogni_item_rispetta_lo_schema_del_contratto(client, db_vivo, co
 
     richiesti_risposta = set(contratto["components"]["schemas"]["RispostaVicinoA"]["required"])
     assert richiesti_risposta <= set(corpo)
+
+
+@pytest.mark.live
+def test_vicino_a_rete_senza_casa_422(client, db_vivo):
+    """Un ruolo SENZA Casa propria non può ricadere sull'identità: lì la Casa serve davvero.
+
+    È la controprova del comportamento introdotto il 2026-09-16: la tolleranza verso uno slug
+    inesistente vale solo quando il sistema **sa** quale Casa usare (identità). Per `rete`, che non
+    ne ha una, la richiesta senza `casa` valida resta un errore — altrimenti si leggerebbe la
+    memoria di una Casa a caso.
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    risposta = _vicino_a(client, "tipo=bar", email="rete@trasi.local")
+
+    assert risposta.status_code == 422
+    assert "casa" in risposta.json()["detail"]
+
+
+@pytest.mark.live
+def test_vicino_a_nome_casa_al_posto_dello_slug(client, db_vivo):
+    """Il modello passa il NOME della Casa invece dello slug: si ricade sull'identità, non si fallisce.
+
+    È il caso reale osservato dal tunnel: `casa=«Centro di Aggregazione Bozzano»` — il nome, non
+    `bozzano`. Con il 422 l'assistente dichiarava un guasto inesistente; ora risponde.
+
+    La Casa usata è quella dell'**identità**, che per questo test è `op.san-bao` (il default di
+    `_vicino_a`): il nome nel parametro viene ignorato, e la risposta deve dirlo.
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    risposta = _vicino_a(client, "casa=Centro+di+Aggregazione+Bozzano&tipo=bar")
+
+    assert risposta.status_code == 200
+    assert risposta.json()["casa"] == "san-bao", "deve valere la Casa dell'identità, non il nome passato"

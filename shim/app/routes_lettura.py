@@ -159,6 +159,11 @@ async def eventi_oggi(
     slug = (casa or "").strip() or await slug_casa_da_identita(sess)
     if not slug:
         raise errore(422, "parametri non ammessi — casa: obbligatoria per un ruolo senza Casa (es. rete)")
+    # Uno slug inesistente non è un errore se l'operatore ha una Casa propria (v. `routes_geo`).
+    if await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
+        slug_identita = await slug_casa_da_identita(sess)
+        if slug_identita:
+            slug = slug_identita
 
     riferimento = data or oggi_locale()
     # Il parametro è un `date`, non una stringa ISO: `$2::date` fa dedurre ad asyncpg il tipo del parametro, e una

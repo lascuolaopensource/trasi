@@ -71,6 +71,22 @@ def _argomenti(operation_id: str) -> dict[str, Any]:
 
 # --- `oggi` ---------------------------------------------------------------------------------------------------
 
+# La riga «Oggi» di una Casa, dai dati della vista. Una sola query, usata sia per verificare che la
+# Casa esista sia per comporre la risposta: due query sarebbero due posti da tenere allineati, e il
+# caso in cui divergono è quello in cui l'endpoint risponde su una Casa che non esiste.
+#
+# Il filtro «solo la propria Casa» sta **nella query** e usa `trasi.casa_corrente()`, la stessa
+# funzione da cui la RLS ricava la Casa del ruolo: per un operatore `casa_*` è la sua Casa, per
+# `rete` e `ti` (che non ne hanno una) è `NULL`, quindi vedono tutte le Case (§11). La decisione
+# resta del database, non di un confronto fatto dallo shim.
+SQL_OGGI = """
+SELECT casa_id, slug, nome, data, eventi, schede_in_scadenza, proposte, testo
+  FROM trasi.v_oggi_casa
+ WHERE slug = $1
+   AND (trasi.casa_corrente() IS NULL OR casa_id = trasi.casa_corrente())
+"""
+
+
 
 @router.get(**_argomenti("oggi"))
 async def oggi(
@@ -93,15 +109,14 @@ async def oggi(
     if not slug:
         raise errore(422, "casa: obbligatoria per un ruolo senza Casa (es. rete)")
 
-    riga = await sess.fetchrow(
-        """
-        SELECT casa_id, slug, nome, data, eventi, schede_in_scadenza, proposte, testo
-          FROM trasi.v_oggi_casa
-         WHERE slug = $1
-           AND (trasi.casa_corrente() IS NULL OR casa_id = trasi.casa_corrente())
-        """,
-        slug,
-    )
+    # Una sola lettura. Uno slug inesistente non è un errore quando l'operatore ha una Casa propria:
+    # il modello, vedendo `casa` nel contratto, tende a riempirlo con il nome invece dello slug (v.
+    # la nota nell'helper), e un 422 farebbe dichiarare all'assistente un guasto che non esiste.
+    riga = await sess.fetchrow(SQL_OGGI, slug)
+    if riga is None:
+        slug_identita = await slug_casa_da_identita(sess)
+        if slug_identita and slug_identita != slug:
+            riga = await sess.fetchrow(SQL_OGGI, slug_identita)
     if riga is None:
         raise errore(404, "Casa non presente fra quelle accessibili a questo ruolo")
 

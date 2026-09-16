@@ -131,20 +131,37 @@ async def vicino_a(
     """I luoghi di un tipo vicino a una Casa, dalla memoria della rete e da OpenStreetMap.
 
     Se `casa` non è indicata, si misura dalla Casa dell'operatore autenticato: l'identità
-    (`identita_onyx.casa_id`) la determina, così l'assistente non deve conoscerla né
-    indovinarla. Un ruolo senza Casa (es. `rete`) deve indicarla esplicitamente.
+    (`identita_onyx.casa_id`) la determina, così l'assistente non deve conoscerla né indovinarla.
+    Un ruolo senza Casa (es. `rete`) deve indicarla esplicitamente.
+
+    Uno slug **che non esiste** non è un errore quando l'operatore ha una Casa propria: il modello,
+    vedendo `casa` nel contratto, tende a riempirlo con il nome della Casa o il nome
+    dell'applicazione («Centro di Aggregazione Bozzano», «Trasi») invece dello slug, e rispondere 422
+    faceva dire all'assistente «la rete non riconosce questa Casa» — un guasto dichiarato che non
+    esiste. Si ricade sull'identità, che è il dato certo.
     """
+    # L'ordine conta: prima il `tipo`, che è una validazione **locale** (non richiede il database e
+    # il suo errore deve arrivare anche quando `casa` è assente), poi la Casa.
+    tipo_normalizzato = (tipo or "").strip().lower()
+    if tipo_normalizzato not in TIPI_OSM:
+        raise errore(422, f"parametri non ammessi — tipo: valori ammessi {', '.join(TIPI_AMMESSI)}")
+
     slug = (casa or "").strip() or await slug_casa_da_identita(sess)
     if not slug:
         raise errore(
             422,
             "parametri non ammessi — casa: obbligatoria per un ruolo senza Casa (es. rete); indicare lo slug",
         )
-    tipo_normalizzato = (tipo or "").strip().lower()
-    if tipo_normalizzato not in TIPI_OSM:
-        raise errore(422, f"parametri non ammessi — tipo: valori ammessi {', '.join(TIPI_AMMESSI)}")
 
+    # Una sola lettura della Casa. Se lo slug richiesto non esiste e l'operatore ha una Casa sua, si
+    # riprova con quella: così il controllo di esistenza è la query che serve alla risposta e non una
+    # seconda query da tenere allineata.
     riga_casa = await sess.fetchrow(SQL_CASA, slug)
+    if riga_casa is None:
+        slug_identita = await slug_casa_da_identita(sess)
+        if slug_identita and slug_identita != slug:
+            riga_casa = await sess.fetchrow(SQL_CASA, slug_identita)
+            slug = slug_identita
     if riga_casa is None:
         raise errore(422, f"parametri non ammessi — casa: nessuna Casa di Quartiere con slug «{slug}»")
 
