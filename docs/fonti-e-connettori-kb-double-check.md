@@ -5,7 +5,9 @@
 «quale link serve a quale servizio»; questo risponde a tre domande diverse:
 
 1. **I link reggono?** Ri-misurati tutti e 131, uno per uno, con metadati (title, canonical, redirect, corpo).
-2. **Sono troppo specifici?** Sì, in parte: 22 link su 126 sono fragili o sottili. Per ogni ente esiste una
+2. **Sono troppo specifici?** Sì, in parte: **17 link distinti sui 126 che rispondono 200** sono fragili o sottili
+(22 voci grezze: alcuni URL compaiono due volte, con e senza `www`). I 5 che non rispondono 200 — `asl.brindisi.it`,
+`/urp`, i due Overpass, `molo12brindisi.com` il giorno della misura — sono già fuori dai 126. Per ogni ente esiste una
    **pagina-madre** che il primo documento non aveva — questa è la sezione che cambia il modo di usare la lista.
 3. **Cosa manca del tutto?** Otto fonti intere che il primo censimento non aveva, e sei servizi di base per cui
    **nessuno pubblica nulla**.
@@ -78,10 +80,10 @@ ASL» — che è la cosa che l'AT deve sapere.
 
 ---
 
-## 2. Fragilità: 22 link su 126 sono «troppo specifici»
+## 2. Fragilità: 22 voci grezze = 17 link «troppo specifici» sui 126 che rispondono 200
 
 Classificazione misurata (criteri: id numerici o `?query` nell'URL, testo visibile < 1.200 caratteri, corpo di
-blocco, redirect). **22 voci grezze su 126** — che sono **17 link distinti** (alcune compaiono due volte nella
+blocco, redirect). **22 voci grezze sui 126 che rispondono 200** — che sono **17 link distinti** (alcune compaiono due volte nella
 misura: `nominatim` con e senza barra finale, `angsa` e `theqube` con e senza `www`, `naukleros` come voce di
 Tabella A e come URL di allow-list). Ecco i 17:
 
@@ -154,25 +156,30 @@ fuori provincia**. `www.arpa.puglia.it` → certificato non verificabile. Ambiti
 
 ## 4. Errori trovati (nel primo documento e nelle ricognizioni)
 
-Il secondo controllo serve anche a questo: dichiarare dove si è sbagliato. **Sei correzioni**, di cui **due gravi**
-e introdotte dalle ricognizioni, non dal primo documento.
+Il secondo controllo serve anche a questo: dichiarare dove si è sbagliato. **Sei correzioni** in totale — **cinque
+in tabella** (di cui **due gravi**, introdotte dalle ricognizioni) **più una già applicata** al primo documento
+(riga in fondo). Restano anche una **conferma** e un **errore di metodo**, che valgono quanto le correzioni.
 
 | # | Chi | Cosa era affermato | Cosa dice la misura | Gravità |
 |---|---|---|---|---|
 | 1 | ricognizione → me | «Le pagine ASL `/en/…` sono **in inglese**» (conteggio lessicale `it/en`: 17/31) | **Falso.** `/en/web/asl-brindisi/-/dipendenze-patologiche` contiene «Il Servizio per le Dipendenze Patologiche svolge le attività…» in **italiano**, identico alla variante `/web/` (2.529 caratteri di corpo entrambi). Il conteggio dello scout misurava il **menu** inglese, non il corpo. **Le 6 righe `/en/` del primo documento sono corrette e non vanno cambiate** | grave (avrebbe fatto riscrivere 6 righe buone) |
-| 2 | ricognizione → me | «ATS BR4 (`ambitomesagne.it`) è **irraggiungibile**: 000 / 301-loop» | **Falso.** `https://www.ambitomesagne.it/` risponde **200** con 84 byte di meta-refresh verso `/ambito/`, che risponde **200 con 86.645 byte e 7.226 caratteri di testo**. ⚠️ **L'errore nasce dal metodo**: con `curl -L` il fetch **non segue un meta-refresh** (non è un redirect HTTP) e restituisce i body vuoto da 84 byte. Chi misura solo con `-L` e vede `size_download: 0` conclude «non raggiungibile». Il BR4 pubblica **tutti** i servizi dell'ambito, inclusi mediazione linguistico-culturale e contrasto alla violenza | grave (dichiarava un buco che non esiste: 30 pagine di servizio perse) |
+| 2 | ricognizione → me | «ATS BR4 (`ambitomesagne.it`) è **irraggiungibile**: 000 / 301-loop» | **Falso.** `https://www.ambitomesagne.it/` risponde **200** con 84 byte di meta-refresh verso `/ambito/`, che risponde **200 con 86.645 byte e 7.226 caratteri di testo**. ⚠️ **L'errore nasce dal metodo**: con `curl -L` il fetch **non segue un meta-refresh** (non è un redirect HTTP) e restituisce un body vuoto da 84 byte. Chi misura solo con `-L` e vede `size_download: 0` conclude «non raggiungibile». Il BR4 pubblica **tutti** i servizi dell'ambito, inclusi mediazione linguistico-culturale e contrasto alla violenza | grave (dichiarava un buco che non esiste: 30 pagine di servizio perse) |
 | 3 | ricognizione → me | Albo cooperative sociali: «endpoint JSON, **299 cooperative in provincia di BR**» | **Non riproducibile.** Con parametri DataTables e con header AJAX la risposta resta `text/html` (122 kB). Il `iTotalRecords=299` non è stato ritrovato in nessuna delle 4 combinazioni provate. **Va trattato come dato non verificato**, non come fonte. L'export delle cooperative passa dal dataset CKAN dei Registri | media |
-| 4 | ricognizione → me | «`esploradati.istat.it` → sostituire con `demo.istat.it`» | **Confermato** (SDMX in timeout, databrowser in errore) — è la correzione 5 sotto, la tengo | — |
-| 5 | **mio, primo documento** | `dati.puglia.it` e `esploradati.istat.it` etichettati entrambi «`api` — dichiarato, non implementato» | **Da scindere.** `dati.puglia.it` **è implementabile oggi** (percorso `/ckan/`, verificato con 95 record). `esploradati.istat.it` **non lo è**: va sostituito da `demo.istat.it` | media |
-| 6 | **mio, primo documento** | `servizisocialipuglia.it` citato come «Registro regionale delle strutture e socio-assistenziali autorizzate»; `consorziosocialebr1.it` citato come pagina «servizi» | **Impreciso.** Il primo si auto-dichiara archivio indipendente non ufficiale e la sua pagina «Brindisi» è per metà fuori provincia; il secondo **non ha una pagina servizi** (la voce esiste su `/sample-page/servizi/`, la URL di default di WordPress, mai rinominata — 1.297 caratteri). Il registro vero è su `sistema.puglia.it` | media |
+| 4 | **mio, primo documento** | `dati.puglia.it` e `esploradati.istat.it` etichettati entrambi «`api` — dichiarato, non implementato» | **Da scindere.** `dati.puglia.it` **è implementabile oggi** (percorso `/ckan/`, verificato con 95 record). `esploradati.istat.it` **non lo è**: va sostituito da `demo.istat.it` | media |
+| 5 | **mio, primo documento** | `servizisocialipuglia.it` citato come «Registro regionale delle strutture e socio-assistenziali autorizzate»; `consorziosocialebr1.it` citato come pagina «servizi» | **Impreciso.** Il primo si auto-dichiara archivio indipendente non ufficiale e la sua pagina «Brindisi» è per metà fuori provincia; il secondo **non ha una pagina servizi** (la voce esiste su `/sample-page/servizi/`, la URL di default di WordPress, mai rinominata — 1.297 caratteri). Il registro vero è su `sistema.puglia.it` | media |
 
-**Una correzione che ho già fatto al primo documento, e che il controllo conferma**: avevo scritto che
+**La sesta correzione — già applicata a questo stesso primo documento**: avevo scritto che
 `servizi.comune.brindisi.it` richiede una riga `fonte` propria. Falso — l'allow-list confronta per etichetta di
-dominio, e `comune.brindisi.it` autorizza già i sottodomini. Verificato eseguendo `_in_allowlist`.
+dominio, e `comune.brindisi.it` autorizza già i sottodomini. Verificato eseguendo `_in_allowlist`, e corretto nel
+documento prima di committarlo.
 
-**Un errore di metodo, da non ripetere.** Un `200` con `-L` non prova che un link sia vivo: `ambitomesagne.it`
-risponde 200 sia senza sia con `-L` **sulla root**, ma il body sono 84 byte di meta-refresh. La regola giusta è
-quella che ho usato qui: **misurare anche il testo visibile**, e se è ~0 guardare il contenuto, non il codice.
+**La conferma.** «`esploradati.istat.it` va sostituito con `demo.istat.it`»: la ricognizione lo diceva e la misura
+lo conferma (SDMX in timeout su 4 varianti, databrowser in errore) — ma il **merito** è della ricognizione, non
+mio, e va detto.
+
+**L'errore di metodo, da non ripetere.** Un `200` con `-L` non prova che un link sia vivo: `ambitomesagne.it`
+risponde 200 sia senza sia con `-L`, ma il body sono 84 byte di meta-refresh. La regola giusta è quella che ho
+usato qui: **misurare anche il testo visibile**, e se è ~0 guardare il contenuto, non il codice.
 
 ---
 
