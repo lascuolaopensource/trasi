@@ -1,5 +1,11 @@
 # Trasi — Fonti e connettori per la knowledge base
 
+> **Secondo controllo disponibile.** Questo censimento è stato ri-verificato link per link — metadati, fragilità,
+> pagine-madre mancanti e fonti assenti — in `docs/fonti-e-connettori-kb-double-check.md`. Contiene **sei
+> correzioni** a questo documento (fra cui due affermazioni da rivedere: `dati.puglia.it` è implementabile oggi
+> via `/ckan/`, `esploradati.istat.it` non lo è) e le **23 pagine-indice** che qui mancavano. Leggere i due
+> documenti insieme: questo dice *quale link serve a quale servizio*, l'altro dice *da dove si vede tutto*.
+
 **A cosa serve.** Espandere la banca dati e i connettori dietro i servizi erogati della «Scheda dei servizi»
 (gruppo Processi, aggiornata al 16/09/2026): OLD *Front office e accoglienza · Presidio contro la solitudine ·
 Facilitazione interculturale · Osservatorio sociale di quartiere* e NEW 1–7.
