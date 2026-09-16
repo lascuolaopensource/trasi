@@ -220,6 +220,60 @@ modifica** con cui l'operatore scrive in memoria ciò che sa, e la **segnalazion
 | **Social** | 15 profili | Facebook/Instagram delle Case | **nessun connettore** (nessuno scraping) |
 | **Buchi: nulla da linkare** | 6 servizi (§5) | abbigliamento, dormitorio, CSM, centri diurni… | proposta in chat + segnalazione alla PA |
 
+---
+
+## 7. Nota di confine: il lavoro che sta correndo accanto a questo documento
+
+**Cosa è successo.** Mentre questo controllo era in corso, un'altra sessione ha **implementato a valle** di
+`docs/fonti-e-connettori-kb.md`: ha creato `db/013_fonti_kb.sql` (10 righe di allow-list), modificato
+`db/011_seed_fonti.sql`, `db/apply.sh` e `flussi/fixtures/fonti_http.json`. La divisione è stata decisa dall'utente
+(«non verificare tutti i domini, ho avviato un'altra verifica in un'altra sessione»): **io verifico, quella
+implementa**. Nessuna duplicazione di obiettivo.
+
+**Due cose da sapere, perché sono già state fatte e non vanno disfatte.**
+
+1. **`ASL Brindisi-3` è stato corretto**: da `https://www.asl.brindisi.it` (morto, 000) a
+   `https://sanita.puglia.it`. È esattamente la correzione n. 5 di questo documento, ed è **già applicata** —
+   verificato a DB: `SELECT url FROM trasi.fonte WHERE nome='ASL Brindisi-3'` → `https://sanita.puglia.it`.
+   Insieme a `Questura di Brindisi-3`, ridotto al dominio nudo (`questure.poliziadistato.it`): in allow-list l'URL
+   è **il dominio che autorizza**, non la pagina da leggere, e il deep link avrebbe autorizzato un host solo.
+2. **La migrazione non è ancora applicata al database**: `db/013_fonti_kb.sql` esiste come file non tracciato. Il DB
+   live ha **18 fonti attive** e i bersagli di sorveglianza attivi **non hanno ancora girato**.
+
+**Due problemi misurati nei bersagli di sorveglianza** (in `flussi/fixtures/fonti_http.json`), da correggere prima
+dell'accensione:
+
+| Problema | Misura | Conseguenza |
+|---|---|---|
+| **`entita_id` non corrisponde alla pagina** | la fixture «Anagrafe» punta a `entita_id=16` con nota «è Comune di Brindisi — URP», ma **il 16 a DB è `Comune di Brindisi — URP`** mentre la pagina sorvegliata è l'**Anagrafe**; il 17 è `ASL Brindisi — Distretto socio-sanitario` (fonte OSM), non il CUP | una variazione della pagina Anagrafe proporrebbe una modifica **all'URP**: la proposta arriverebbe all'AT su un'entità sbagliata, con `diff` credibile — il tipo di errore che nessuno contesta in approvazione perché *sembra* giusto |
+| **Il luogo 17 ha ancora la fonte morta** | `luogo.id=17` («ASL Brindisi — Distretto socio-sanitario») ha `url = https://www.asl.brindisi.it` e `fonte_id=6` | il seed ha corretto la **fonte**, non il **luogo**: la scheda che il cittadino legge continua a puntare al dominio morto |
+
+**Un terzo effetto, non un errore ma un costo**: `v_flusso_coerenza_fonti` elenca come **`fonte_silente` tutte e 18
+le fonti attive**, perché nessuna ha ancora un `fonte_run` (verificato: `SELECT voce, count(*) … GROUP BY 1` →
+`fonte_silente | 18`). L'identità AT **esiste** (`v_flusso_destinatari`: `at → rete@trasi.local`, 2 righe), quindi
+`alert.py` **non** fallisce: manda un messaggio che dice *«18 fonti silenti»*. È corretto per il codice — una fonte
+attiva che non ha mai girato è, letteralmente, silente — ma **la prima notte dopo l'applicazione l'AT riceverà un
+avviso con 18 voci che non segnalano alcun guasto**. Due modi di evitarlo: escludere dalla voce `fonte_silente` le
+fonti senza alcun `fonte_run` (mai girate ≠ smesse di girare), oppure accettare il primo avviso come rumore di
+accensione sapendo cos'è. La prima è preferibile: un allarme che parte con 18 voci il primo giorno è un allarme che
+si impara a ignorare.
+
+**I selettori sono verificati, e li ho ri-misurati io con l'estrattore reale** (`.card-body`, `html.parser` di
+`fonti_http.py`, non un mio surrogato):
+
+| Bersaglio | Selettore | Testo estratto | Esito |
+|---|---|---|---|
+| ASL CUP | `.card-body` | **1.692 caratteri** («Numero Verde Prenotazioni, 800 888 388, Cup Brindisi…») | ✅ corretto |
+| Comune Anagrafe | `.card-body` | 893 caratteri (telefoni dei referenti) | ⚠️ **estrae i contatti, non gli orari**: la pagina Anagrafe **non contiene un blocco orari** (`#orario-pubblico` c'è solo su 7 pagine su 52, tutte luoghi culturali). Il bersaglio sorveglia «i contatti cambiano», non «gli orari cambiano» |
+| Comune avvisi / eventi | `.journal-content-article` | **0 caratteri** | ⚠️ correttamente `attivo: false` — e la nota lo dichiara |
+
+**La raccomandazione che porto a questa sessione**: i due bersagli `attivo: true` vanno spenti finché `entita_id`
+non è allineato all'entità che la pagina descrive davvero, e il terzo (`.journal-content-article` su avvisi/eventi,
+0 caratteri) va lasciato com'è: `attivo: false` con la nota è la forma giusta — il difetto non è il selettore
+mancante, è il fatto che un selettore non misurato sarebbe passato per misurato.
+
+---
+
 **Tre azioni che valgono più di qualunque altro link**, e che il secondo controllo porta a dire con certezza:
 
 1. **Sostituire `esploradati.istat.it` con `demo.istat.it`** e **correggere il percorso CKAN** in
@@ -229,3 +283,4 @@ modifica** con cui l'operatore scrive in memoria ciò che sa, e la **segnalazion
    `#contatti`, `#orario-pubblico` già misurati) coprono il Comune.
 3. **Non sorvegliare i siti degli ETS**: `molo12brindisi.com` è passato da 200 a 500 in poche ore. Un allarme
    notturno su un hosting instabile insegna a ignorare gli allarmi.
+
