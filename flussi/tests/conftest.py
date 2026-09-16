@@ -189,18 +189,51 @@ def pulizia():
             # l'anomalia, facendo passare il caso «feed cambiato» per il motivo sbagliato. Queste
             # righe sono tutte prodotte dal flusso e si ricreano importando la fixture — non è memoria
             # della rete scritta a mano, ed è il solo modo di rendere il delta deterministico.
+            #
+            # **L'audit si rimuove per `uid_ical`, non per `entita_id`.** La forma precedente
+            # cancellava l'audit degli eventi *ancora esistenti* e poi gli eventi: bastava una
+            # esecuzione interrotta fra le due istruzioni — o una riga di audit che puntava a un
+            # evento già rimosso da un run precedente — perché restassero righe **orfane**, che
+            # nessuna esecuzione successiva poteva più associare a un evento. Misurato: 6 righe
+            # `ical_upsert` orfane dopo una serata di esecuzioni, e i test che contano
+            # `dopo->>'uid_ical' LIKE 'b4test-%'` le sommavano ai propri, fallendo in modo diverso a
+            # ogni run («attese 5 + 1, trovate 7»). Il marcatore `b4test-` è nel payload dell'audit
+            # stesso, quindi si può usare direttamente e non dipende dall'esistenza dell'evento.
             esegui(
-                "DELETE FROM trasi.audit WHERE entita = 'evento' AND entita_id IN "
-                "(SELECT id FROM trasi.evento WHERE fonte_id = "
-                " (SELECT id FROM trasi.fonte WHERE nome = 'Google Calendar-ical-2'))"
+                "DELETE FROM trasi.audit WHERE azione = 'ical_upsert' "
+                "  AND dopo->>'uid_ical' LIKE 'b4test-%'"
+            )
+            # Rete di sicurezza per gli orfani già accumulati dalle esecuzioni precedenti: righe di
+            # audit su eventi che non esistono più. Non tocca l'audit degli eventi vivi.
+            esegui(
+                "DELETE FROM trasi.audit WHERE entita = 'evento' "
+                "  AND NOT EXISTS (SELECT 1 FROM trasi.evento e WHERE e.id = trasi.audit.entita_id)"
             )
             esegui(
                 "DELETE FROM trasi.evento WHERE fonte_id = "
                 "(SELECT id FROM trasi.fonte WHERE nome = 'Google Calendar-ical-2')"
             )
             # Le proposte di coerenza create dai casi di anomalia.
-            esegui("DELETE FROM trasi.audit WHERE proposta_id IN "
-                   "(SELECT id FROM trasi.proposta WHERE origine = 'coerenza')")
+            #
+            # L'`audit` si cancella per `proposta_id` **e** per `entita_id`, e non è ridondanza:
+            # `proposta_02_audit_tg` scrive più righe per la stessa proposta (`proposta_creata`,
+            # `transizione`), tutte con la stessa `proposta_id` — quindi il solo `proposta_id`
+            # basterebbe. Il caso che rompeva è un altro: una proposta può essere cancellata **prima**
+            # che questo blocco la raggiunga (un caso della batteria che ripulisce la propria), e la
+            # sua riga di audit resta agganciata all'entità. Con la FK `audit.proposta_id →
+            # proposta.id` questo produce `update or delete on table "proposta" violates foreign key
+            # constraint "audit_proposta_id_fkey"`: la pulizia fallisce, le righe restano, e il test
+            # successivo eredita lo stato — il modo in cui un guasto di pulizia diventa un guasto
+            # apparente di logica, tre file più in là.
+            esegui(
+                "DELETE FROM trasi.audit WHERE proposta_id IN "
+                "(SELECT id FROM trasi.proposta WHERE origine = 'coerenza')"
+            )
+            esegui(
+                "DELETE FROM trasi.audit WHERE entita = 'evento' AND entita_id IN "
+                "(SELECT proposta.entita_id FROM trasi.proposta proposta "
+                " WHERE proposta.origine = 'coerenza' AND proposta.entita_id IS NOT NULL)"
+            )
             esegui("DELETE FROM trasi.proposta WHERE origine = 'coerenza'")
         if registro:
             esegui("DELETE FROM trasi.flusso_run")
