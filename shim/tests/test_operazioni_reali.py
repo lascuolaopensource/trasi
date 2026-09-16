@@ -20,6 +20,15 @@ from attese import OPERAZIONI_ATTESE
 
 EMAIL_OPERATORE = "op.san-bao@trasi.local"
 
+# Marcatore delle proposte che questa batteria crea davvero (il corpo di `proponi_modifica` è
+# completo, quindi con il database acceso l'INSERT va a buon fine). Serve a **rimuoverle**: vedi la
+# fixture `senza_residui` in coda. Il motivo per cui non si può omettere: `proposta` è la coda «Da
+# approvare» che l'operatore apre ogni giorno, e ogni esecuzione della suite ne lasciava due —
+# misurate **40 righe** di motivazione «prova» dopo una giornata di lavoro, indistinguibili da una
+# segnalazione vera per chi guarda la coda. È il difetto che il piano chiama «coda ignorata», ed è
+# esattamente il modo in cui si produce: rumore che sembra lavoro.
+MARCA = "B3TEST: prova di contratto"
+
 # Parametri minimi perché la richiesta arrivi alla logica dell'endpoint invece di fermarsi alla validazione: serve a
 # distinguere «l'operazione esiste e risponde» da «l'operazione esiste e rifiuta i parametri».
 PARAMETRI: dict[str, str] = {
@@ -36,7 +45,7 @@ CORPI: dict[str, dict] = {
         "tipo": "chiudi_luogo",
         "entita": "luogo",
         "payload": {},
-        "motivazione": "prova",
+        "motivazione": MARCA,
     },
     "approva_proposta": {"proposta_id": 1, "decisione": "approva"},
 }
@@ -133,3 +142,50 @@ def test_healthz_resta_fuori_dal_contratto_e_non_tocca_il_database(client):
     from app.main import app
 
     assert "/healthz" not in app.openapi()["paths"]
+
+
+@pytest.fixture(autouse=True)
+def senza_residui():
+    """Rimuove le proposte che questa batteria crea, **prima e dopo** ogni test del file.
+
+    Perché `autouse` e perché anche *prima*: `test_gli_errori_usano_l_involucro_detail_del_contratto`
+    e `test_ogni_operazione_del_contratto_esiste_e_non_risponde_piu_501` chiamano `proponi_modifica`
+    con un corpo completo, quindi con il database acceso l'INSERT **riesce** — e la proposta resta
+    nella coda «Da approvare» della Casa. Il test precedente poteva lasciarne una, e la pulizia a
+    fine test non basta a rendere la suite ripetibile: è la stessa ragione per cui `db/tests/run.sh`
+    avvolge ogni file in `BEGIN/ROLLBACK`.
+
+    Si cancella con la connessione amministrativa perché nessun ruolo applicativo ha `DELETE` su
+    `proposta` e `audit` (V4: la memoria non si cancella dall'applicazione) — è la via che
+    `ambiente.pulisci` già usa, e il commento là spiega perché assumere quel ruolo per la pulizia
+    non è un aggiramento. Il perimetro è la **marca**, mai «tutte le proposte»: una proposta scritta
+    da un altro test o da una prova manuale non va toccata.
+    """
+    import asyncio
+
+    from ambiente import connessione_amministratore
+
+    async def rimuovi() -> None:
+        conn = await connessione_amministratore()
+        try:
+            # L'ordine è obbligato: prima l'audit (la FK `audit.proposta_id`), poi la proposta.
+            await conn.execute(
+                "DELETE FROM trasi.audit WHERE proposta_id IN "
+                "(SELECT id FROM trasi.proposta WHERE motivazione = $1)",
+                MARCA,
+            )
+            await conn.execute("DELETE FROM trasi.proposta WHERE motivazione = $1", MARCA)
+        finally:
+            await conn.close()
+
+    try:
+        asyncio.run(rimuovi())
+    except Exception:  # noqa: BLE001 — senza database la pulizia non ha nulla da fare
+        pass
+
+    yield
+
+    try:
+        asyncio.run(rimuovi())
+    except Exception:  # noqa: BLE001
+        pass

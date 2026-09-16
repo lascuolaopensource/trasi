@@ -1,8 +1,13 @@
-"""Output: `biglietto`, `oggi`, `cerca_web` (B3-SHM-07/08/12).
+"""Output: `biglietto`, `oggi`, `cerca_web` (B3-SHM-07/08/12) e la scheda evento dell'area operatore (US-1.3).
 
 Tre endpoint che non scrivono nulla e che condividono una sola idea: **ciò che esce è già pronto per essere usato**.
 Il biglietto è HTML A6 da stampare senza dati del cittadino; la riga «Oggi» è il testo della Home composto dalla
 vista; `cerca_web` restituisce solo risultati di fonti in allow-list, ognuno con il badge già formato.
+
+La **scheda evento** (`GET /op/scheda_evento`, in coda) è il quarto foglio, e sta fuori dal contratto congelato per
+una ragione di canale, non di formato: la chiama il browser dell'operatore con il cookie di sessione, non Onyx con la
+chiave dello shim. Stessa pipeline e stessi divieti del biglietto — un solo costruttore di pagina (`_foglio`) per
+entrambi, così le regole di stampa e i divieti non possono divergere fra i due fogli.
 
 **`cerca_web` — la ragione per cui esiste.** Il gate V-07 è **negativo**: la ricerca web nativa di Onyx v4.7.2 espone
 solo `queries` e non ha alcuna restrizione per dominio (`plan.md` §0.3). Lo shim interroga SearXNG interno e **filtra
@@ -26,6 +31,7 @@ import httpx
 from fastapi import APIRouter, Depends, FastAPI, Query
 from fastapi.responses import HTMLResponse
 
+from .auth import SessioneOperatore, sessione_corrente
 from .badge import NOTA_ORARI_ASSENTI, badge_esterna, badge_kb, nome_fonte
 from .contratto import prefisso_path
 from .db import Sessione, parametri, parametro_int, sessione, slug_casa_da_identita
@@ -33,6 +39,7 @@ from .errori import errore
 from .operazioni import dichiarazione
 from .settings import get_settings
 from .vicinanza import (
+    FUSO,
     STATO_ERRORE,
     STATO_OK,
     STATO_SCARTATA_FIDUCIA,
@@ -42,7 +49,13 @@ from .vicinanza import (
     nodo_osm,
 )
 
+# Due router, perché due sono i canali. `router` è la via di Onyx (chiave `X-Trasi-Key`, email nel
+# percorso, contratto congelato); `router_op` è la via del browser dell'operatore (cookie di sessione,
+# nessun identificatore nell'URL) e viene montato sotto `/op`. La distinzione non è formale: tenendo i
+# due router separati, nessuna route può essere valida per entrambi i canali, e la scheda evento — che
+# è per il browser — non entra nell'OpenAPI che il gate V-09 confronta con le nove operazioni.
 router = APIRouter()
+router_op = APIRouter()
 
 # Nome della fonte esterna interrogata da `cerca_web`, come compare in `fonti_esterna[].fonte`.
 MOTORE_WEB = "SearXNG"
@@ -50,11 +63,22 @@ MOTORE_WEB = "SearXNG"
 # Sorgente dei POI esterni nel biglietto: la riga di `trasi.fonte` con `tipo_accesso='osm_overpass'`.
 TIPO_ACCESSO_OSM = "osm_overpass"
 
+# Sorgente degli eventi importati da un calendario esterno: l'unica scrittura automatica ammessa su
+# `evento` (§8 F4). È il discriminante del badge V3: `ical` → `[Esterna …]`, tutto il resto (fonte
+# della rete, o nessuna fonte = inserimento a mano) → `[KB …]`.
+TIPO_ACCESSO_ICAL = "ical"
 
 
 def monta(applicazione: FastAPI) -> None:
-    """Monta le route degli output sotto il prefisso del contratto (`/v1/u/{email}`)."""
+    """Monta le route degli output sotto il prefisso del contratto (`/v1/u/{email}`) e la scheda evento sotto `/op`.
+
+    Due prefissi perché i canali sono due: il contratto congelato per Onyx e `/op` per il browser
+    dell'operatore. `include_in_schema=False` sulla seconda è ciò che tiene la scheda fuori dall'OpenAPI
+    dell'applicazione — che per il gate V-09 è il contratto con Onyx, e che deve esporre esattamente le
+    nove `operationId` congelate.
+    """
     applicazione.include_router(router, prefix=prefisso_path())
+    applicazione.include_router(router_op, prefix="/op", include_in_schema=False)
 
 
 def _argomenti(operation_id: str) -> dict[str, Any]:
@@ -163,48 +187,43 @@ def _metri(valore: float) -> str:
     return f"{valore / 1000:.1f}".replace(".", ",") + " km"
 
 
-def _documento_biglietto(
+def _foglio(
     *,
-    nome: str,
-    indirizzo: str,
-    orari_testo: str | None,
-    orari_nota: str | None,
-    come_arrivare: str,
-    fonte: str,
+    titolo: str,
+    intestazione: str,
+    formato: str,
+    larghezza: str,
     badge: str,
+    righe: str,
+    didascalia: str | None,
+    fonte: str,
     consultato: datetime,
-    tipo: str,
+    nota: str,
 ) -> str:
-    """Il biglietto: una pagina A6, senza moduli e senza campi del cittadino (§4.4, §12).
+    """La pagina stampabile: testa, stile, tabella e piè di pagina. Il guscio di **ogni** foglio dello shim.
 
-    Ogni valore interpolato passa da `html.escape`: i nomi dei POI arrivano da OpenStreetMap, cioè da una fonte che
-    non controlliamo, e un `<` in un nome non deve rompere il documento. Il foglio non contiene `<form>`, `<input>`
-    né parole come «cittadino» o «telefono»: è il criterio osservabile di B3-SHM-07, ed è anche il motivo per cui il
-    titolo dice esplicitamente che il foglio non contiene dati personali — un'affermazione su ciò che **non** c'è,
-    non un campo da compilare.
+    Un guscio solo per il biglietto e per la scheda evento, e non è una questione di righe risparmiate: i due fogli
+    condividono i **divieti** — niente `<form>`, niente `<input>`, niente campi compilabili — e le regole di stampa.
+    Con lo stile in due copie, una correzione ai margini o a `@page` arriverebbe a un foglio e non all'altro, e il
+    divieto resterebbe verificato su uno solo dei due. Chi aggiunge un terzo foglio eredita gli stessi vincoli.
+
+    Ogni valore interpolato passa da `html.escape` (qui il titolo, il badge, la fonte; nelle righe, `_voce`): i dati
+    arrivano da OpenStreetMap, dai calendari delle Case e dalla memoria — fonti che non controlliamo — e un `<` in un
+    titolo non deve rompere il documento. Il piè di pagina dichiara che il foglio non contiene dati personali: è
+    un'affermazione su ciò che **non** c'è, non un campo da compilare.
     """
-    orari = orari_testo or ""
-    nota = orari_nota or (NOTA_ORARI_ASSENTI if not orari else "")
-    righe = "".join(
-        [
-            _voce("Indirizzo", indirizzo),
-            _voce("Orari", orari),
-            _voce("Nota orari", nota),
-            _voce("Come arrivare", come_arrivare),
-            _voce("Tipo", tipo),
-        ]
-    )
+    caption = f'\n    <caption class="luogo">{html.escape(didascalia)}</caption>' if didascalia else ""
     return f"""<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <title>{html.escape(nome)} — biglietto</title>
+  <title>{html.escape(titolo)}</title>
   <style>
-    @page {{ size: A6; margin: 8mm }}
+    @page {{ size: {formato}; margin: 8mm }}
     @media print {{ body {{ margin: 0 }} .no-print {{ display: none }} }}
     :root {{ color-scheme: light }}
     body {{ font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-            font-size: 10pt; line-height: 1.35; color: #14181f; margin: 8mm; max-width: 105mm }}
+            font-size: 10pt; line-height: 1.35; color: #14181f; margin: 8mm; max-width: {larghezza} }}
     h1 {{ font-size: 14pt; margin: 0 0 .4rem; line-height: 1.2 }}
     .badge {{ font-size: 8pt; color: #3d4756; border: 1px solid #c8cfd9; border-radius: 3px;
               padding: .15rem .35rem; display: inline-block; margin-bottom: .5rem }}
@@ -217,20 +236,57 @@ def _documento_biglietto(
   </style>
 </head>
 <body>
-  <h1>{html.escape(nome)}</h1>
+  <h1>{html.escape(intestazione)}</h1>
   <p class="badge">{html.escape(badge)}</p>
-  <table>
-    <caption class="luogo">{html.escape(nome)}</caption>
+  <table>{caption}
     <tbody>
 {righe}    </tbody>
   </table>
   <footer>
     Fonte: {html.escape(fonte)} · consultato il {consultato.strftime('%d/%m/%Y')} alle {consultato.strftime('%H:%M')}
-    <p class="nota">Questo foglio è una indicazione di luogo: non contiene dati personali e non è un modulo da compilare.</p>
+    <p class="nota">{html.escape(nota)}</p>
   </footer>
 </body>
 </html>
 """
+
+
+def _documento_biglietto(
+    *,
+    nome: str,
+    indirizzo: str,
+    orari_testo: str | None,
+    orari_nota: str | None,
+    come_arrivare: str,
+    fonte: str,
+    badge: str,
+    consultato: datetime,
+    tipo: str,
+) -> str:
+    """Il biglietto: una pagina A6, senza moduli e senza campi del cittadino (§4.4, §12), dal guscio `_foglio`."""
+    orari = orari_testo or ""
+    nota = orari_nota or (NOTA_ORARI_ASSENTI if not orari else "")
+    righe = "".join(
+        [
+            _voce("Indirizzo", indirizzo),
+            _voce("Orari", orari),
+            _voce("Nota orari", nota),
+            _voce("Come arrivare", come_arrivare),
+            _voce("Tipo", tipo),
+        ]
+    )
+    return _foglio(
+        titolo=f"{nome} — biglietto",
+        intestazione=nome,
+        formato="A6",
+        larghezza="105mm",
+        badge=badge,
+        righe=righe,
+        didascalia=nome,
+        fonte=fonte,
+        consultato=consultato,
+        nota="Questo foglio è una indicazione di luogo: non contiene dati personali e non è un modulo da compilare.",
+    )
 
 
 async def _luogo_kb(sess: Sessione, luogo_id: int) -> dict[str, Any] | None:
@@ -555,3 +611,229 @@ async def _tetto_risultati(sess: Sessione, richiesti: int | None) -> int:
     valori = await parametri(sess, ("max_risultati_esterni",))
     tetto = parametro_int(valori, "max_risultati_esterni", 5)
     return min(richiesti, tetto) if richiesti else tetto
+
+
+# --- `scheda_evento` (area operatore, US-1.3) -----------------------------------------------------------------
+#
+# La scheda stampabile di un evento: stesso mestiere del biglietto, canale diverso. Il biglietto è uno
+# strumento del LLM (`/v1/u/{email}/biglietto`, nel contratto congelato); questa la apre il browser
+# dell'operatore dal pulsante «stampa» della Home (`/op/scheda_evento`, cookie di sessione). Il canale
+# è diverso, la pipeline è la stessa: una query, `_foglio`, gli stessi divieti.
+#
+# La query porta anche la Casa e la fonte — con alias `e.` su ogni colonna dell'evento, perché `casa` ha
+# a sua volta `id` e `nome` e senza qualificazione PostgreSQL rifiuta la JOIN con «column reference "id"
+# is ambiguous» (difetto già visto su un altro endpoint di quest'area). Si seleziona **solo** ciò che la
+# scheda stampa: `uid_ical` e `creato_ts` esistono su `trasi.evento` ma non dicono nulla all'operatore, e
+# `annullato` è già il filtro del `WHERE`.
+SQL_EVENTO = """
+SELECT e.titolo, e.descrizione, e.inizio, e.fine, e.luogo_testo, e.url,
+       e.affidabilita, e.aggiornato_ts, e.aggiornato_da,
+       f.nome AS fonte_nome, f.autorita AS fonte_autorita, f.tipo_accesso AS fonte_tipo,
+       c.nome AS casa_nome, c.zona AS casa_zona, c.ente_gestore AS casa_ente,
+       (SELECT cl.note_accesso
+          FROM trasi.luogo cl
+         WHERE cl.casa_id = c.id AND cl.tipo = 'casa_quartiere' AND cl.chiuso_il IS NULL
+         ORDER BY cl.affidabilita DESC NULLS LAST, cl.id
+         LIMIT 1) AS casa_accesso
+  FROM trasi.evento e
+  JOIN trasi.casa c ON c.id = e.casa_id
+  LEFT JOIN trasi.fonte f ON f.id = e.fonte_id
+ WHERE e.id = $1
+   AND e.annullato = false
+"""
+
+# Dalla riga dell'evento al badge V3. Due casi, e la differenza è la **provenienza**, non la fiducia:
+# un evento con fonte iCal l'ha scritto un calendario esterno (`automazioni`, §8 F4) ed è «non
+# verificato dalla rete»; uno senza `fonte_id` l'ha inserito una persona della rete — «a mano», e la
+# formulazione è quella che `routes_lettura.py` usa per gli eventi senza fonte esterna. Il nome della
+# fonte viene da `nome_fonte`, che preferisce `autorita` (il nome umano) al `nome` tecnico.
+NOME_FONTE_MANO = "inserito a mano"
+NOME_FONTE_CALENDARIO = "calendario della Casa"
+
+# Data di aggiornamento assente: si **dichiara**, non si inventa. `aggiornato_ts` lo scrive il trigger
+# `scrittura_00_ts` a ogni scrittura mediata, quindi manca solo per le righe seminate prima del trigger
+# — che per l'operatore è un'informazione vera (e il motivo per cui la scheda la mostra invece di
+# stampare una data plausibile).
+NOTA_AGGIORNAMENTO_ASSENTE = "data di aggiornamento non disponibile"
+NOTA_DESCRIZIONE_ASSENTE = "descrizione non disponibile nella memoria"
+NOTA_LUOGO_ASSENTE = "luogo non indicato: la Casa di riferimento è il punto di ritrovo dichiarato"
+NOTA_ACCESSO_ASSENTE = "modalità di accesso non dichiarate nella memoria"
+NOTA_CONTATTO_ASSENTE = "contatto pubblico non dichiarato nella memoria"
+
+
+_GIORNI = ("lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica")
+
+
+def _periodo(inizio: datetime, fine: datetime | None) -> str:
+    """`domenica 20/09/2026, 18:00–22:00` — giorno esteso, orari locali.
+
+    Le ore si convertono **esplicitamente** nel fuso italiano: `asyncpg` restituisce i `timestamptz` in
+    UTC, e un `strftime` diretto mostrerebbe l'evento delle 18:30 come «16:30» (difetto verificato su
+    `eventi_oggi`). La fine è facoltativa e l'evento può chiudersi il giorno dopo: se la data di fine
+    differisce, la si scrive per esteso invece di lasciare un orario ambiguo.
+    """
+    locale_inizio = inizio.astimezone(FUSO)
+    testo = f"{_GIORNI[locale_inizio.weekday()]} {locale_inizio.strftime('%d/%m/%Y')}, {locale_inizio.strftime('%H:%M')}"
+    if fine is None:
+        return testo
+    locale_fine = fine.astimezone(FUSO)
+    if locale_fine.date() == locale_inizio.date():
+        return f"{testo}–{locale_fine.strftime('%H:%M')}"
+    return f"{testo} — fino a {_GIORNI[locale_fine.weekday()]} {locale_fine.strftime('%d/%m/%Y')}, {locale_fine.strftime('%H:%M')}"
+
+
+def _documento_scheda_evento(
+    *,
+    titolo: str,
+    periodo: str,
+    dove: str,
+    accesso: str,
+    descrizione: str,
+    contatto: str,
+    fonte: str,
+    badge: str,
+    aggiornamento: str,
+    casa: str,
+    url: str | None,
+    consultato: datetime,
+) -> str:
+    """La scheda evento: una pagina **A5** (US-1.3), senza moduli e senza campi del cittadino.
+
+    A5 e non A6 come il biglietto: il biglietto indica un luogo (nome, indirizzo, orari) e sta su mezzo
+    foglio; la scheda evento porta in più titolo, periodo, descrizione, accesso e contatto — su A6 il
+    testo andrebbe a capo a ogni riga e la locandina non sarebbe più leggibile. Il guscio (`_foglio`) è
+    lo stesso: cambia il formato del foglio, non le regole.
+
+    Gli stessi divieti del biglietto, e per la stessa ragione: nessun `<form>`, nessun `<input>`, nessuna
+    parola «cittadino»/«nome_persona»/«telefono» nel documento. La scheda è una locandina da appendere,
+    non un modulo da compilare, e i dati che mostra sono quelli pubblici dell'evento.
+    """
+    righe = "".join(
+        [
+            _voce("Quando", periodo),
+            _voce("Dove", dove),
+            _voce("Come si accede", accesso),
+            _voce("Descrizione", descrizione),
+            _voce("Contatto pubblico", contatto),
+            _voce("Casa di Quartiere", casa),
+            _voce("Aggiornamento", aggiornamento),
+            _voce("Riferimento", url),
+        ]
+    )
+    return _foglio(
+        titolo=f"{titolo} — scheda evento",
+        intestazione=titolo,
+        formato="A5",
+        larghezza="148mm",
+        badge=badge,
+        righe=righe,
+        didascalia=None,
+        fonte=fonte,
+        consultato=consultato,
+        nota=(
+            "Questa scheda descrive un evento della rete: non contiene dati personali e non è un modulo "
+            "da compilare. Chi decide su date, luogo e accesso è la Casa di Quartiere."
+        ),
+    )
+
+
+async def _evento_kb(sess: SessioneOperatore, evento_id: int) -> dict[str, Any] | None:
+    """L'evento con Casa e fonte, o `None` se non esiste (o è annullato: il `WHERE` è nella query).
+
+    Stessa forma di `_luogo_kb` per il biglietto: la riga della memoria e i suoi riferimenti, in una
+    sola lettura. Il filtro `annullato = false` sta **nella query** e non in Python, perché «esiste»
+    per l'operatore significa «esiste e non è annullato»: separare le due condizioni creerebbe un 404
+    con due messaggi diversi per lo stesso fatto.
+    """
+    return await sess.fetchrow(SQL_EVENTO, evento_id)
+
+
+@router_op.get(
+    "/scheda_evento",
+    operation_id="op_scheda_evento",
+    response_class=HTMLResponse,
+    summary="Scheda stampabile di un evento (US-1.3): titolo, data/ora, luogo, accesso, contatto "
+    "pubblico, fonte e data di aggiornamento, badge di provenienza. Nessun campo compilabile.",
+    tags=["op"],
+)
+async def op_scheda_evento(
+    evento_id: int = Query(..., ge=1, description="Identificativo dell'evento (`trasi.evento.id`)."),
+    sess: SessioneOperatore = Depends(sessione_corrente),
+) -> HTMLResponse:
+    """GET /op/scheda_evento?evento_id= — il foglio stampabile di un evento, per il browser dell'operatore.
+
+    **Read-only**, come tutti gli output dello shim: legge `trasi.evento` unito a `casa` e `fonte` e
+    compone la pagina. Nessun `INSERT`, nessun `UPDATE` — se l'operatore vuole correggere qualcosa,
+    quella è una proposta (V4), non una scrittura da qui.
+
+    **404** se l'evento non esiste *o è annullato*: `annullato` è l'annullamento soft del flusso iCal
+    (§8 F4) e un evento annullato non deve poter essere stampato e appeso in bacheca. Le due condizioni
+    sono lo stesso esito perché per l'operatore sono lo stesso fatto: quell'evento non c'è.
+
+    La provenienza (V3) si dichiara sul badge: `[Esterna …]` per un evento importato da un calendario
+    (`fonte.tipo_accesso='ical'`, scritto da `automazioni` e mai verificato dalla rete), `[KB …]` per un
+    evento della rete — compreso quello **inserito a mano**, che non ha `fonte_id` e per il quale il
+    nome della fonte è «inserito a mano» (la stessa formulazione di `routes_lettura.py`).
+
+    La data di aggiornamento è quella di `aggiornato_ts`; se manca, la scheda **lo dichiara** invece di
+    stampare una data inventata (US-1.2: «la risposta include la data di aggiornamento», US-1.4:
+    l'informazione mancante si dichiara).
+    """
+    riga = await _evento_kb(sess, evento_id)
+    if riga is None:
+        raise errore(404, "evento non presente nella memoria della rete, oppure annullato")
+
+    consultato = adesso_locale()
+    titolo = (riga["titolo"] or "").strip() or "Evento senza titolo"
+    fonte_esterna = riga["fonte_tipo"] == TIPO_ACCESSO_ICAL
+
+    if fonte_esterna:
+        # Calendario esterno: il badge dichiara che la rete non l'ha verificato, con l'ora della
+        # consultazione (la scheda è appena stata generata, quindi «consultata adesso»).
+        nome = nome_fonte(riga["fonte_autorita"], riga["fonte_nome"] or NOME_FONTE_CALENDARIO)
+        badge = badge_esterna(nome, consultato)
+    else:
+        # Rete (o inserimento a mano): il badge KB porta la data di aggiornamento e la fiducia.
+        nome = nome_fonte(riga["fonte_autorita"], riga["fonte_nome"] or NOME_FONTE_MANO)
+        badge = badge_kb(nome, riga["aggiornato_ts"], riga["affidabilita"])
+
+    aggiornamento = (
+        f"{riga['aggiornato_ts'].astimezone(FUSO).strftime('%d/%m/%Y')} alle "
+        f"{riga['aggiornato_ts'].astimezone(FUSO).strftime('%H:%M')}"
+        if riga["aggiornato_ts"]
+        else NOTA_AGGIORNAMENTO_ASSENTE
+    )
+    if riga["aggiornato_da"]:
+        # Chi ha scritto il dato **per ruolo**, mai una persona: è il vocabolario del runbook.
+        aggiornamento = f"{aggiornamento} ({riga['aggiornato_da']})"
+
+    casa = f"{riga['casa_nome']} — {riga['casa_zona']}" if riga["casa_zona"] else riga["casa_nome"]
+    if riga["casa_ente"]:
+        casa = f"{casa} ({riga['casa_ente']})"
+
+    descrizione = (riga["descrizione"] or "").strip() or NOTA_DESCRIZIONE_ASSENTE
+    dove = (riga["luogo_testo"] or "").strip() or NOTA_LUOGO_ASSENTE
+    # L'accesso è dichiarato dalla Casa (US-1.2: «garanzie di accesso»). La memoria non ha una colonna
+    # «accesso» su `evento`: l'unica nota di accesso che il sistema possiede è `luogo.note_accesso` del
+    # luogo della Casa che organizza. Quando non c'è, la scheda **lo dichiara** invece di dedurre
+    # «gratuito» o «su prenotazione» — sono affermazioni che solo la Casa può fare.
+    accesso = (riga["casa_accesso"] or "").strip() or NOTA_ACCESSO_ASSENTE
+
+    return HTMLResponse(
+        _documento_scheda_evento(
+            titolo=titolo,
+            periodo=_periodo(riga["inizio"], riga["fine"]),
+            dove=dove,
+            accesso=accesso,
+            descrizione=descrizione,
+            # Il contatto pubblico è quello della Casa che organizza l'evento: l'ente gestore, che è
+            # un'informazione pubblica e istituzionale (V5). Nessun recapito di persona, mai.
+            contatto=riga["casa_ente"] or NOTA_CONTATTO_ASSENTE,
+            fonte=nome,
+            badge=badge,
+            aggiornamento=aggiornamento,
+            casa=casa,
+            url=riga["url"],
+            consultato=consultato,
+        )
+    )

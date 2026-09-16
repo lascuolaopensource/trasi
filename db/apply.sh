@@ -42,9 +42,25 @@ psql_owner() {
 }
 
 # La 000 definisce i ruoli: se manca QUALSIASI ruolo atteso, la 000 gira comunque (è idempotente).
+#
+# L'ordine NON è quello dei prefissi, ed è la ragione per cui è scritto a mano uno per uno.
+# Le dipendenze che lo determinano, tutte verificate da un fallimento reale:
+#   * 004 prima di 005: le viste di B1 usano le colonne base del dominio; il blocco !NEW
+#     (che usa `evento.aggiornato_ts` della 005 e `oggetto`/`movimento` della 014) sta nella
+#     016, che gira DOPO entrambe. Tenerlo nella 004 faceva fallire l'apply con
+#     `relation "trasi.oggetto" does not exist` — la 004 girerebbe prima della 014 che la crea;
+#   * 010 (seed Case) prima di 011 e 012: le fonti hanno `casa_id`, i luoghi hanno `fonte_id`;
+#   * 010 prima di 013: `credenziale_casa` semina UNA riga per Casa e la sua verifica conta 10;
+#   * 013, 014, 015 prima di 006: la §11 di `006_fn_proposte.sql` dichiara come precondizione
+#     le tabelle di credenziali/attrezzoteca/messaggi (crea_sessione, conferma_movimento,
+#     scadi_messaggi) e fallisce con un errore parlante se mancano;
+#   * 016 dopo 014 (viste attrezzoteca) e dopo 005 (colonna `aggiornato_ts`).
+# La 020 (registro `flusso_run` di B4) resta applicabile a parte: `flussi/provisiona.sh` e
+# l'entrypoint del container `automazioni` la applicano da soli, e non serve allo shim.
 ORDER=(000_roles.sql 001_schema.sql 002_rls.sql 003_parametri.sql 004_views.sql
-       005_rls_proposta.sql 006_fn_proposte.sql 007_dash.sql
-       010_seed_case.sql 011_seed_fonti.sql 012_seed_luoghi.sql)
+       005_rls_proposta.sql 010_seed_case.sql 011_seed_fonti.sql 012_seed_luoghi.sql
+       013_credenziali.sql 014_attrezzoteca.sql 015_messaggi.sql
+       006_fn_proposte.sql 016_viste_new.sql 007_dash.sql)
 
 # filtri opzionali da riga di comando (prefissi)
 FILTERS=("$@")

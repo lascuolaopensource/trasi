@@ -157,11 +157,26 @@ def pulizia():
             # Il luogo promosso dalle fixture torna al valore del seed: si individua per fonte, perché
             # è il nome che la promozione riscrive. `aggiornato_da` torna a NULL — è l'impronta della
             # scrittura, e dopo il ripristino non c'è più una scrittura da imputare.
+            #
+            # **Il trigger va disabilitato per questo UPDATE, e senza di esso il ripristino non
+            # avviene affatto.** `scrittura_00_ts` (db/005) è un trigger `BEFORE INSERT OR UPDATE`
+            # che *scrive* `NEW.aggiornato_ts := now()` e `NEW.aggiornato_da := current_user`: un
+            # `SET aggiornato_da = NULL` viene sovrascritto dal trigger prima che la riga sia scritta.
+            # Misurato: `UPDATE … SET aggiornato_da = NULL, aggiornato_ts = NULL` lascia
+            # `aggiornato_da = 'postgres'` e `aggiornato_ts` non nullo. La pulizia sembrava riuscire
+            # (exit 0, nessun errore) e lasciava intatto ciò che doveva rimuovere: il risultato era
+            # esattamente la violazione di V4 che questo blocco esiste per non produrre.
+            # `ALTER TABLE … DISABLE TRIGGER` nella stessa transazione è l'unico modo di scrivere
+            # quei due campi, ed è confinato alla pulizia (il trigger resta attivo per tutto il resto).
             esegui(
+                "BEGIN; "
+                "ALTER TABLE trasi.luogo DISABLE TRIGGER scrittura_00_ts; "
                 "UPDATE trasi.luogo SET nome = 'CAF ACLI La Rosa', affidabilita = 1, orari = NULL, "
                 "       ext_ref = NULL, aggiornato_da = NULL, aggiornato_ts = NULL, "
                 "       data_aggiornamento = current_date "
-                " WHERE fonte_id = (SELECT id FROM trasi.fonte WHERE nome = 'CAF ACLI Brindisi')"
+                " WHERE fonte_id = (SELECT id FROM trasi.fonte WHERE nome = 'CAF ACLI Brindisi'); "
+                "ALTER TABLE trasi.luogo ENABLE TRIGGER scrittura_00_ts; "
+                "COMMIT;"
             )
         if automatiche:
             esegui("DELETE FROM trasi.audit WHERE proposta_id IN "

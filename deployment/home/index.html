@@ -32,11 +32,14 @@
     </select>
   </p>
   <nav class="azioni" aria-label="Aiuto e uscita">
+    <a class="azione" href="/operatore.html">Area operatore</a>
     <a class="azione" href="#aiuto">Aiuto</a>
-    <form class="uscita" method="post" action="//onyx.lascuolaopensource.org/auth/logout">
-      <button class="azione" type="submit">Esci</button>
-    </form>
-    <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione della chat chiusa.</p>
+    <!-- Esci chiude la sessione **dello shim**, non quella di Onyx: prima era un
+         invio del browser a un altro dominio. Il logout ora è
+         `POST /api/shim/logout` (cookie HttpOnly revocato sul database),
+         gestito in `home.js`. -->
+    <button class="azione" type="button" id="pulsante-esci">Esci</button>
+    <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
   </nav>
 </header>
 
@@ -45,7 +48,12 @@
 
   <ul class="riquadri">
     <li class="cella">
-      <a class="riquadro" id="riquadro-chiedi" data-modello="//onyx.lascuolaopensource.org/app?agentId=2&amp;casa={casa}" href="//onyx.lascuolaopensource.org/app?agentId=2&amp;casa=san-bao">
+      <!-- CHIEDI resta dentro Trasi: punta all'area operatore, che ha la chat
+           integrata (`POST /api/shim/op/chat`, server-to-server verso Onyx).
+           Prima era un collegamento diretto all'app di Onyx su un altro dominio:
+           il salto di dominio che il vincolo «nessun redirect» vieta, e che la
+           chat via shim esiste per eliminare. -->
+      <a class="riquadro" id="riquadro-chiedi" data-modello="/operatore.html?casa={casa}" href="/operatore.html?casa=san-bao">
         <h2 class="riquadro-titolo">CHIEDI</h2>
         <p class="riquadro-testo">L’assistente della rete: domande dei cittadini, con la fonte di ogni risposta.</p>
       </a>
@@ -73,6 +81,36 @@
   </ul>
 
   <p class="oggi" id="oggi" role="status" aria-live="polite" aria-busy="true">Lettura dei dati di oggi in corso…</p>
+
+  <!-- ====================== INIZIO BLOCCO TEST ======================
+       Pannello di collaudo: esiste SOLO durante il collaudo e va rimosso
+       per le utenti finali cancellando questo blocco e il blocco omonimo
+       in home.js e style.css (marcati «BLOCCO TEST»). Si attiva con
+       ?test=1 nell'indirizzo; senza il parametro non esiste nella pagina. -->
+  <section class="pannello-test" id="pannello-test" hidden aria-labelledby="test-titolo">
+    <h2 id="test-titolo">Pannello di collaudo <span class="nota-inattiva">(solo test — da rimuovere al rilascio)</span></h2>
+    <dl class="test-righe">
+      <dt>Salute del servizio dati</dt>
+      <dd><button class="riquadro-azione" type="button" id="test-healthz">Verifica /healthz</button>
+          <output id="test-healthz-esito" role="status"></output></dd>
+      <dt>Sessione operatore</dt>
+      <dd><button class="riquadro-azione" type="button" id="test-me">Verifica /me</button>
+          <output id="test-me-esito" role="status"></output></dd>
+      <dt>Scheda evento stampabile</dt>
+      <dd>
+        <label class="etichetta" for="test-evento-id">ID evento</label>
+        <input id="test-evento-id" type="number" min="1" value="1">
+        <button class="riquadro-azione" type="button" id="test-scheda-evento">Apri scheda stampabile</button>
+      </dd>
+      <dt>Embed Osservatorio (Metabase)</dt>
+      <dd><button class="riquadro-azione" type="button" id="test-metabase">Verifica caricamento</button>
+          <output id="test-metabase-esito" role="status"></output>
+          <iframe id="test-metabase-frame" title="Anteprima Osservatorio (collaudo)" hidden></iframe></dd>
+      <dt>Ultima chiamata «Oggi»</dt>
+      <dd><output id="test-oggi-esito" role="status">—</output></dd>
+    </dl>
+  </section>
+  <!-- ======================= FINE BLOCCO TEST ======================== -->
 </main>
 
 <section id="aiuto" aria-labelledby="aiuto-titolo">

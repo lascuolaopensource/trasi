@@ -414,6 +414,94 @@ Caddy serve correttamente su `:8088`, ma la pubblicazione esterna richiede una r
 aggiunta dal TI: su questo host non ci sono le credenziali (`/etc/cloudflared/` contiene solo
 `credentials.json` di un tunnel token-based).
 
+## Login operatore CdQ (schede !NEW, US-6.x)
+
+Ogni Casa di Quartiere ha **una sola credenziale condivisa** per gli operatori: utente = **slug della
+Casa** (es. `sanbao`, `tuturano`), password per Casa. Niente account per i cittadini (decisione del
+2026-09-16: vietati per 12 mesi) e **nessun redirect verso Onyx**: il browser entra solo sul dominio
+Trasi, e la chat con l'assistente passa dallo shim server-to-server.
+
+Il login è un endpoint dello shim (`POST /login`, accanto a `POST /logout` e `GET /me`): i client non
+toccano mai il database.
+Dopo il login il browser riceve un **cookie `trasi_sessione`** (HttpOnly + SameSite=Lax, quindi
+non leggibile dal JavaScript della pagina) e tutte le operazioni (scheda evento, registrazione
+richiesta, attrezzoteca, chat interna) avvengono con quel cookie.
+
+| Aspetto | Valore |
+|---|---|
+| Durata sessione | **12 ore** — parametro DB `session_ttl_hours`; passate le 12 h si rifà il login |
+| Blocco anti brute-force | **più di 4 tentativi falliti in 10 minuti** → la Casa è bloccata per 10 minuti (non serve sblocco manuale: il blocco scade da solo) |
+| Password | hash `crypt`/bcrypt (pgcrypto) sul DB; la password in chiaro non è conservata da nessuna parte |
+| Password iniziale | **`<slug>2026!`** (es. per San Bao: `sanbao2026!`) — **da cambiare alla prima consegna** con la procedura sotto |
+
+### Prima attivazione di una Casa
+
+Lo slug è quello della tabella `casa` (v. NocoDB «Casa» o `SELECT slug FROM trasi.casa;`).
+
+```bash
+docker exec trasi-db_trasi-1 psql -U postgres -d trasi_db -c "
+  SET ROLE ti; SET search_path = trasi, public;
+  INSERT INTO credenziale_casa (casa_id, pass_hash)
+  SELECT c.id, crypt('<slug>2026!', gen_salt('bf'))
+  FROM casa c WHERE c.slug = '<slug>'
+  ON CONFLICT (casa_id) DO NOTHING;"
+```
+
+### Cambio password (richiesta della Casa, o password iniziale da cambiare)
+
+Può farlo **solo il ruolo `ti`** — non l'operatore della Casa da solo. Comando con la **nuova**
+password scelta (evitare spazi e apici):
+
+```bash
+docker exec trasi-db_trasi-1 psql -U postgres -d trasi_db -c "
+  SET ROLE ti; SET search_path = trasi, public;
+  UPDATE credenziale_casa c SET pass_hash = crypt('NUOVA_PASSWORD', gen_salt('bf')),
+       aggiornato_ts = now(), aggiornato_da = current_user
+  FROM casa s WHERE s.id = c.casa_id AND s.slug = '<slug>';"
+```
+
+`UPDATE 1` = cambiata; `UPDATE 0` = credenziale mai creata per quello slug → usare la procedura di
+prima attivazione. Dopo il cambio, le sessioni già aperte restano valide fino allo scadere naturale
+(≤ 12 h); per tagliarle subito:
+
+```bash
+docker exec trasi-db_trasi-1 psql -U postgres -d trasi_db -c "
+  SET ROLE ti; SET search_path = trasi, public;
+  DELETE FROM sessione s USING casa c WHERE c.id = s.casa_id AND c.slug = '<slug>';"
+```
+
+### Subentro dell'ente gestore
+
+**Stessa identica procedura del cambio password**: nuova password con l'`UPDATE` sopra, poi il
+`DELETE` delle sessioni. Le vecchie credenziali smettono di funzionare sul colpo; le sessioni già
+aperte dai precedenti operatori decadono al più tardi entro 12 ore. Il runbook non prevede altro:
+non c'è archivio delle password vecchie e non serve riavviare nessun servizio.
+
+### Note operative
+
+- **Nessun lockout permanente**: il blocco dopo > 4 fallimenti scade da solo in 10 minuti; se una Casa
+  segnala «non riusciamo più ad entrare», aspettare 10 minuti e riprovare con calma.
+- I tentativi di login sono tracciati in `trasi.tentativo_login` (solo ora e Casa, mai la password):
+  utile per capire se un blocco è un errore umano o un rumore esterno.
+- La Home pubblica (`trasi.…`) **non** richiede login: resta aperta come prima. Il login riguarda solo
+  le funzioni operatore sotto `/op/…`.
+
+## Eccezioni V4 aggiornate (schede !NEW)
+
+V4 resta la regola: **le scritture al dominio avvengono solo via proposta → approvazione →
+applicazione con audit**. Le schede `!NEW` aggiungono due eccezioni documentate all'unica preesistente
+(import iCal). Decisioni del 2026-09-16 in `docs/confronto-sistema-nuove-funzionalita.md` §2. Tutte e
+tre le eccezioni scrivono comunque una riga in `trasi.audit`.
+
+| Eccezione | Perché non può passare dal flusso proposte |
+|---|---|
+| **Import iCal** (preesistente, `flussi/fonti_ical.py`) | È una sincronizzazione automatica da fonte esterna dichiarata (V3): la fonte è già la garanzia, e ogni evento importato porta badge e fonte. Un passaggio manuale per evento renderebbe l'import inutile. |
+| **`registra_richiesta` (`POST /op/registra_richiesta`)** | La registrazione avviene **durante** il colloquio allo sportello: non può attendere la coda di approvazione. La riga `richiesta` non contiene comunque dati del cittadino (V5) — solo categoria, esito, destinazione; l'audit (`azione='registra_richiesta'`) conserva il chi/quando. |
+| **Movimento attrezzoteca (prestito tra Case)** | È un evento operativo concordato tra due Case, non una modifica di scheda: la tutela V4 è garantita dalla **conferma della Casa ricevente** (`conferma_movimento`, solo `a_casa` può confermare) e dall'audit su ogni passaggio di stato. **La nascita/modifica degli oggetti di inventario resta invece nel flusso proposte** (V4 pieno). |
+
+Mantenere la lista **chiusa**: una nuova eccezione richiede una riga qui **prima** del codice, con la
+motivazione, come per le tre sopra.
+
 ## Domande aperte / punti non risolti in B0
 
 1. **Rate limit Caddy** (plan §12 p. 6, «60 req/min/IP»): **non implementato**.

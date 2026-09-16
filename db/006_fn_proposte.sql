@@ -91,6 +91,8 @@ BEGIN
       SELECT to_jsonb(t) FROM trasi.evento t WHERE t.id = p_id)
     WHEN 'opportunita' THEN (
       SELECT to_jsonb(t) FROM trasi.opportunita t WHERE t.id = p_id)
+    WHEN 'oggetto' THEN (
+      SELECT to_jsonb(t) FROM trasi.oggetto t WHERE t.id = p_id)
     ELSE NULL
   END;
 END;
@@ -569,6 +571,53 @@ BEGIN
             RAISE EXCEPTION 'casa % inesistente: orari non applicabili', v_eid;
           END IF;
 
+        -- -------- F. oggetto (attrezzoteca, US-5.x; tabella db/014) ---------
+        WHEN 'nuovo_oggetto' THEN
+          v_p := trasi.payload_richiede(
+                   trasi.payload_ammesso(v_rec.payload,
+                     ARRAY['nome','descrizione','quantita','condizione','casa_id','fonte_id']),
+                   ARRAY['nome','quantita']);
+          INSERT INTO trasi.oggetto (nome, descrizione, quantita, casa_id, condizione, fonte_id, aggiornato_ts)
+          VALUES (
+            v_p->>'nome', v_p->>'descrizione',
+            (v_p->>'quantita')::int,
+            COALESCE((v_p->>'casa_id')::int, v_rec.casa_id),
+            COALESCE(v_p->>'condizione', 'integro'),
+            COALESCE((v_p->>'fonte_id')::int, v_rec.fonte_id, v_fonte_kb),
+            now())
+          RETURNING id INTO v_eid;
+
+        WHEN 'modifica_oggetto' THEN
+          v_eid := v_rec.entita_id;
+          v_p := trasi.payload_ammesso(v_rec.payload,
+                   ARRAY['nome','descrizione','quantita','condizione','casa_id','fonte_id','attivo']);
+          UPDATE trasi.oggetto t SET
+            nome        = CASE WHEN v_p ? 'nome'       THEN v_p->>'nome'              ELSE t.nome END,
+            descrizione = CASE WHEN v_p ? 'descrizione' THEN v_p->>'descrizione'      ELSE t.descrizione END,
+            quantita    = CASE WHEN v_p ? 'quantita'   THEN (v_p->>'quantita')::int   ELSE t.quantita END,
+            condizione  = CASE WHEN v_p ? 'condizione' THEN v_p->>'condizione'        ELSE t.condizione END,
+            casa_id     = CASE WHEN v_p ? 'casa_id'    THEN (v_p->>'casa_id')::int    ELSE t.casa_id END,
+            fonte_id    = CASE WHEN v_p ? 'fonte_id'   THEN (v_p->>'fonte_id')::int   ELSE t.fonte_id END,
+            attivo      = CASE WHEN v_p ? 'attivo'     THEN (v_p->>'attivo')::boolean ELSE t.attivo END,
+            aggiornato_ts = now()
+           WHERE t.id = v_eid;
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'oggetto % inesistente: modifica non applicabile', v_eid;
+          END IF;
+
+        -- Ritiro dall'attrezzoteca: attivo=false (mai DELETE, V4 regola 7).
+        WHEN 'ritira_oggetto' THEN
+          v_eid := v_rec.entita_id;
+          v_p := trasi.payload_ammesso(v_rec.payload, ARRAY['condizione']);
+          UPDATE trasi.oggetto t SET
+            attivo        = false,
+            condizione    = COALESCE(v_p->>'condizione', t.condizione),
+            aggiornato_ts = now()
+           WHERE t.id = v_eid;
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'oggetto % inesistente: ritiro non applicabile', v_eid;
+          END IF;
+
         ELSE
           RAISE EXCEPTION 'tipo di proposta non applicabile: %', v_rec.tipo;
       END CASE;
@@ -715,6 +764,16 @@ WITH mut AS (
   UNION ALL
   SELECT 'casa', id, id, aggiornato_ts, aggiornato_da FROM trasi.casa
    WHERE aggiornato_ts IS NOT NULL
+  -- Attrezzoteca (db/014): `oggetto` è memoria della rete a tutti gli effetti —
+  -- nasce e si modifica SOLO via proposta (tipi nuovo_oggetto/modifica_oggetto/
+  -- ritira_oggetto), quindi una sua mutazione senza `applicata` è una violazione
+  -- di V4 esattamente come per un luogo. `movimento` NON è qui: è l'evento
+  -- operativo la cui eccezione è documentata, e la sua contabilità è l'audit
+  -- 'conferma_movimento' scritto da `conferma_movimento()` a ogni passaggio di
+  -- stato — confrontarlo con `applicata` segnalerebbe ogni prestito legittimo.
+  UNION ALL
+  SELECT 'oggetto', id, casa_id, aggiornato_ts, aggiornato_da FROM trasi.oggetto
+   WHERE aggiornato_ts IS NOT NULL
 )
 SELECT m.entita, m.id AS entita_id, m.ts, m.da AS scritto_da, m.casa_id
   FROM mut m
@@ -722,7 +781,12 @@ SELECT m.entita, m.id AS entita_id, m.ts, m.da AS scritto_da, m.casa_id
          SELECT 1 FROM trasi.audit a
           WHERE a.entita = m.entita
             AND a.entita_id = m.id
-            AND a.azione IN ('applicata', 'ical_upsert'))
+            AND a.azione IN (
+              -- I tre percorsi che mutano la memoria con una riga di audit
+              -- corrispondente: proposta applicata, eccezione iCal, e lo
+              -- spostamento di un oggetto fra Case (`conferma_movimento`, che
+              -- muta `oggetto.casa_id` e scrive la propria riga — v. §11c).
+              'applicata', 'ical_upsert', 'conferma_movimento'))
    -- Scritture dichiarate fuori dal flusso mediato: il seed iniziale (owner) e
    -- la gestione diretta della propria Casa (matrice congelata, D1/§7 riga 390).
    -- Tutto il resto senza audit e' una violazione di V4 e compare qui.
@@ -776,3 +840,382 @@ BEGIN
   RAISE NOTICE 'B1-proposte/006 applicato: macchina a stati, diff automatico, audit, applica_proposte_approvate (owner applicatore), scadi_proposte, v_da_approvare, v_scritture_senza_audit';
 END
 $verify$;
+
+-- ============================================================================
+-- 11. Schede !NEW — funzioni operative (Fase 0 §2: eccezioni V4 documentate in
+--     deployment/README.md, lista chiusa).
+--     Dipendono dalle tabelle di db/013_credenziali.sql, db/014_attrezzoteca.sql,
+--     db/015_messaggi.sql (apply.sh le applica prima di rieseguire 006).
+--
+--     Convenzioni uguali al resto del file: SECURITY DEFINER owner `applicatore`,
+--     search_path fissato, EXECUTE revocato a PUBLIC e concesso per nome ai soli
+--     ruoli che le usano. `session_user` va in audit.eseguito_da (chi si è
+--     autenticato); `current_user` dentro è `applicatore` per costruzione.
+-- ============================================================================
+
+-- ---------------------------------------------------------------------------
+-- 10b. Vocabolario dei tipi di proposta: i tre dell'attrezzoteca (US-5.x).
+--
+-- Perché qui e non in db/001. Il CHECK di `proposta.tipo` è nato con le nove
+-- tipologie del dominio di territorio (§7.1 di db/001_schema.sql); i tre tipi
+-- dell'attrezzoteca nascono con questo file, che è l'unico che li implementa
+-- (§F dello `applica_proposte_approvate`). Senza questo ALTER il vocabolario e
+-- l'implementazione divergono in modo silenzioso per chi legge il codice: la
+-- `nuovo_oggetto` è un ramo `WHEN` perfettamente scritto che **nessun INSERT
+-- può raggiungere**, perché il CHECK rifiuta la riga prima.
+-- (Misurato: `INSERT … tipo='nuovo_oggetto'` → `violates check constraint
+-- "proposta_tipo_check"`, con il ramo di applicazione già presente.)
+--
+-- Il vincolo si sostituisce per intero, non si aggiunge: due CHECK sullo stesso
+-- campo sarebbero due vocabolari da tenere allineati — la seconda verità che
+-- questo progetto rifiuta altrove. Idempotente: DROP + ADD.
+-- ---------------------------------------------------------------------------
+ALTER TABLE trasi.proposta DROP CONSTRAINT IF EXISTS proposta_tipo_check;
+ALTER TABLE trasi.proposta
+  ADD CONSTRAINT proposta_tipo_check CHECK (tipo IN (
+    -- nove tipi del dominio di territorio (db/001 §7.1, invariati)
+    'nuovo_luogo','modifica_luogo','chiudi_luogo','modifica_scheda','nuova_scheda',
+    'modifica_evento','nuova_opportunita','promuovi_esterno','modifica_orari_casa',
+    -- tre tipi dell'attrezzoteca: nascita/modifica/ritiro di `oggetto`. Il
+    -- MOVIMENTO non è qui: è un evento operativo con INSERT diretto e conferma
+    -- della Casa ricevente (eccezione V4 documentata in deployment/README.md),
+    -- non una proposta.
+    'nuovo_oggetto','modifica_oggetto','ritira_oggetto'));
+
+-- `approvatore_default` (db/001) decide chi approva in base al tipo: i tre tipi
+-- dell'attrezzoteca non sono nel suo CASE e ricadono su `at` (la rete). Non si
+-- ridefinisce — la scelta è già quella giusta e una seconda copia della funzione
+-- sarebbe una seconda verità da tenere allineata. La si dichiara qui perché è
+-- deliberata: l'oggetto nasce nella Casa ma entra nell'inventario **condiviso**
+-- della rete, e chi lo prende in prestito è un'altra Casa. Approva la rete, e
+-- resta salva la separazione proponente/approvatore di V4 (una Casa propone,
+-- `at` approva).
+
+-- Precondizioni (falliscono con errore parlante se l'ordine di apply non è rispettato).
+DO $pre_new$
+DECLARE v_missing text;
+BEGIN
+  SELECT string_agg(x, ', ') INTO v_missing
+    FROM unnest(ARRAY['trasi.credenziale_casa','trasi.sessione','trasi.tentativo_login',
+                      'trasi.oggetto','trasi.movimento','trasi.messaggio']) x
+   WHERE to_regclass(x) IS NULL;
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION '006 §11: mancano % — applica prima db/013, db/014, db/015 via apply.sh', v_missing;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto') THEN
+    RAISE EXCEPTION '006 §11: manca pgcrypto — applica prima db/013_credenziali.sql';
+  END IF;
+END
+$pre_new$;
+
+-- ---------------------------------------------------------------------------
+-- 11a. `crea_sessione(p_casa_slug, p_pass)` → uuid | NULL
+--      Login unico per CdQ (US-6.1): verifica bcrypt lato DB (niente passlib),
+--      anti brute-force (>4 fallimenti/10 min per Casa → NULL + audit login_bloccato),
+--      successo → sessione con scadenza dal parametro [P] session_ttl_hours
+--      (ripiego 12 h) + audit 'login' + azzeramento dei tentativi della Casa.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION trasi.crea_sessione(p_casa_slug text, p_pass text)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = trasi, public, pg_catalog
+AS $fn$
+DECLARE
+  v_casa_id    int;
+  v_hash       text;
+  v_fallimenti int;
+  v_token      uuid;
+  v_ttl        interval;
+BEGIN
+  IF p_casa_slug IS NULL OR p_pass IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT c.id, cc.pass_hash INTO v_casa_id, v_hash
+    FROM trasi.casa c
+    LEFT JOIN trasi.credenziale_casa cc ON cc.casa_id = c.id
+   WHERE c.slug = p_casa_slug;
+
+  -- Casa sconosciuta o senza credenziale: stesso NULL della password errata
+  -- (l'endpoint non rivela se lo slug esiste).
+  IF v_casa_id IS NULL OR v_hash IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT count(*) INTO v_fallimenti
+    FROM trasi.tentativo_login t
+   WHERE t.casa_id = v_casa_id
+     AND t.ts > now() - interval '10 minutes';
+
+  IF v_fallimenti > 4 THEN
+    INSERT INTO trasi.audit (azione, eseguito_da, entita, entita_id, dopo)
+    VALUES ('login_bloccato', session_user, 'casa', v_casa_id,
+            jsonb_build_object('casa_slug', p_casa_slug, 'fallimenti_10min', v_fallimenti));
+    RETURN NULL;
+  END IF;
+
+  IF crypt(p_pass, v_hash) <> v_hash THEN
+    INSERT INTO trasi.tentativo_login (casa_id) VALUES (v_casa_id);
+    INSERT INTO trasi.audit (azione, eseguito_da, entita, entita_id, dopo)
+    VALUES ('login_fallito', session_user, 'casa', v_casa_id,
+            jsonb_build_object('casa_slug', p_casa_slug));
+    RETURN NULL;
+  END IF;
+
+  v_ttl := make_interval(hours => COALESCE(trasi.p_int('session_ttl_hours'), 12));
+  DELETE FROM trasi.tentativo_login t WHERE t.casa_id = v_casa_id;
+  INSERT INTO trasi.sessione (casa_id, scade_ts)
+  VALUES (v_casa_id, now() + v_ttl)
+  RETURNING token INTO v_token;
+
+  INSERT INTO trasi.audit (azione, eseguito_da, entita, entita_id, dopo)
+  VALUES ('login', session_user, 'casa', v_casa_id,
+          jsonb_build_object('casa_slug', p_casa_slug, 'scade_ts', now() + v_ttl));
+  RETURN v_token;
+END;
+$fn$;
+
+ALTER FUNCTION trasi.crea_sessione(text, text) OWNER TO applicatore;
+REVOKE ALL ON FUNCTION trasi.crea_sessione(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION trasi.crea_sessione(text, text) TO shim_rw, applicatore, automazioni;
+
+-- ---------------------------------------------------------------------------
+-- 11b. `registra_richiesta_operatore(...)` → bigint
+--      Eccezione V4 documentata (Fase 0 §2): la registrazione avviene DURANTE il
+--      colloquio e non può attendere la coda di approvazione. Insert + audit in
+--      una transazione; errori parlanti P0001 su vocabolario e destinazione
+--      (lo shim li mappa in 422; i CHECK di tabella restano la seconda barriera).
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION trasi.registra_richiesta_operatore(
+  p_casa_slug         text,
+  p_categoria         text,
+  p_esito             text,
+  p_destinazione_id   integer DEFAULT NULL,
+  p_destinazione_nota text    DEFAULT NULL
+) RETURNS bigint
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = trasi, public, pg_catalog
+AS $fn$
+DECLARE
+  v_casa_id int;
+  v_id      bigint;
+BEGIN
+  SELECT c.id INTO v_casa_id FROM trasi.casa c WHERE c.slug = p_casa_slug;
+  IF v_casa_id IS NULL THEN
+    RAISE EXCEPTION 'casa % sconosciuta: la richiesta non si registra (controllare lo slug)', p_casa_slug
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF p_categoria IS NULL OR p_categoria NOT IN ('orientamento','servizi_sociali','fiscale_isee','lavoro','abitare',
+                                                'salute','interculturale','ascolto_solitudine','eventi_attivita','altro') THEN
+    RAISE EXCEPTION 'categoria % non ammessa: vocabolario chiuso (orientamento, servizi_sociali, fiscale_isee, lavoro, abitare, salute, interculturale, ascolto_solitudine, eventi_attivita, altro)', COALESCE(p_categoria, '(vuota)')
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF p_esito IS NULL OR p_esito NOT IN ('risolta','inviata_altrove','non_trovata','rinviata') THEN
+    RAISE EXCEPTION 'esito % non ammesso (risolta, inviata_altrove, non_trovata, rinviata)', COALESCE(p_esito, '(vuoto)')
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF p_esito = 'inviata_altrove' AND p_destinazione_id IS NULL AND NULLIF(btrim(COALESCE(p_destinazione_nota,'')), '') IS NULL THEN
+    RAISE EXCEPTION 'esito «inviata_altrove» senza destinazione: indicare destinazione_id oppure destinazione_nota, altrimenti la registrazione non dice dove è stata indirizzata la persona'
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF p_destinazione_id IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM trasi.luogo l WHERE l.id = p_destinazione_id AND l.chiuso_il IS NULL) THEN
+    RAISE EXCEPTION 'destinazione_id % non corrisponde a un luogo della memoria della rete', p_destinazione_id
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  INSERT INTO trasi.richiesta (casa_id, categoria, esito, destinazione_id, destinazione_nota)
+  VALUES (v_casa_id, p_categoria, p_esito, p_destinazione_id, NULLIF(btrim(COALESCE(p_destinazione_nota,'')), ''))
+  RETURNING id INTO v_id;
+
+  INSERT INTO trasi.audit (azione, eseguito_da, entita, entita_id, dopo)
+  SELECT 'registra_richiesta', session_user, 'richiesta', r.id, to_jsonb(r)
+    FROM trasi.richiesta r WHERE r.id = v_id;
+
+  RETURN v_id;
+END;
+$fn$;
+
+ALTER FUNCTION trasi.registra_richiesta_operatore(text, text, text, integer, text) OWNER TO applicatore;
+REVOKE ALL ON FUNCTION trasi.registra_richiesta_operatore(text, text, text, integer, text) FROM PUBLIC;
+-- I ruoli **Casa** devono poterla eseguire, non solo `shim_rw`, ed è il punto che rende la funzione
+-- raggiungibile dall'area operatore. La sessione dello shim esegue `SET LOCAL ROLE casa_<slug>`
+-- (`auth.dipendenza_sessione_corrente`) per far decidere la RLS come in ogni altra via: da quel
+-- momento i privilegi effettivi sono quelli del **ruolo Casa**, e `EXECUTE` concesso al solo
+-- `shim_rw` non basta. Misurato: `POST /op/registra_richiesta` con sessione valida →
+-- `permission denied for function registra_richiesta_operatore`; `has_function_privilege` dava
+-- `casa_sanbao: false` e `shim_rw: true`. Concederlo ai dieci ruoli Casa non allarga il perimetro:
+-- la funzione è SECURITY DEFINER e prende lo slug della Casa come parametro, ma l'INSERT che esegue
+-- va su `trasi.richiesta`, dove la RLS impone `casa_id = casa_corrente()` — cioè un operatore non
+-- può registrare a nome di un'altra Casa, indipendentemente dal privilegio sulla funzione.
+GRANT EXECUTE ON FUNCTION trasi.registra_richiesta_operatore(text, text, text, integer, text)
+  TO shim_rw, applicatore, automazioni,
+     casa_santaspazio, casa_molo12, casa_erranti, casa_buscicchio, casa_sanbao,
+     casa_minimus, casa_pop, casa_bozzano, casa_dream, casa_tuturano;
+
+-- ---------------------------------------------------------------------------
+-- 11c. `conferma_movimento(p_movimento, p_ruolo)` → void
+--      L'unica via di UPDATE di `movimento` (tabella senza policy UPDATE per i
+--      client): decide la Casa RICEVENTE sul prestito proposto, e la Casa
+--      CEDENTE (o rete/ti) sul rientro con condizione. Errori P0001 parlanti V6.
+--      `p_ruolo` è il ruolo DB ricavato dalla sessione (mai dal body libero).
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION trasi.conferma_movimento(p_movimento integer, p_ruolo text)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = trasi, public, pg_catalog
+AS $fn$
+DECLARE
+  v_mov     trasi.movimento%ROWTYPE;
+  v_casa_id int;
+  v_prima   jsonb;
+  v_ogg_prima jsonb;
+BEGIN
+  SELECT rc.casa_id INTO v_casa_id FROM trasi.ruolo_casa rc WHERE rc.ruolo = p_ruolo;
+  IF p_ruolo IS NULL OR (v_casa_id IS NULL AND p_ruolo NOT IN ('rete','ti','applicatore')) THEN
+    RAISE EXCEPTION 'ruolo % non riconosciuto: la conferma spetta alla Casa ricevente', COALESCE(p_ruolo, '(vuoto)')
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT m.* INTO v_mov FROM trasi.movimento m WHERE m.id = p_movimento;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'movimento % inesistente', p_movimento
+      USING ERRCODE = 'P0001';
+  END IF;
+  v_prima := to_jsonb(v_mov);
+  -- Fotografia dell'oggetto PRIMA dello spostamento: serve all'audit che si scrive
+  -- in coda. `snapshot_entita` non si usa qui perché è STABLE e leggerebbe lo stato
+  -- già mutato; qui la lettura è esplicita e avviene prima delle UPDATE.
+  SELECT to_jsonb(o) INTO v_ogg_prima FROM trasi.oggetto o WHERE o.id = v_mov.oggetto_id;
+
+  CASE v_mov.stato
+    WHEN 'proposto' THEN
+      IF p_ruolo NOT IN ('rete','ti') AND v_casa_id IS DISTINCT FROM v_mov.a_casa_id THEN
+        RAISE EXCEPTION 'la conferma del movimento % spetta alla Casa ricevente (%), non a %: la decisione resta umana (V6)',
+          p_movimento,
+          (SELECT c.slug FROM trasi.casa c WHERE c.id = v_mov.a_casa_id),
+          p_ruolo
+          USING ERRCODE = 'P0001';
+      END IF;
+      UPDATE trasi.movimento m
+         SET stato = 'confermato'
+       WHERE m.id = p_movimento;
+      UPDATE trasi.oggetto o SET casa_id = v_mov.a_casa_id WHERE o.id = v_mov.oggetto_id;
+    WHEN 'confermato' THEN
+      -- Il rientro chiude il prestito: lo marca la Casa cedente (o rete/ti),
+      -- riportando l'oggetto alla Casa d'origine e registrando la condizione.
+      IF p_ruolo NOT IN ('rete','ti') AND v_casa_id IS DISTINCT FROM v_mov.da_casa_id THEN
+        RAISE EXCEPTION 'il rientro del movimento % lo marca la Casa cedente (%), non %',
+          p_movimento,
+          (SELECT c.slug FROM trasi.casa c WHERE c.id = v_mov.da_casa_id),
+          p_ruolo
+          USING ERRCODE = 'P0001';
+      END IF;
+      UPDATE trasi.movimento m
+         SET stato = 'rientrato',
+             condizione_rientro = (SELECT o.condizione FROM trasi.oggetto o WHERE o.id = v_mov.oggetto_id)
+       WHERE m.id = p_movimento;
+      UPDATE trasi.oggetto o SET casa_id = v_mov.da_casa_id WHERE o.id = v_mov.oggetto_id;
+    ELSE
+      RAISE EXCEPTION 'il movimento % è in stato ''%'': nessuna conferma possibile (conferma solo da ''proposto'', rientro solo da ''confermato'')',
+        p_movimento, v_mov.stato
+        USING ERRCODE = 'P0001';
+  END CASE;
+
+  INSERT INTO trasi.audit (azione, eseguito_da, entita, entita_id, prima, dopo)
+  SELECT 'conferma_movimento', session_user, 'movimento', m.id, v_prima, to_jsonb(m)
+    FROM trasi.movimento m WHERE m.id = p_movimento;
+
+  -- L'oggetto cambia Casa insieme al movimento (le due UPDATE sopra): anche lui
+  -- ha la sua riga. Senza, `v_scritture_senza_audit` — che contabilizza `oggetto`
+  -- come il resto della memoria — segnalerebbe **ogni prestito legittimo** come
+  -- violazione di V4: il falso positivo che rende inutile la vista quando poi
+  -- segnala una violazione vera. Una sola riga per movimento, scritta dopo il
+  -- CASE: entrambi i rami che arrivano qui hanno spostato l'oggetto (i rifiuti
+  -- sollevano eccezione prima).
+  INSERT INTO trasi.audit (azione, eseguito_da, entita, entita_id, prima, dopo)
+  SELECT 'conferma_movimento', session_user, 'oggetto', o.id, v_ogg_prima, to_jsonb(o)
+    FROM trasi.oggetto o WHERE o.id = v_mov.oggetto_id;
+END;
+$fn$;
+
+ALTER FUNCTION trasi.conferma_movimento(integer, text) OWNER TO applicatore;
+REVOKE ALL ON FUNCTION trasi.conferma_movimento(integer, text) FROM PUBLIC;
+-- Come `registra_richiesta_operatore`: la sessione opera come ruolo **Casa** (`SET LOCAL ROLE`), quindi
+-- il privilegio va concesso ai dieci ruoli, non al solo `shim_rw`. Senza, il pulsante «Conferma
+-- ricezione» della UI (`POST /op/movimento/{id}/conferma`) rispondeva «permission denied for function
+-- conferma_movimento», e la transitività del prestito — cioè la tutela che sostituisce V4 in questa
+-- eccezione — non poteva avvenire. La verifica di chi può confermare **non** è qui: è dentro la
+-- funzione (`p_ruolo`, e la casa del movimento), che è il posto in cui la regola vive.
+GRANT EXECUTE ON FUNCTION trasi.conferma_movimento(integer, text)
+  TO shim_rw, applicatore, automazioni,
+     casa_santaspazio, casa_molo12, casa_erranti, casa_buscicchio, casa_sanbao,
+     casa_minimus, casa_pop, casa_bozzano, casa_dream, casa_tuturano;
+
+-- ---------------------------------------------------------------------------
+-- 11d. `scadi_messaggi()` → int — retention chat interna (US-7, privacy):
+--      cancella i messaggi LETTI oltre messaggi_retention_days (ripiego 90).
+--      I non-letti non si toccano: una segnalazione PA non sparisce perché vecchia.
+--      Qui dentro anche le pulizie di contorno del login: sessioni scadute e
+--      tentativi oltre la finestra di 10 minuti (stesso passo notturno, notte.sh).
+--      Ritorna quante righe sono state cancellate in totale.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION trasi.scadi_messaggi()
+RETURNS integer
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = trasi, public, pg_catalog
+AS $fn$
+DECLARE
+  v_retention interval := make_interval(days => COALESCE(trasi.p_int('messaggi_retention_days'), 90));
+  v_n_msg  int;
+  v_n_sess int;
+  v_n_tent int;
+BEGIN
+  DELETE FROM trasi.messaggio m
+   WHERE m.letto_ts IS NOT NULL
+     AND m.letto_ts < now() - v_retention;
+  GET DIAGNOSTICS v_n_msg = ROW_COUNT;
+
+  DELETE FROM trasi.sessione s WHERE s.scade_ts < now();
+  GET DIAGNOSTICS v_n_sess = ROW_COUNT;
+
+  DELETE FROM trasi.tentativo_login t WHERE t.ts < now() - interval '10 minutes';
+  GET DIAGNOSTICS v_n_tent = ROW_COUNT;
+
+  RETURN v_n_msg + v_n_sess + v_n_tent;
+END;
+$fn$;
+
+ALTER FUNCTION trasi.scadi_messaggi() OWNER TO applicatore;
+REVOKE ALL ON FUNCTION trasi.scadi_messaggi() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION trasi.scadi_messaggi() TO automazioni, ti;
+
+-- ---------------------------------------------------------------------------
+-- 11e. Verifica di installazione delle funzioni !NEW
+-- ---------------------------------------------------------------------------
+DO $verify_new$
+DECLARE v_mancanti text;
+BEGIN
+  SELECT string_agg(f, ', ') INTO v_mancanti
+    FROM unnest(ARRAY['trasi.crea_sessione(text,text)',
+                      'trasi.registra_richiesta_operatore(text,text,text,integer,text)',
+                      'trasi.conferma_movimento(integer,text)',
+                      'trasi.scadi_messaggi()']) f
+   WHERE to_regprocedure(f) IS NULL;
+  IF v_mancanti IS NOT NULL THEN
+    RAISE EXCEPTION '006 §11: funzioni mancanti dopo l''installazione: %', v_mancanti;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
+              WHERE p.oid IN ('trasi.crea_sessione(text,text)'::regprocedure,
+                              'trasi.registra_richiesta_operatore(text,text,text,integer,text)'::regprocedure,
+                              'trasi.conferma_movimento(integer,text)'::regprocedure,
+                              'trasi.scadi_messaggi()'::regprocedure)
+                AND r.rolname <> 'applicatore') THEN
+    RAISE EXCEPTION '006 §11: una funzione operativa non ha owner applicatore';
+  END IF;
+  IF trasi.snapshot_entita('oggetto', NULL) IS NOT NULL THEN
+    RAISE EXCEPTION '006 §11: snapshot_entita(oggetto, NULL) deve essere NULL';
+  END IF;
+  RAISE NOTICE '006 §11 applicato: entita ''oggetto'' in snapshot/whitelist, tipi nuovo_oggetto|modifica_oggetto|ritira_oggetto, crea_sessione, registra_richiesta_operatore, conferma_movimento, scadi_messaggi (owner applicatore)';
+END
+$verify_new$;

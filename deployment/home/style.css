@@ -129,7 +129,6 @@ select:focus-visible { border-radius: var(--raggio); }
   align-items: center;
   gap: 8px;
 }
-.uscita { margin: 0; }
 
 .azione {
   display: inline-block;
@@ -284,7 +283,101 @@ main {
 /* ---------------------------------------------------------------- stampa */
 
 @media print {
-  .saltare, .azioni, .uscita { display: none; }
+  .saltare, .azioni { display: none; }
   body { background: #fff; }
   .riquadro { break-inside: avoid; }
 }
+
+/* ------------------------------------------------------- area operatore */
+
+.modulo { max-width: 34rem; }
+.modulo p { margin: 0 0 14px; }
+.etichetta { display: block; font-weight: 600; margin-bottom: 4px; }
+.modulo select, .modulo input, .modulo textarea,
+.chat-modulo textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--testo);
+  background: var(--superficie);
+  border: 2px solid var(--bordo);
+  border-radius: 6px;
+}
+.modulo-in-linea { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.modulo-in-linea input { max-width: 18rem; }
+
+.riquadro-azione {
+  display: inline-block;
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--superficie);
+  background: var(--testata);
+  border: 2px solid var(--testata-bordo);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.riquadro-azione:hover { background: var(--testata-bordo); }
+
+.messaggio-errore {
+  padding: 10px 14px;
+  background: var(--attenzione-sfondo);
+  color: var(--attenzione);
+  border-radius: var(--raggio);
+}
+.messaggio-ok { padding: 10px 14px; background: #e0efe0; color: #1e4a1e; border-radius: var(--raggio); }
+.messaggio-nota { color: var(--testo-tenue); }
+
+.linguette { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+.linguetta {
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 600;
+  background: var(--superficie);
+  border: 2px solid var(--bordo);
+  border-radius: var(--raggio);
+  cursor: pointer;
+}
+.linguetta[aria-pressed="true"] { background: var(--testata); color: var(--superficie); border-color: var(--testata-bordo); }
+
+.chat-registro { list-style: none; margin: 0 0 14px; padding: 0; max-width: 62rem; }
+.chat-battuta { margin: 0 0 10px; padding: 10px 14px; border-radius: var(--raggio); max-width: 46rem; }
+.chat-operatore { background: var(--superficie); border: 2px solid var(--bordo-tenue); margin-left: 3rem; }
+.chat-assistente { background: #eef3f8; border: 2px solid #b9c9da; margin-right: 3rem; }
+.chat-chi { display: block; font-size: 0.875rem; font-weight: 700; color: var(--testo-tenue); }
+.chat-testo { margin: 4px 0 0; white-space: pre-wrap; }
+.chat-modulo { max-width: 46rem; }
+
+.tabella { border-collapse: collapse; width: 100%; max-width: 62rem; }
+.tabella th, .tabella td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--bordo-tenue); }
+.tabella th { color: var(--testata); }
+.solo-lettore { position: absolute; left: -9999px; }
+.elenco-movimenti li, .elenco-messaggi li { margin-bottom: 8px; }
+
+/* Messaggio non ancora letto: il destinatario lo distingue a colpo d'occhio.
+   Il rilievo è deliberatamente debole (un bordo a sinistra, non un colore di
+   sfondo acceso): la bacheca è un canale operativo, non una casella di posta da
+   svuotare, e un messaggio non letto non è un allarme. */
+.messaggio-non-letto {
+  border-left: 3px solid var(--testata);
+  padding-left: 8px;
+}
+
+/* ====================== INIZIO BLOCCO TEST ======================
+   Stili del pannello di collaudo: rimuovere al rilascio con i blocchi
+   omonimi in index.html e home.js. */
+.pannello-test {
+  max-width: 62rem;
+  margin: 18px auto 0;
+  padding: 18px 20px;
+  background: #fffef4;
+  border: 2px dashed var(--bordo);
+  border-radius: var(--raggio);
+}
+.pannello-test h2 { margin: 0 0 10px; font-size: 1.125rem; color: var(--attenzione); }
+.test-righe { margin: 0; }
+.test-righe dt { font-weight: 700; margin-top: 12px; }
+.test-righe dd { margin: 4px 0 0; }
+.test-righe output { margin-left: 10px; color: var(--testo-tenue); }
+#test-metabase-frame { width: 100%; max-width: 62rem; height: 300px; border: 2px solid var(--bordo-tenue); border-radius: var(--raggio); margin-top: 8px; }
+/* ======================= FINE BLOCCO TEST ======================== */

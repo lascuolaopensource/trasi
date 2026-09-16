@@ -227,8 +227,24 @@ def test_proponi_modifica_non_scrive_il_dominio_e_non_sceglie_l_approvatore(app_
     assert not [c for c in sessione_finta.eseguite if any(
         parola in c[0].upper() for parola in ("INSERT INTO TRASI.LUOGO", "UPDATE TRASI.LUOGO", "INSERT INTO TRASI.SCHEDA", "UPDATE TRASI.SCHEDA")
     )], "lo shim non scrive il dominio"
-    corpo_payload = json.loads(insert[0][1][4])
-    assert corpo_payload == {"orari": {"lun": ["09:00", "13:00"]}}
+
+    # Il valore legato è il **dizionario** del payload, non una stringa JSON che lo rappresenta.
+    #
+    # La differenza non è stilistica ed è il motivo per cui questa riga è cambiata: il codec `jsonb`
+    # è registrato su ogni connessione del pool (`db._prepara_connessione`, `encoder=json.dumps`),
+    # quindi serializzare il payload nello shim *e* lasciarlo serializzare al codec produceva una
+    # **doppia codifica** — una stringa JSON dentro un `jsonb`. `json.loads` qui accettava entrambe
+    # le forme, quindi il test passava; sul database la proposta finiva con `jsonb_typeof(payload)`
+    # = `'string'` e `applica_proposte_approvate` la rifiutava per sempre con
+    # `cannot call jsonb_each on a non-object`. Il test verificava la forma del valore in Python,
+    # non ciò che il database ne avrebbe fatto: ora verifica il valore che il codec deve ricevere.
+    payload_legato = insert[0][1][4]
+    assert payload_legato == {"orari": {"lun": ["09:00", "13:00"]}}, (
+        f"il payload va passato come dizionario (il codec jsonb lo serializza): {payload_legato!r}"
+    )
+    assert not isinstance(payload_legato, str), (
+        "una stringa qui è la doppia codifica che rende la proposta inapplicabile"
+    )
 
 
 def test_proponi_modifica_motivazione_81_char_422(app_cliente):

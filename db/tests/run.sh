@@ -42,7 +42,7 @@ if [[ "$(psql_t -tAc "SELECT to_regclass('trasi.casa') IS NOT NULL")" != "t" ]];
 fi
 
 FILES=()
-for f in db/tests/t_seed.sql db/tests/t_rls.sql db/tests/t_viste.sql db/tests/test_zero_scritture.sql; do
+for f in db/tests/t_seed.sql db/tests/t_rls.sql db/tests/t_viste.sql db/tests/t_messaggi.sql db/tests/test_zero_scritture.sql; do
   [[ -f "$f" ]] && selected "$f" && FILES+=("$f")
 done
 if [[ ${#FILES[@]} -eq 0 ]]; then echo "run.sh: nessun file di test selezionato" >&2; exit 1; fi

@@ -147,6 +147,44 @@ def crea_app() -> FastAPI:
     scritture.monta(applicazione)
     testi.monta(applicazione)
 
+    # --- area operatore (schede !NEW 3/5/6/7): le funzioni del browser, non di Onyx --------------
+    #
+    # Questi router stanno **fuori** dal prefisso `/v1/u/{email}` del contratto congelato, e la
+    # distinzione non è formale: quel prefisso è la via di Onyx (identità nell'URL, autenticata con
+    # `X-Trasi-Key`), questa è la via del **browser dell'operatore**, autenticata con il cookie di
+    # sessione. Tenerle separate significa che una richiesta non può accidentalmente essere valida
+    # per entrambe, ed è la ragione per cui l'email dell'operatore non compare in nessuno di questi
+    # indirizzi (V5: nessun identificatore nel percorso, quindi nei log dei proxy).
+    #
+    # Due prefissi e non uno, deliberatamente:
+    #   * `auth` a radice, perché la pagina di accesso esiste **prima** della sessione: `/login` non
+    #     può stare dietro un prefisso che presuppone di essere già entrati, e `/logout` e `/me`
+    #     stanno con lui perché sono la stessa conversazione (chi sono / esci);
+    #   * il resto sotto `/op`, così «tutto ciò che richiede una sessione operatore» è un prefisso
+    #     solo, verificabile con un `grep`, e non un elenco di path da tenere a mente.
+    #
+    # `include_in_schema=False` su tutto il blocco, e non è un dettaglio. Lo schema OpenAPI che
+    # FastAPI genera da questa applicazione **è il contratto con Onyx**, e il gate V-09 lo verifica
+    # per uguaglianza: le `operationId` esposte devono essere esattamente le nove congelate in
+    # `shim/openapi.yaml`. Gli endpoint dell'area operatore non sono strumenti del LLM — li chiama
+    # il browser — quindi non appartengono a quel documento: dichiararli qui li tiene fuori dal
+    # contratto **senza** indebolire il gate (che resta `esposte == attese`, non un suo sottoinsieme).
+    from . import attrezzoteca, auth, messaggi
+
+    applicazione.include_router(auth.router, include_in_schema=False)
+
+    # La chat (proxy server-to-server verso Onyx) è montata con lo stesso criterio degli altri;
+    # se il modulo non è ancora presente, il resto dell'area operatore continua a funzionare.
+    try:
+        from . import chat
+
+        chat.monta(applicazione)
+    except ImportError:  # pragma: no cover — il modulo nasce con la scheda !NEW 6
+        logger.warning("chat non montata: shim/app/chat.py assente")
+
+    applicazione.include_router(attrezzoteca.router, prefix="/op", include_in_schema=False)
+    applicazione.include_router(messaggi.router, prefix="/op", include_in_schema=False)
+
     @applicazione.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:
         """Liveness del container: non tocca il database, così «healthy» significa «il processo risponde»."""

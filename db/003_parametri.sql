@@ -41,7 +41,12 @@ INSERT INTO trasi.parametro (chiave, valore, tipo, descrizione) VALUES
   ('gg_preavviso_scadenza',   '15',   'int',  'Preavviso, in giorni, per le scadenze (bandi, opportunità).'),
   ('k_anonimato',             '5',    'int',  'Soglia di k-anonimato: sotto questa soglia n è NULL e n_label = ''<5''.'),
   ('gg_retention_chat',       '30',   'int',  'Retention delle chat Onyx: solo la proposta persiste oltre.'),
-  ('giorno_ciclo_mensile',    '3',    'int',  'Giorno del mese del ciclo mensile (digest, report PN, CSV).')
+  ('giorno_ciclo_mensile',    '3',    'int',  'Giorno del mese del ciclo mensile (digest, report PN, CSV).'),
+  -- Schede !NEW (2026-09-16) --------------------------------------------------
+  ('session_ttl_hours',          '12', 'int',  'Durata in ore del cookie di sessione del login operatore CdQ (scadenza sul DB: trasi.sessione.scade_ts).'),
+  ('messaggi_retention_days',    '90', 'int',  'Retention della chat interna CdQ↔CdQ↔PA: trasi.scadi_messaggi() cancella i messaggi LETTI più vecchi di N giorni; i non letti non scadono.'),
+  ('attrezzoteca_soglia_bassa',  '2',  'int',  'Sotto N movimenti confermati/rientrati negli ultimi 12 mesi, in v_uso_oggetti l''oggetto è marcato "uso_basso".'),
+  ('attrezzoteca_soglia_alta',   '10', 'int',  'Da N movimenti confermati/rientrati negli ultimi 12 mesi in su, in v_uso_oggetti l''oggetto è marcato "uso_alto".')
 ON CONFLICT (chiave) DO NOTHING;
 
 RESET ROLE;

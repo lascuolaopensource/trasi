@@ -32,7 +32,6 @@ dell'operatore», ed è esattamente quello che viene calcolato.
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from typing import Any, Literal
 
@@ -315,7 +314,19 @@ async def proponi_modifica(
     casa_proposta = _casa_della_proposta(corpo, sess)
     # `payload` così com'è stato dichiarato: solo i campi inviati (`exclude_unset`), perché un `null` esplicito
     # significherebbe «azzera questo valore», che è una proposta diversa da quella formulata.
-    payload = json.dumps(corpo.payload.model_dump(exclude_unset=True, mode="json"))
+    #
+    # **Si passa il dizionario, non `json.dumps(...)`.** Il codec `jsonb` è registrato su ogni connessione del pool
+    # (`db._prepara_connessione`, `encoder=json.dumps`): serializzare qui *e* far serializzare il codec produce una
+    # **doppia codifica**, cioè una stringa JSON dentro un `jsonb`. Misurato sul database vero:
+    #   * `json.dumps({...})` → `jsonb_typeof` = `'string'`
+    #   * `{...}`             → `jsonb_typeof` = `'object'`
+    # La conseguenza non era un errore al momento della scrittura — la riga entrava — ma **una proposta
+    # inapplicabile**: `applica_proposte_approvate` chiama `payload_ammesso`/`payload_richiede`, che usano
+    # `jsonb_each`, e su una stringa rispondono `cannot call jsonb_each on a non-object`. La proposta veniva
+    # approvata e poi falliva per sempre, con l'esito `parziale` e l'errore solo dentro `flusso_run.dettaglio`:
+    # il consenso umano raccolto e mai applicato, che è il modo peggiore in cui V4 può rompersi.
+    # (Misurato: 4 proposte reali in quello stato, fra cui una approvata dall'AT e non applicabile.)
+    payload = corpo.payload.model_dump(exclude_unset=True, mode="json")
 
     try:
         riga = await sess.fetchrow(

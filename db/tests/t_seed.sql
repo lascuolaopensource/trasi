@@ -106,9 +106,11 @@ DO $$
 DECLARE n integer; owner text; colonne text; mancanti text;
 BEGIN
   SELECT count(*) INTO n FROM pg_tables WHERE schemaname = 'trasi';
-  -- 14 tabelle: le 13 di B1 più `flusso_run` (B4). Il numero è cresciuto con l'evoluzione del
-  -- sistema: il test verifica che lo schema sia quello atteso, non che sia rimasto quello di B1.
-  IF n <> 14 THEN RAISE EXCEPTION 'FAIL O05 — tabelle in schema trasi: %, attese 14', n; END IF;
+  -- 20 tabelle: le 13 di B1, `flusso_run` (B4) e le 6 delle schede !NEW — credenziale_casa,
+  -- sessione, tentativo_login (login operatore, db/013), oggetto, movimento (attrezzoteca, db/014),
+  -- messaggio (chat interna, db/015). Il numero cresce con l'evoluzione del sistema: il test verifica
+  -- che lo schema sia quello atteso **oggi**, non che sia rimasto quello di B1.
+  IF n <> 20 THEN RAISE EXCEPTION 'FAIL O05 — tabelle in schema trasi: %, attese 20', n; END IF;
 
   SELECT pg_get_userbyid(nspowner) INTO owner FROM pg_namespace WHERE nspname = 'trasi';
   IF owner <> 'trasi_owner' THEN RAISE EXCEPTION 'FAIL O05 — owner dello schema trasi = %, atteso trasi_owner', owner; END IF;

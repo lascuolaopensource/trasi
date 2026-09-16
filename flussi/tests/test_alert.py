@@ -269,3 +269,86 @@ def test_impronta_distingue_i_destinatari() -> None:
     m1 = a.Messaggio(a="gestore.a@trasi.local", oggetto="Trasi · 1 in attesa", righe=righe)
     m2 = a.Messaggio(a="gestore.b@trasi.local", oggetto="Trasi · 1 in attesa", righe=righe)
     assert a._impronta(m1) != a._impronta(m2)
+
+
+# -------------------------------------------------------- eventi: dati mancanti o datati (V6)
+
+
+def test_riga_evento_incompleto_tono_v6() -> None:
+    """Il testo del caso `incompleto`: dichiara lo stato e chi decide — mai un imperativo.
+
+    È il contratto del nuovo check, e va provato **senza** database: la proprietà da difendere è del
+    template, e un template non deve dipendere dai dati per essere misurato. La frase è quella del
+    contract: «La scheda di <titolo> è incompleta: manca <mancanze>. Decide la CdQ <slug> se e quando
+    aggiornarla.» — `verifica_v6` deve lasciarla passare (il soggetto è chi decide, il verbo è al
+    presente indicativo), e il test fallisce se il template la cambiasse.
+    """
+    riga = alert._riga_evento({
+        "motivo": "incompleto",
+        "titolo": "Cineforum d'estate",
+        "mancanze": "{descrizione,luogo_testo}",
+        "casa_slug": "san-bao",
+    })
+    assert riga == (
+        "  · La scheda di Cineforum d'estate è incompleta: manca descrizione, luogo_testo. "
+        "Decide la CdQ san-bao se e quando aggiornarla."
+    ), f"il testo del caso incompleto è cambiato:\n{riga}"
+    assert not alert.verifica_v6(riga), f"il caso incompleto contiene un imperativo: {alert.verifica_v6(riga)}"
+
+
+def test_riga_evento_datato_tono_v6() -> None:
+    """Il testo del caso `datato`: «…risulta aggiornata più di 2 mesi fa. Decide la CdQ <slug> se
+    verificarla.» — niente «verifica», niente «aggiorna»: chi decide è la CdQ, il sistema segnala."""
+    riga = alert._riga_evento({
+        "motivo": "datato",
+        "titolo": "Cineforum d'estate",
+        "mancanze": "{}",
+        "casa_slug": "bozzano",
+    })
+    assert riga == (
+        "  · La scheda di Cineforum d'estate risulta aggiornata più di 2 mesi fa. "
+        "Decide la CdQ bozzano se verificarla."
+    ), f"il testo del caso datato è cambiato:\n{riga}"
+    assert not alert.verifica_v6(riga), f"il caso datato contiene un imperativo: {alert.verifica_v6(riga)}"
+
+
+def test_mancanze_elenco_nomi_campi() -> None:
+    """Le mancanze arrivano come array Postgres testuale: escono come elenco leggibile di nomi."""
+    assert alert._mancanze_elenco("{descrizione,luogo_testo}") == "descrizione, luogo_testo"
+    assert alert._mancanze_elenco("{url}") == "url"
+    # Un array vuoto (caso limite della vista) non deve rompere la frase.
+    assert alert._mancanze_elenco("{}") == "informazioni"
+
+
+@pytest.mark.live
+def test_messaggi_eventi_dati_mancanti_rispettano_v6(db_vivo, pulizia):
+    """Il check compone messaggi reali dalla vista: tono V6, quattro campi, destinatario risolto.
+
+    Se la vista `trasi.v_eventi_dati_mancanti` non è ancora stata creata (merge DBA in corso) il test
+    si salta dichiarandolo: la vista è l'interfaccia di dominio del check, e senza di essa non c'è
+    nulla da misurare — il coordinatore la verifica nell'integrazione.
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile: i messaggi si compongono su dati reali")
+
+    from comune import leggi
+
+    try:
+        leggi("SELECT evento_id FROM trasi.v_eventi_dati_mancanti LIMIT 1")
+    except Exception:
+        pytest.skip("trasi.v_eventi_dati_mancanti non presente: in attesa del merge DBA (db/004)")
+
+    messaggi = alert.messaggi_eventi_dati_mancanti()
+    if not messaggi:
+        pytest.skip("nessun evento con dati mancanti o datati nel database corrente")
+
+    for messaggio in messaggi:
+        corpo = messaggio.corpo()
+        assert messaggio.a, "destinatario mancante"
+        assert not messaggio.verifica(), f"V6 violato: {messaggio.verifica()}"
+        for campo in ("cosa_osservato", "evidenza", "cosa_si_potrebbe_fare", "chi_decide"):
+            assert messaggio.campi.get(campo), f"campo V6 mancante: {campo}"
+        assert len(corpo.splitlines()) <= alert.Messaggio.MAX_RIGHE
+        # «Decide la CdQ …» deve comparire in ogni riga di dettaglio: è la firma del check.
+        for riga in messaggio.righe:
+            assert "Decide la CdQ" in riga, f"riga senza il soggetto che decide:\n{riga}"

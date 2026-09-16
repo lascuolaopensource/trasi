@@ -1,4 +1,4 @@
-"""Test degli output: `biglietto`, `oggi`, `cerca_web` (B3-SHM-07/08/12).
+"""Test degli output: `biglietto`, `oggi`, `cerca_web` (B3-SHM-07/08/12) e `scheda_evento` (US-1.3).
 
 SearXNG è **mockato** (`respx`) e il database è sostituito da una sessione finta per i test del contratto: un test
 che dipendesse da ciò che il motore restituisce davvero non proverebbe il filtro — proverebbe il motore. Il caso
@@ -6,14 +6,21 @@ che dipendesse da ciò che il motore restituisce davvero non proverebbe il filtr
 risultati commerciali delle query tipiche (`paginegialle.it`, `paginebianche.it`), è il caso **normale**.
 
 Il confronto dei domini è per **host**, non per sottostringa: `falso-inps.it.example` non è autorizzato da `inps.it`.
+
+La **scheda evento** (`GET /op/scheda_evento`) è provata come il biglietto — formato `@page`, divieti lessicali,
+badge V3, 404 — e in più sul **divieto di scrittura**, contando le query che riceve: è l'unica prova di «read-only»
+che non dipende da come si legge il codice. Il test `live` difende la query contro il database vero, perché
+l'ambiguità di colonna di una JOIN (`column reference "id" is ambiguous`) su un doppio non comparirebbe.
 """
 
 from __future__ import annotations
 
 import asyncio
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 import respx
@@ -21,6 +28,11 @@ from fastapi.testclient import TestClient
 from httpx import Response
 
 import ambiente
+
+# Il fuso di riferimento del progetto (`badge.FUSO_ITALIANO`): gli eventi di prova sono istanti locali, come
+# quelli che `asyncpg` restituisce convertiti — un `datetime` ingenuo renderebbe il test dipendente dalla TZ
+# del processo invece che dal comportamento dell'endpoint.
+FUSO = ZoneInfo("Europe/Rome")
 
 CHIAVE = ambiente.CHIAVE_SHIM or "chiave-di-test"
 
@@ -44,6 +56,7 @@ class SessioneFinta:
         ruolo: str = "casa_sanbao",
         riga_oggi: dict[str, Any] | None = None,
         luogo: dict[str, Any] | None = None,
+        evento: dict[str, Any] | None = None,
         fonti_web: list[dict[str, Any]] | None = None,
         parametri_valori: dict[str, Any] | None = None,
     ) -> None:
@@ -53,6 +66,7 @@ class SessioneFinta:
         self.eseguite: list[tuple[str, tuple[Any, ...]]] = []
         self.riga_oggi = riga_oggi
         self.luogo = luogo
+        self.evento = evento
         self.fonti_web = fonti_web if fonti_web is not None else [
             {"fonte": nome, "url": f"https://{dominio}", "livello_fiducia": fiducia, "tecnica": dominio}
             for dominio, (nome, fiducia) in DOMINI_ALLOWLIST.items()
@@ -77,6 +91,11 @@ class SessioneFinta:
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
         self.eseguite.append((sql, args))
+        # L'evento per primo: la sua query porta una sotto-select su `trasi.luogo` (la nota di accesso
+        # della Casa) e una JOIN su `trasi.casa`, quindi senza questo ordine il doppio risponderebbe con
+        # la riga del luogo o della Casa — cioè il test proverebbe una pagina costruita su dati sbagliati.
+        if "FROM trasi.evento" in sql:
+            return self.evento
         if "v_oggi_casa" in sql:
             return self.riga_oggi
         if "FROM trasi.luogo" in sql:
@@ -97,15 +116,23 @@ class SessioneFinta:
 
 @pytest.fixture
 def app_cliente(monkeypatch):
-    """`TestClient` sull'app reale con la sessione sostituita."""
+    """`TestClient` sull'app reale con la sessione sostituita.
+
+    Due dipendenze di sessione e non una, perché lo shim ne ha due: `db.sessione` è la via di Onyx
+    (chiave + email nel percorso) e `auth.sessione_corrente` è la via dell'operatore (cookie) sotto
+    `/op`. Il doppio risponde a entrambe, così un test dell'area operatore non deve costruire una
+    sessione diversa — e una differenza di comportamento fra i due canali resta visibile.
+    """
     ambiente.configura_ambiente()
 
     from app import main as modulo_main
+    from app.auth import sessione_corrente
     from app.db import sessione as dipendenza
 
     def costruisci(sessione_finta: SessioneFinta) -> TestClient:
         applicazione = modulo_main.crea_app()
         applicazione.dependency_overrides[dipendenza] = lambda: sessione_finta
+        applicazione.dependency_overrides[sessione_corrente] = lambda: sessione_finta
         return TestClient(applicazione, raise_server_exceptions=False)
 
     return costruisci
@@ -644,3 +671,287 @@ def test_cerca_web_risposta_conforme_al_contratto(app_cliente):
             for e in validatore.iter_errors(risposta.json())
         ]
         assert errori == [], errori
+
+
+# --- `scheda_evento` (area operatore, US-1.3) -----------------------------------------------------------------
+
+
+def _evento_di_prova(**sovrascritture: Any) -> dict[str, Any]:
+    """Una riga di `trasi.evento` con i suoi riferimenti, come la restituisce `SQL_EVENTO`.
+
+    I valori sono quelli di un evento **inserito a mano** (nessun `fonte_id`, quindi nessun
+    `fonte_nome`/`fonte_autorita`): è il caso che il badge V3 deve saper dichiarare come «inserito a
+    mano», ed è anche lo stato in cui la memoria reale si trova — l'unico evento presente nel seed
+    (`Festa di fine estate`, 20/09/2026) non ha fonte.
+    """
+    riga = {
+        "id": 1427,
+        "titolo": "Festa di fine estate",
+        "descrizione": "Musica e laboratori per il quartiere, ingresso libero.",
+        "inizio": datetime(2026, 9, 20, 18, 0, tzinfo=FUSO),
+        "fine": datetime(2026, 9, 20, 22, 0, tzinfo=FUSO),
+        "luogo_testo": "Cortile della Casa, San Bao",
+        "url": None,
+        "annullato": False,
+        "uid_ical": None,
+        "affidabilita": 3,
+        "creato_ts": datetime(2026, 9, 16, 17, 26, tzinfo=FUSO),
+        "aggiornato_ts": datetime(2026, 9, 16, 17, 26, tzinfo=FUSO),
+        "aggiornato_da": "casa_sanbao",
+        "fonte_nome": None,
+        "fonte_autorita": None,
+        "fonte_tipo": None,
+        "casa_slug": "san-bao",
+        "casa_nome": "San Bao",
+        "casa_zona": "La Rosa",
+        "casa_ente": "Coop. NauKleros",
+        "casa_accesso": "Portierato attivo",
+    }
+    riga.update(sovrascritture)
+    return riga
+
+
+def _scheda(client: TestClient, evento_id: int = 1427):
+    """La chiamata che fa la UI: `home.js` apre `/api/shim/op/scheda_evento?evento_id=…` (Caddy toglie `/api/shim`)."""
+    return client.get("/op/scheda_evento", headers=_intestazioni(), params={"evento_id": evento_id})
+
+
+def test_scheda_evento_html_a5_senza_campi_e_senza_parole_vietate(app_cliente):
+    """La scheda è un foglio **A5** senza moduli: gli stessi divieti del biglietto A6, verificati sul documento intero.
+
+    A5 e non A6 perché la scheda porta più contenuto (titolo, periodo, luogo, accesso, descrizione,
+    contatto, fonte): su A6 il testo andrebbe a capo a ogni riga. Il formato è quindi un'asserzione del
+    test, non un dettaglio di stile — un `@page { size: A6` qui significherebbe che il costruttore del
+    biglietto è stato riusato per un contenuto che non gli appartiene.
+    """
+    client = app_cliente(SessioneFinta(evento=_evento_di_prova()))
+
+    risposta = _scheda(client)
+
+    assert risposta.status_code == 200, risposta.text
+    assert risposta.headers["content-type"].startswith("text/html")
+    corpo = risposta.text
+
+    assert "@page { size: A5" in corpo
+    assert "margin: 8mm" in corpo
+    assert re.search(r"<h1[^>]*>Festa di fine estate</h1>", corpo)
+    # Gli orari sono quelli **locali** dell'evento: un `strftime` sul timestamp UTC mostrerebbe 16:00.
+    assert "domenica 20/09/2026" in corpo
+    assert "18:00–22:00" in corpo
+    assert "Cortile della Casa, San Bao" in corpo
+    assert "Coop. NauKleros" in corpo
+
+    for vietato in ("<input", "<form", "<textarea", "<select", "cittadino", "nome_persona", "telefono"):
+        assert vietato not in corpo.lower(), f"la scheda evento non deve contenere «{vietato}»"
+
+
+def test_scheda_evento_inserito_a_mano_porta_badge_kb_con_la_fonte_dichiarata(app_cliente):
+    """Un evento senza `fonte_id` è inserito a mano: il badge lo dichiara invece di tacere (V3).
+
+    La formulazione è quella di `routes_lettura.py` per gli eventi senza fonte esterna: un evento della
+    rete non è «non verificato» (sarebbe il badge delle fonti esterne) e non ha una fonte istituzionale
+    da citare; dire «inserito a mano» è l'informazione vera, e l'operatore sa da chi andare a verificare.
+    """
+    client = app_cliente(SessioneFinta(evento=_evento_di_prova()))
+
+    corpo = _scheda(client).text
+
+    assert "[KB · inserito a mano · agg. 16/09/2026 · affidabilità 3]" in corpo
+    assert "Fonte: inserito a mano" in corpo
+    assert "[Esterna" not in corpo
+
+
+def test_scheda_evento_da_calendario_esterno_porta_badge_esterna(app_cliente):
+    """Un evento con fonte iCal è importato da un calendario: badge `[Esterna …]`, non verificato dalla rete.
+
+    È la distinzione che l'AC di US-1.3 chiede esplicitamente («badge `[KB …]`/`[Esterna …]`»): il
+    calendario di una Casa è una fonte esterna come OpenStreetMap, e la rete non l'ha verificata. Se
+    questo evento portasse un badge KB, l'operatore lo tratterebbe come memoria verificata.
+    """
+    evento = _evento_di_prova(
+        id=2001,
+        uid_ical="festa-2026@san-bao",
+        fonte_nome="Google Calendar-ical-2",
+        fonte_autorita="Calendari ufficiali delle Case",
+        fonte_tipo="ical",
+    )
+    client = app_cliente(SessioneFinta(evento=evento))
+
+    corpo = _scheda(client, evento["id"]).text
+
+    assert "[Esterna · Calendari ufficiali delle Case · consultata " in corpo
+    assert "non verificata dalla rete]" in corpo
+    assert "[KB" not in corpo
+
+
+def test_scheda_evento_inesistente_o_annullato_404(app_cliente):
+    """Un evento che non c'è (o è annullato: la query lo esclude) è 404, mai una scheda vuota da appendere."""
+    client = app_cliente(SessioneFinta(evento=None))
+
+    risposta = _scheda(client, 999999)
+
+    assert risposta.status_code == 404
+    assert "annullato" in risposta.json()["detail"]
+
+
+def test_scheda_evento_dichiara_la_data_di_aggiornamento_mancante(app_cliente):
+    """Se `aggiornato_ts` manca, la scheda **lo dichiara**: non inventa una data (US-1.2, US-1.4).
+
+    È il caso delle righe seminate prima del trigger `scrittura_00_ts`: l'informazione manca davvero, e
+    una data plausibile sulla locandina sarebbe la sola affermazione falsa che il foglio potrebbe fare.
+    """
+    evento = _evento_di_prova(aggiornato_ts=None, aggiornato_da=None, casa_accesso=None)
+    client = app_cliente(SessioneFinta(evento=evento))
+
+    corpo = _scheda(client, evento["id"]).text
+
+    assert "data di aggiornamento non disponibile" in corpo
+    assert "agg. —" in corpo, "il badge non inventa una data quando non la conosce"
+    # Accesso e contatto: quando la memoria non li ha, la scheda lo dice invece di dedurli.
+    assert "modalità di accesso non dichiarate nella memoria" in corpo
+
+
+def test_scheda_evento_oltre_la_mezzanotte_dichiara_il_giorno_di_fine(app_cliente):
+    """Un evento che finisce il giorno dopo dichiara **anche la data di fine**: «22:00–02:00» senza data sarebbe falso.
+
+    È il confine del formattatore: dentro lo stesso giorno l'orario di fine basta (`18:00–22:00`), oltre la
+    mezzanotte il solo orario farebbe leggere la fine come precedente all'inizio. La scheda è una locandina:
+    un orario ambiguo è un errore che l'operatore scopre solo davanti alla persona che ha davanti.
+    """
+    evento = _evento_di_prova(
+        inizio=datetime(2026, 9, 20, 22, 0, tzinfo=FUSO),
+        fine=datetime(2026, 9, 21, 2, 0, tzinfo=FUSO),
+    )
+    client = app_cliente(SessioneFinta(evento=evento))
+
+    corpo = _scheda(client, evento["id"]).text
+
+    assert "domenica 20/09/2026, 22:00 — fino a lunedì 21/09/2026, 02:00" in corpo
+
+
+def test_scheda_evento_senza_fine_mostra_il_solo_inizio(app_cliente):
+    """Un evento senza `fine` (facoltativa nello schema) mostra l'inizio e non un trattino sospeso."""
+    evento = _evento_di_prova(fine=None)
+    client = app_cliente(SessioneFinta(evento=evento))
+
+    corpo = _scheda(client, evento["id"]).text
+
+    assert "domenica 20/09/2026, 18:00" in corpo
+    assert "18:00–" not in corpo
+
+
+def test_scheda_evento_non_scrive_nulla_sul_dominio(app_cliente):
+    """L'endpoint è **read-only**: una sola lettura, e nessuna istruzione di scrittura (V4).
+
+    La verifica è sulle query effettivamente ricevute dalla sessione: è l'unica prova che non dipende da
+    una convenzione di lettura del codice, e regge anche se in futuro qualcuno aggiungesse un `execute`
+    «innocuo» per timbrare la stampa.
+    """
+    sessione_finta = SessioneFinta(evento=_evento_di_prova())
+    client = app_cliente(sessione_finta)
+
+    assert _scheda(client).status_code == 200
+
+    assert len(sessione_finta.eseguite) == 1, [q for q, _ in sessione_finta.eseguite]
+    query, argomenti = sessione_finta.eseguite[0]
+    assert "FROM trasi.evento" in query
+    assert argomenti == (1427,)
+    for scrittura in ("INSERT", "UPDATE", "DELETE"):
+        assert scrittura not in query.upper()
+
+
+def test_scheda_evento_e_fuori_dal_contratto_congelato(app_cliente):
+    """La scheda non compare nell'OpenAPI dell'applicazione: quel documento è il contratto con Onyx (gate V-09).
+
+    La scheda la chiama il browser, non il LLM, e `include_in_schema=False` è ciò che la tiene fuori dalle
+    nove operazioni congelate. Il test guarda lo schema generato dall'app — non lo YAML, che nessuno tocca
+    — perché è da lì che un `include_in_schema` dimenticato farebbe divergere il contratto che Onyx
+    registra. L'insieme completo delle `operationId` esposte è già verificato da
+    `test_openapi_contract.py`: qui si difende l'assenza di questa, non si ripete quel confronto.
+    """
+    client = app_cliente(SessioneFinta(evento=_evento_di_prova()))
+    client.get("/healthz")
+
+    from app.main import app
+
+    esposte = {
+        operazione["operationId"]
+        for elemento in app.openapi()["paths"].values()
+        for metodo, operazione in elemento.items()
+        if metodo in ("get", "post", "put", "patch", "delete")
+    }
+    assert "op_scheda_evento" not in esposte
+    assert not any("/op/" in percorso for percorso in app.openapi()["paths"]), app.openapi()["paths"].keys()
+
+
+@pytest.mark.live
+def test_scheda_evento_sul_database_vero_mostra_l_evento_di_seed(db_vivo):
+    """Sul database reale, la scheda dell'evento di seed si genera e dichiara la sua provenienza.
+
+    Il test è `live` perché il valore qui non è la forma del foglio — già provata sopra su un doppio — ma
+    la **query** e l'**accesso**: che `SQL_EVENTO` sia eseguibile dal ruolo della Casa (JOIN su `casa` e
+    `fonte`, sotto-select su `luogo`), che le colonne esistano con quei nomi e che il filtro `annullato`
+    regga. Un errore di SQL si vede solo qui: `column reference "id" is ambiguous` è il difetto tipico di
+    questa JOIN, e su un doppio non comparirebbe.
+
+    La sessione è quella **vera**, come negli altri test dell'area operatore: login con le credenziali
+    seminate da db/013 e cookie `trasi_sessione` fino a `/op/…`, senza `dependency_overrides`. Sostituire
+    la dipendenza renderebbe il test verde anche se l'accesso dell'operatore fosse rotto — cioè
+    lascerebbe scoperto proprio il tratto da cui dipende questa pagina.
+    """
+    if not db_vivo:
+        pytest.skip(f"database non raggiungibile ({ambiente.dsn_test()})")
+    ambiente.configura_ambiente()
+
+    async def evento_di_seed() -> dict[str, Any] | None:
+        """L'evento più recente non annullato della Casa: si legge, non si assume un id."""
+        conn = await ambiente.connessione(ruolo="casa_sanbao")
+        try:
+            riga = await conn.fetchrow(
+                """
+                SELECT e.id, e.titolo, e.annullato, c.slug AS casa_slug
+                  FROM trasi.evento e JOIN trasi.casa c ON c.id = e.casa_id
+                 WHERE e.annullato = false AND c.slug = $1
+                 ORDER BY e.inizio DESC LIMIT 1
+                """,
+                ambiente.SLUG_SANBAO,
+            )
+            return dict(riga) if riga else None
+        finally:
+            await conn.close()
+
+    evento = asyncio.run(evento_di_seed())
+    if evento is None:
+        pytest.skip(f"nessun evento per la Casa {ambiente.SLUG_SANBAO}")
+
+    from app.main import crea_app
+
+    # Un solo `TestClient` per test: il pool di connessioni dello shim è globale al processo e vive nel
+    # ciclo di eventi del client che l'ha aperto (v. `test_attrezzoteca_op.py`). Il `logout` alla fine
+    # revoca il token: la sessione è credenziale, e un test che ne lascia una aperta a ogni esecuzione
+    # riempirebbe `trasi.sessione` di righe che nessuno usa.
+    with TestClient(crea_app(), raise_server_exceptions=False) as client:
+        accesso = client.post(
+            "/login",
+            json={"casa": ambiente.SLUG_SANBAO, "password": ambiente.SLUG_SANBAO.replace("-", "") + "2026!"},
+        )
+        assert accesso.status_code == 200, f"login della Casa non riuscito: {accesso.status_code} {accesso.text}"
+
+        try:
+            risposta = client.get("/op/scheda_evento", params={"evento_id": evento["id"]})
+            # `evento_id` è dichiarato `ge=1`: zero non è un identificativo, ed è un 422 di validazione.
+            annullato = client.get("/op/scheda_evento", params={"evento_id": 0})
+            inesistente = client.get("/op/scheda_evento", params={"evento_id": 999999})
+        finally:
+            client.post("/logout")
+
+    assert risposta.status_code == 200, risposta.text
+    assert inesistente.status_code == 404
+    assert annullato.status_code == 422, "`evento_id` è dichiarato `ge=1`: zero non è un identificativo"
+
+    corpo = risposta.text
+    assert "@page { size: A5" in corpo
+    assert f"<h1>{evento['titolo']}</h1>" in corpo
+    assert "[KB · " in corpo or "[Esterna · " in corpo
+    for vietato in ("<input", "<form", "<textarea", "<select", "cittadino", "nome_persona", "telefono"):
+        assert vietato not in corpo.lower()

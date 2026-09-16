@@ -6,24 +6,31 @@
 \set ON_ERROR_STOP on
 \pset pager off
 
--- V01 · i 10 parametri [P] esistono con i valori iniziali dell'architettura §7.2 -------------
+-- V01 · i parametri [P] esistono con i valori iniziali dell'architettura §7.2 -------------
+-- Il conteggio non è più 10: le schede !NEW (2026-09-16) hanno aggiunto i quattro parametri
+-- del login operatore, della retention della chat interna e delle soglie d'uso
+-- dell'attrezzoteca. Il test verifica che lo schema sia quello atteso **oggi**, non che sia
+-- rimasto quello di B1 — la stessa scelta già fatta da O05 per il numero di tabelle.
 DO $$
 DECLARE attesi text[][] := ARRAY[
     ['raggio_vicinanza_m','800'],['gg_scadenza_proposta','30'],['fiducia_min_esterna','2'],
     ['max_risultati_esterni','5'],['gg_validazione_comune','7'],['gg_escalation_pm','14'],
     ['gg_preavviso_scadenza','15'],['k_anonimato','5'],['gg_retention_chat','30'],
-    ['giorno_ciclo_mensile','3']];
+    ['giorno_ciclo_mensile','3'],
+    -- schede !NEW (2026-09-16)
+    ['session_ttl_hours','12'],['messaggi_retention_days','90'],
+    ['attrezzoteca_soglia_bassa','2'],['attrezzoteca_soglia_alta','10']];
   r text[]; v text;
 BEGIN
-  IF (SELECT count(*) FROM trasi.parametro) <> 10 THEN
-    RAISE EXCEPTION 'FAIL V01 — parametri presenti: %, attesi 10', (SELECT count(*) FROM trasi.parametro);
+  IF (SELECT count(*) FROM trasi.parametro) <> 14 THEN
+    RAISE EXCEPTION 'FAIL V01 — parametri presenti: %, attesi 14', (SELECT count(*) FROM trasi.parametro);
   END IF;
   FOREACH r SLICE 1 IN ARRAY attesi LOOP
     v := trasi.p_text(r[1]);
     IF v IS NULL THEN RAISE EXCEPTION 'FAIL V01 — parametro % assente', r[1]; END IF;
     IF v <> r[2] THEN RAISE EXCEPTION 'FAIL V01 — % = ''%'', atteso ''%'' (architettura §7.2)', r[1], v, r[2]; END IF;
   END LOOP;
-  RAISE NOTICE 'PASS V01 — 10 parametri [P] con i valori di §7.2 (raggio 800, scadenza 30, fiducia_min 2, max_esterni 5, k_anon 5, …)';
+  RAISE NOTICE 'PASS V01 — 14 parametri [P] con i valori attesi (raggio 800, scadenza 30, fiducia_min 2, max_esterni 5, k_anon 5, …)';
 END $$;
 
 -- V02 · p_int/p_text/p_bool: tipi corretti, e NULL (non eccezione) su chiave inesistente -----

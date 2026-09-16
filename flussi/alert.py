@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Trasi — F6 «Alert» (B4-FLW-09) · chi decide, non chi deve fare.
 
-Due avvisi, i due del MVP (§8 F6):
+Tre avvisi:
 
 1. **Proposte in attesa** — oltre `[P] gg_attesa_alert` giorni (default 7), al **destinatario
    competente**: il *gestore* della Casa se la proposta è sua (`approvatore_ruolo='gestore'`), altrimenti
@@ -9,6 +9,11 @@ Due avvisi, i due del MVP (§8 F6):
    che non è stata presa — ed è l'informazione più utile che la coda possa dare.
 2. **Coerenza delle fonti** — fonte silente, in errore, con delta anomalo, o dato provvisorio non
    confermato entro la finestra. Va all'AT (è chi governa le fonti, §11).
+3. **Eventi con dati mancanti o datati** — da `trasi.v_eventi_dati_mancanti` (evento futuro con campi
+   nulli, oppure dato non aggiornato da oltre 2 mesi, motivo `incompleto`|`datato`). Va al **gestore
+   della Casa** dell'evento (recapito da `trasi.v_flusso_recapiti`): la scheda è sua e la decisione
+   di aggiornarla è sua. **Sola segnalazione**: nessuna scrittura sul dominio, mai — il flusso legge
+   la vista e compone l'avviso, punto.
 
 **V6 — i messaggi dicono chi decide, non impartiscono compiti.** I quattro campi sono *cosa è stato
 osservato · su quale evidenza · cosa si potrebbe fare · chi decide*, e nessun verbo imperativo entra
@@ -285,6 +290,130 @@ def messaggi_coerenza() -> list[Messaggio]:
     ]
 
 
+# ------------------------------------------------------------------ eventi: dati mancanti o datati
+
+
+def _eventi_dati_mancanti() -> list[dict]:
+    """Gli eventi futuri con scheda incompleta o non aggiornata, dalla vista di dominio.
+
+    Colonne della vista (db/004_views.sql, confermate da DBA): `evento_id, casa_id, casa_slug,
+    titolo, inizio, mancanze text[], motivo`. Il motivo ha **tre** valori: `incompleto`, `datato`,
+    `incompleto_e_datato` — il terzo è la congiunzione dei due e va comunicato come entrambi.
+    `mancanze` arriva dal CSV come array Postgres testuale (`{descrizione,luogo_testo}`) e si legge
+    come elenco di nomi di campo — mai come testo da mostrare così com'è.
+    """
+    return leggi(
+        "SELECT evento_id, casa_slug, titolo, inizio, mancanze, motivo "
+        "  FROM trasi.v_eventi_dati_mancanti ORDER BY casa_slug, motivo, titolo"
+    )
+
+
+def _mancanze_elenco(mancanze: str) -> str:
+    """`{descrizione,luogo,contatto}` → «descrizione, luogo, contatto»: i nomi dei campi mancanti.
+
+    L'array testuale di Postgres si smonta qui e non in SQL perché il messaggio è una scelta di
+    comunicazione del flusso, non della vista: la vista dichiara *quali* campi mancano, il flusso
+    decide come dirlo. Nessun campo personale può entrare da qui: sono nomi di colonna dello schema.
+    """
+    valori = [v.strip().strip('"') for v in mancanze.strip("{}").split(",") if v.strip()]
+    return ", ".join(valori) if valori else "informazioni"
+
+
+def _riga_evento(riga: dict) -> str:
+    """La riga V6 del dettaglio: dice lo stato e **chi decide**, mai un compito.
+
+    «Decide la CdQ <slug> se…» è la forma dell'architettura §2.2 — il soggetto della frase è chi
+    decide, il verbo è al presente indicativo (dichiara), non all'imperativo (ordina): il presidio
+    lessicale `verifica_v6` la lascia passare, e `flussi/tests/test_v6_template.py` lo garantisce a
+    ogni giro. Un «aggiorna la scheda» bloccherebbe l'intero alert, com'è giusto che sia.
+    """
+    if riga["motivo"] == "datato":
+        return (
+            f"  · La scheda di {riga['titolo']} risulta aggiornata più di 2 mesi fa. "
+            f"Decide la CdQ {riga['casa_slug']} se verificarla."
+        )
+    testo = (
+        f"  · La scheda di {riga['titolo']} è incompleta: manca "
+        f"{_mancanze_elenco(riga['mancanze'])}."
+    )
+    if riga["motivo"] == "incompleto_e_datato":
+        # La congiunzione dei due motivi: si dicono entrambe le cose, in una riga sola.
+        testo = testo.rstrip(".") + ", e risulta aggiornata più di 2 mesi fa."
+    return testo + f" Decide la CdQ {riga['casa_slug']} se e quando aggiornarla."
+
+
+def _conteggi_motivo(eventi: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Eventi con campi mancanti e datati, con `incompleto_e_datato` contato in entrambi gli insiemi."""
+    incompleti = [e for e in eventi if "incompleto" in e["motivo"]]
+    datati = [e for e in eventi if "datato" in e["motivo"]]
+    return incompleti, datati
+
+
+def messaggi_eventi_dati_mancanti() -> list[Messaggio]:
+    """Un messaggio **per Casa** con i suoi eventi incompleti o datati: la scheda è sua, decide lei.
+
+    Il recapito si risolve da `trasi.v_flusso_recapiti` — la stessa regola di governance degli altri
+    avvisi (email_digest, poi identità gestore, poi AT) scritta una volta sola nel database. Una casa
+    senza recapito manda l'avviso all'AT: un evento senza destinatario non deve sparire.
+    """
+    righe = _eventi_dati_mancanti()
+    if not righe:
+        return []
+
+    recapiti = {
+        r["casa_slug"]: r["destinatario"]
+        for r in leggi("SELECT casa_slug, destinatario FROM trasi.v_flusso_recapiti")
+        if r["destinatario"]
+    }
+    at = _destinatario_at()
+
+    per_casa: dict[str, list[dict]] = {}
+    for riga in righe:
+        per_casa.setdefault(riga["casa_slug"], []).append(riga)
+
+    messaggi: list[Messaggio] = []
+    for slug, eventi in sorted(per_casa.items()):
+        destinatario = recapiti.get(slug) or at
+        if not destinatario:
+            raise AlertErrore(
+                f"eventi dati mancanti: nessun recapito per la CdQ {slug} e nessuna identità AT"
+            )
+        incomplete = [e for e in eventi if e["motivo"] == "incompleto"]
+        datate = [e for e in eventi if e["motivo"] != "incompleto"]
+        pezzi = []
+        if incomplete:
+            pezzi.append(f"{len(incomplete)} con campi mancanti")
+        if datate:
+            pezzi.append(f"{len(datate)} non aggiornate da oltre 2 mesi")
+
+        messaggi.append(
+            Messaggio(
+                a=destinatario,
+                oggetto=f"Trasi · schede evento di {slug}: " + " · ".join(pezzi),
+                campi={
+                    "cosa_osservato": (
+                        f"Schede di eventi futuri della CdQ {slug}: " + " · ".join(pezzi)
+                    ),
+                    "evidenza": (
+                        "vista trasi.v_eventi_dati_mancanti: eventi futuri con campi nulli "
+                        "oppure dato non aggiornato da oltre 2 mesi"
+                    ),
+                    "cosa_si_potrebbe_fare": (
+                        "Le schede si possono aggiornare dalla coda delle proposte della propria "
+                        "Casa; una scheda che resta datata continua a comparire in questo avviso "
+                        "fino a quando il dato torna aggiornato."
+                    ),
+                    "chi_decide": (
+                        f"Le schede degli eventi della CdQ {slug} le decide la CdQ {slug}: "
+                        "il sistema segnala lo stato e la scelta resta alla Casa."
+                    ),
+                },
+                righe=[_riga_evento(e) for e in eventi],
+            )
+        )
+    return messaggi
+
+
 # --------------------------------------------------------------------------- invio
 
 
@@ -406,7 +535,7 @@ def esegui(*, dry_run: bool, giorni: int | None = None, come_json: bool = False)
     mittente = os.environ.get("TRASI_SMTP_FROM", "trasi@trasi.local")
 
     try:
-        messaggi = messaggi_proposte(gg) + messaggi_coerenza()
+        messaggi = messaggi_proposte(gg) + messaggi_coerenza() + messaggi_eventi_dati_mancanti()
     except FlussoErrore as errore:
         # L'errore va **anche su stderr**, non solo in `flusso_run`: un run che fallisce senza dire
         # perché è un run che nessuno ripara (successo davvero, alla prima esecuzione di questo file).

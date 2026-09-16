@@ -178,16 +178,89 @@
 
   leggiOggi(casaScelta());
 
-  /* Uscita: il modulo fa da solo il POST verso Onyx (nessun `fetch` qui, così
-     funziona anche se in futuro il logout richiedesse un token). A POST
-     concluso il browser torna su questa pagina e la riga dice che è andata. */
-  var modulo = document.querySelector("form.uscita");
-  var esito = document.getElementById("esito-uscita");
-  if (modulo && esito) {
-    modulo.addEventListener("submit", function () {
-      window.setTimeout(function () {
-        esito.hidden = false;
-      }, 1200);
+  /* Uscita: chiude la sessione **dello shim** con lo stesso percorso del resto
+     della pagina (Caddy aggiunge la chiave lato server). Il POST è gestito qui e
+     non da un modulo HTML, perché `action` puntava a un altro dominio: il logout
+     di Onyx. La sessione dell'operatore è del cookie `trasi_sessione`, e la revoca
+     avviene sul database dello shim (`DELETE FROM trasi.sessione`), quindi il
+     pulsante non deve uscire da Trasi per funzionare. L'esito si dichiara in ogni
+     caso — anche se la richiesta fallisce, l'utente sa che non è uscito. */
+  var pulsanteEsci = document.getElementById("pulsante-esci");
+  var esitoUscita = document.getElementById("esito-uscita");
+  if (pulsanteEsci && esitoUscita) {
+    pulsanteEsci.addEventListener("click", function () {
+      fetch("/api/shim/logout", { method: "POST", credentials: "same-origin" })
+        .then(function (risposta) {
+          esitoUscita.textContent = risposta.ok
+            ? "Sessione chiusa."
+            : "Uscita non riuscita (risposta " + risposta.status + ").";
+          esitoUscita.hidden = false;
+        })
+        .catch(function () {
+          esitoUscita.textContent = "Uscita non riuscita: servizio non raggiungibile.";
+          esitoUscita.hidden = false;
+        });
     });
   }
+
+  /* ====================== INIZIO BLOCCO TEST ======================
+     Pannello di collaudo (?test=1). Va rimosso al rilascio insieme al
+     blocco omonimo in index.html e style.css. Attivo solo se la query
+     string lo chiede: senza `?test=1` non succede nulla. */
+  (function pannelloTest() {
+    if (!/[?&]test=1\b/.test(window.location.search)) return;
+    var pannello = document.getElementById("pannello-test");
+    if (!pannello) return;
+    pannello.hidden = false;
+
+    function esito(id, testo) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = testo;
+    }
+
+    document.getElementById("test-healthz").addEventListener("click", function () {
+      fetch("/api/shim/healthz").then(function (r) {
+        esito("test-healthz-esito", "OK (" + r.status + ")");
+      }).catch(function () {
+        esito("test-healthz-esito", "non raggiungibile");
+      });
+    });
+
+    document.getElementById("test-me").addEventListener("click", function () {
+      fetch("/api/shim/me", { credentials: "same-origin" }).then(function (r) {
+        return r.json().then(function (corpo) {
+          esito("test-me-esito", r.status === 200 ? "in sessione: " + (corpo.casa || "?") : "nessuna sessione (" + r.status + ")");
+        });
+      }).catch(function () {
+        esito("test-me-esito", "non raggiungibile");
+      });
+    });
+
+    document.getElementById("test-scheda-evento").addEventListener("click", function () {
+      var id = document.getElementById("test-evento-id").value;
+      if (!id) return;
+      window.open("/api/shim/op/scheda_evento?evento_id=" + encodeURIComponent(id), "_blank", "noopener");
+    });
+
+    document.getElementById("test-metabase").addEventListener("click", function () {
+      var frame = document.getElementById("test-metabase-frame");
+      frame.hidden = false;
+      frame.src = "/metabase/dashboard/3";
+      frame.addEventListener("load", function () {
+        esito("test-metabase-esito", "caricato");
+      });
+      window.setTimeout(function () {
+        if (esito) esito("test-metabase-esito", "timeout 5 s");
+      }, 5000);
+    });
+
+    /* Riepilogo dell'ultima lettura della riga «Oggi»: la pagina la fa
+       comunque, qui ci limitiamo a osservare il risultato. */
+    var osservatore = new MutationObserver(function () {
+      esito("test-oggi-esito", (rigaOggi.getAttribute("data-stato") || "letta") + " — «" +
+        (rigaOggi.textContent || "").slice(0, 80) + "…»");
+    });
+    osservatore.observe(rigaOggi, { childList: true, attributes: true });
+  })();
+  /* ======================= FINE BLOCCO TEST ======================== */
 })();

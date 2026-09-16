@@ -367,3 +367,4 @@ GRANT SELECT ON trasi.v_scaduti, trasi.v_in_scadenza, trasi.v_senza_risposta, tr
      casa_bozzano, casa_dream, casa_tuturano, rete, ti, metabase_ro, automazioni, shim_rw, applicatore;
 
 RESET ROLE;
+
