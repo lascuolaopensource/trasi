@@ -1,16 +1,19 @@
-"""Scritture mediate: `registra_richiesta`, `proponi_modifica`, `approva_proposta` (B3-SHM-05/06).
+"""Scritture dello shim: `registra_richiesta`, `crea_evento`, `proponi_modifica`, `approva_proposta` (B3-SHM-05/06, S2).
 
 **La RLS è l'autorità** (§1 principio 3, §11). Questo modulo non decide mai i permessi: prova l'operazione e mappa
 l'esito — un `UPDATE` che non tocca righe è «0 righe», cioè un rifiuto della RLS, non un errore interno. Per questo
 non esiste alcun pre-controllo del tipo «questa proposta è tua?»: quel controllo sarebbe una seconda copia della
 policy, e divergerebbe.
 
-Le uniche scritture ammesse dal progetto (§4 V4) sono due, e sono qui dentro:
+Le scritture ammesse dal progetto sono tre, e sono qui dentro:
 
 - `richiesta` — registro operativo del colloquio (`registra_richiesta`), **senza campi del cittadino**: il modello
   dati non ne ha, e `additionalProperties: false` respinge `casa_id` o qualunque altro campo non previsto;
-- `proposta` — il ciclo di scrittura mediata (`proponi_modifica` → `approva_proposta`): nessun endpoint tocca il
-  dominio (`luogo`, `scheda_servizio`, `evento`, `opportunita`, `casa`). L'applicazione al dominio è del flusso F9
+- `evento` — **scrittura diretta** (`crea_evento`): l'operatore della Casa è anche il gestore (decisione S2,
+  «opzione A»), quindi la cerimonia proposta/approvazione non ha un secondo umano a cui passare. Il dominio resta
+  protetto dalla policy `evento_ins_casa` (`casa_id = casa_corrente()`) e la tracciabilità dai trigger di dominio;
+- `proposta` — il ciclo mediato (`proponi_modifica` → `approva_proposta`) resta per le entità **fuori dalla Casa**
+  (luoghi, territorio, rete), dove un secondo decisore esiste davvero. L'applicazione al dominio è del flusso F9
   (`applica_proposte`), non dello shim.
 
 **Cosa il database calcola da sé, e che quindi non si passa.** `approvatore_ruolo`, `stato`, `proposto_da`,
@@ -33,7 +36,7 @@ dell'operatore», ed è esattamente quello che viene calcolato.
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
 
 from asyncpg.exceptions import (
@@ -46,6 +49,7 @@ from fastapi import APIRouter, Depends, FastAPI
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import pii
+from .badge import badge_kb
 from .contratto import prefisso_path
 from .db import Sessione, sessione
 from .errori import DETAIL_DA_APPROVARE_IN_CODA, errore
@@ -262,6 +266,74 @@ async def registra_richiesta(
         _rifiuta_violazione(exc)
 
     return {"richiesta_id": richiesta_id}
+
+
+# --- `crea_evento` --------------------------------------------------------------------------------------------
+
+
+class CreaEventoIn(BaseModel):
+    """Il corpo di `crea_evento`: solo campi di `trasi.evento`, mai `casa_id` né dati personali (V5/§12).
+
+    `casa_id` viene **dall'identità** (come in `registra_richiesta`): la policy `evento_ins_casa` del database
+    verifica comunque `casa_id = casa_corrente()` — la seconda barriera, non la prima.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    titolo: str = Field(min_length=1, max_length=200)
+    descrizione: str | None = None
+    inizio: datetime
+    fine: datetime | None = None
+    luogo_testo: str | None = None
+    url: str | None = None
+
+    @model_validator(mode="after")
+    def _fine_dopo_inizio(self) -> "CreaEventoIn":
+        """Il CHECK `evento_fine_dopo_inizio` lo rifiuterebbe con un 500; il contratto lo dichiara 422."""
+        if self.fine is not None and self.fine < self.inizio:
+            raise ValueError("fine deve essere uguale o successiva a inizio")
+        return self
+
+
+@router.post(
+    **_argomenti("crea_evento"),
+    status_code=201,
+)
+async def crea_evento(
+    corpo: CreaEventoIn, sess: Sessione = Depends(sessione)
+) -> dict[str, Any]:
+    """Crea un evento della Casa dell'operatore, scrittura **diretta** (opzione A, decisione del progetto).
+
+    Non è una proposta: il gestore è anche l'operatore, la separazione V4 non si applica. La tracciabilità resta
+    garantita dai trigger di dominio (`scrittura_00_ts` su `aggiornato_ts`/`aggiornato_da`); il trigger
+    `evento_ical_01_audit` **non** registra la scrittura come `ical_upsert` perché `session_user` non è
+    `automazioni` — l'audit non attribuisce a una fonte automatica una scrittura umana.
+    """
+    if sess.casa_id is None:
+        raise errore(403, DETAIL_RUOLO_NON_CONSENTITO)
+
+    pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
+
+    try:
+        evento_id = await sess.fetchval(
+            """
+            INSERT INTO trasi.evento (casa_id, titolo, descrizione, inizio, fine, luogo_testo, url, affidabilita)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 3)
+            RETURNING id
+            """,
+            sess.casa_id,
+            corpo.titolo,
+            corpo.descrizione,
+            corpo.inizio,
+            corpo.fine,
+            corpo.luogo_testo,
+            corpo.url,
+        )
+    except Exception as exc:  # noqa: BLE001 — la traduzione è il compito di `_rifiuta_violazione`
+        _rifiuta_violazione(exc)
+
+    badge = badge_kb("inserito dall'operatore", date.today(), 3)
+    return {"evento_id": evento_id, "badge": badge}
 
 
 # --- `proponi_modifica` ---------------------------------------------------------------------------------------

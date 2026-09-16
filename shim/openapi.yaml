@@ -366,6 +366,66 @@ paths:
           $ref: '#/components/responses/ParametriNonAmmessi'
         '501':
           $ref: '#/components/responses/NonImplementato'
+  /eventi:
+    post:
+      operationId: crea_evento
+      tags:
+      - kb
+      summary: 'Crea un nuovo evento per la Casa dell''operatore autenticato. Usalo quando l''operatore comunica un evento
+        che si terrà nella sua Casa (es. "Sabato c''è la festa della zappa alle 17"). L''evento è subito visibile in `eventi_oggi`
+        e nella memoria della rete; la Casa è sempre quella dell''identità, mai scelta dal corpo della richiesta.'
+      requestBody:
+        required: true
+        description: 'Dati dell''evento da creare. Solo i campi del modello `evento` ammessi: nessun campo per il cittadino,
+          nessun `casa_id` (la Casa viene dall''identità). I testi in italiano; email, telefoni e codici fiscali sono respinti
+          con 422 `dato_personale_sospetto`.'
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - titolo
+              - inizio
+              properties:
+                titolo:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Titolo dell''evento, in italiano (obbligatorio). Es. "Festa della zappa".
+                descrizione:
+                  type: string
+                  description: Descrizione breve, facoltativa. Non contenere dati personali.
+                inizio:
+                  type: string
+                  format: date-time
+                  description: 'Data e ora di inizio, ISO 8601 con fuso (es. "2026-09-21T17:00:00+02:00"). Se il fuso è omesso
+                    si intende Europe/Rome.'
+                fine:
+                  type: string
+                  format: date-time
+                  description: Data e ora di fine, facoltativa; se presente deve essere uguale o successiva a `inizio`.
+                luogo_testo:
+                  type: string
+                  description: 'Dove si svolge, in testo libero (es. "Sala grande", "Giardino della Casa"). Se omesso si intende
+                    la Casa stessa.'
+                url:
+                  type: string
+                  format: uri
+                  description: URL di riferimento (locandina, pagina social), facoltativo.
+      responses:
+        '201':
+          description: Evento creato nella memoria della rete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaCreaEvento'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
   /biglietto:
     get:
       operationId: biglietto
@@ -979,6 +1039,22 @@ components:
           type: integer
           minimum: 1
           description: Identificativo della richiesta registrata.
+    RispostaCreaEvento:
+      type: object
+      additionalProperties: false
+      required:
+      - evento_id
+      - badge
+      description: Conferma di creazione dell'evento; il badge riporta la provenienza già formattata da mostrare all'operatore.
+      properties:
+        evento_id:
+          type: integer
+          minimum: 1
+          description: Identificativo dell'evento appena creato.
+        badge:
+          type: string
+          description: 'Etichetta di provenienza già formattata, da riportare così com''è (es. "[KB · inserito dall''operatore
+            · 16/09/2026 · affidabilità 3]").'
     RispostaProponiModifica:
       type: object
       additionalProperties: false

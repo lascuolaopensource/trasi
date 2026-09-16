@@ -5,12 +5,14 @@ documento con un'attesa scritta a mano, invece di rileggere la stessa fonte e co
 cambia senza una decisione, questi test falliscono.
 """
 
-# Le nove operazioni congelate: `operationId`, metodo HTTP, percorso.
+# Le operazioni congelate: `operationId`, metodo HTTP, percorso. Decisa l'aggiunta di `crea_evento` (scrittura
+# diretta dell'evento da parte dell'operatore-gestore, opzione A approvata dal progetto).
 OPERAZIONI_ATTESE: tuple[tuple[str, str, str], ...] = (
     ("cerca_luogo", "get", "/cerca_luogo"),
     ("eventi_oggi", "get", "/eventi_oggi"),
     ("vicino_a", "get", "/vicino_a"),
     ("registra_richiesta", "post", "/registra_richiesta"),
+    ("crea_evento", "post", "/eventi"),
     ("proponi_modifica", "post", "/proponi_modifica"),
     ("approva_proposta", "post", "/approva_proposta"),
     ("biglietto", "get", "/biglietto"),
