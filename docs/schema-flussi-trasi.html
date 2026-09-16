@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Trasi — Schemi di flusso delle informazioni</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  @page { size: A4; margin: 14mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: #1a1a2e; margin: 0 auto; max-width: 900px; line-height: 1.45;
+    background: #fff;
+  }
+  .pagina { page-break-after: always; }
+  .pagina:last-child { page-break-after: auto; }
+
+  header.doc {
+    border-bottom: 3px solid #1a5c47; padding-bottom: 10px; margin-bottom: 18px;
+  }
+  header.doc h1 { font-size: 22pt; margin: 0 0 4px; color: #1a5c47; }
+  header.doc p { margin: 0; color: #555; font-size: 10pt; }
+
+  h2 { font-size: 14pt; color: #1a5c47; border-bottom: 1px solid #cfe3da;
+       padding-bottom: 4px; margin: 22px 0 8px; }
+  h2 .num {
+    display: inline-block; background: #1a5c47; color: #fff; border-radius: 50%;
+    width: 22px; height: 22px; text-align: center; line-height: 22px;
+    font-size: 11pt; margin-right: 6px;
+  }
+  .spiega { font-size: 9.5pt; color: #444; margin: 6px 0 12px; }
+  .spiega b { color: #1a1a2e; }
+
+  .diagramma {
+    border: 1px solid #d8e4df; border-radius: 8px; padding: 14px;
+    background: #fbfdfc; text-align: center; margin: 8px 0 14px;
+  }
+  .mermaid { font-size: 10.5pt; }
+
+  .regola {
+    background: #fdf6ec; border-left: 4px solid #d9a03c; padding: 8px 12px;
+    font-size: 9.5pt; border-radius: 0 6px 6px 0; margin: 10px 0;
+  }
+  .regola b { color: #8a5a00; }
+
+  divieti { display: block; }
+  .divieto {
+    display: inline-block; background: #fdeeee; border: 1px solid #e5b3b3;
+    border-radius: 6px; padding: 6px 10px; margin: 3px 4px 3px 0;
+    font-size: 9pt; color: #7a2323;
+  }
+
+  table.sintesi { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 8px; }
+  table.sintesi th { background: #1a5c47; color: #fff; text-align: left; padding: 6px 8px; }
+  table.sintesi td { border: 1px solid #d8e4df; padding: 6px 8px; vertical-align: top; }
+  table.sintesi tr:nth-child(even) td { background: #f4f9f7; }
+
+  .badge { font-family: ui-monospace, monospace; font-size: 8.5pt;
+    background: #eef4f1; border: 1px solid #cfe3da; border-radius: 4px; padding: 1px 5px; }
+
+  footer.pagina-f { font-size: 8pt; color: #999; text-align: right; margin-top: 14px; }
+
+  @media print {
+    body { max-width: none; font-size: 9pt; }
+    a { color: #1a1a2e; text-decoration: none; }
+    .pagina { page-break-after: always; }
+    .pagina:last-child { page-break-after: auto; }
+    .pagina:first-child { page-break-before: avoid; }
+    .diagramma { padding: 4px; margin: 2px 0 4px; }
+    .pagina:nth-child(1) .diagramma { zoom: 0.52; }
+    .pagina:nth-child(2) .diagramma { zoom: 0.62; }
+    .pagina:nth-child(3) .diagramma { zoom: 0.60; }
+    .pagina:nth-child(4) .diagramma { zoom: 0.62; }
+    h2 { font-size: 12pt; margin: 8px 0 4px; }
+    .spiega { font-size: 8.5pt; margin: 3px 0 5px; }
+    .regola, .divieto { font-size: 8.5pt; padding: 5px 10px; }
+    footer.pagina-f { margin-top: 8px; }
+    header.doc h1 { font-size: 19pt; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ======================= PAGINA 1 ======================= -->
+<section class="pagina">
+  <header class="doc">
+    <h1>Trasi — Come fluiscono le informazioni</h1>
+    <p>Portierato di Quartiere · Rete delle Case di Quartiere di Brindisi · schemi per il confronto con il gruppo servizi · settembre 2026</p>
+  </header>
+
+  <h2><span class="num">1</span>Il sistema in una pagina</h2>
+  <p class="spiega">
+    <b>Come leggerlo:</b> in alto ci sono le persone e le fonti; in mezzo c'è <b>lo shim</b>, l'unica porta
+    d'ingresso: ogni richiesta passa di lì, che venga dalla chat, dalla Home o dai flussi automatici.
+    In basso c'è <b>un solo database</b> (Postgres + PostGIS). Non esistono dati "nascosti" in altre app:
+    tutto ciò che il sistema sa vive lì, diviso fra <i>dati del dominio</i> (ciò che è vero oggi)
+    e <i>coda delle proposte</i> (ciò che qualcuno vorrebbe cambiare, in attesa di approvazione).
+  </p>
+  <div class="diagramma">
+<pre class="mermaid">
+flowchart TD
+    subgraph PERSONE["Chi usa il sistema"]
+        OP["Operatore di Casa<br/>(tablet allo sportello)"]
+        RE["Rete / coordinamento"]
+        FO["Fonti esterne<br/>calendari iCal · siti · OpenStreetMap"]
+    end
+    subgraph ENTRATA["Come si entra"]
+        CHAT["Onyx · assistente AI in chat<br/>4 assistenti: Presidio, Casa, Rete, Staff PN"]
+        HOME["Home web<br/>pagina semplice dell'operatore"]
+        CRON["Flussi notturni<br/>importano fonti, controllano coerenza"]
+    end
+    subgraph PORTA["Unica porta d'ingresso"]
+        SHIM["SHIM (FastAPI)<br/>controlla identità e permessi<br/>traduce ogni chiamata in SQL"]
+    end
+    subgraph MEMORIA["Postgres + PostGIS — la memoria unica"]
+        DATI[("DATI DEL DOMINIO<br/>Case · luoghi · servizi<br/>eventi · richieste")]
+        CODA[("CODA PROPOSTE + AUDIT<br/>append-only, nessuno cancella")]
+    end
+    OP --> CHAT & HOME
+    RE --> CHAT
+    FO --> CRON
+    CHAT --> SHIM
+    HOME --> SHIM
+    CRON --> SHIM
+    SHIM --> DATI
+    SHIM --> CODA
+    DATI --> RPT["METABASE<br/>dashboard e report<br/>(Home, chat e dashboard leggono<br/>LE STESSE viste: stessi numeri)"]
+    CODA --> RPT
+</pre>
+  </div>
+  <div class="regola">
+    <b>Regola d'oro:</b> tutto passa dallo shim e finisce in un solo database. Se il gruppo servizi
+    vuole aggiungere o correggere un'informazione, la destinazione è sempre il DB centrale —
+    <b>mai direttamente</b>: si entra in coda come proposta (vedi schema 3).
+  </div>
+  <footer class="pagina-f">Trasi · schemi di flusso · pag. 1/4</footer>
+</section>
+
+<!-- ======================= PAGINA 2 ======================= -->
+<section class="pagina">
+  <h2><span class="num">2</span>Flusso di lettura — l'operatore chiede, il sistema risponde con la fonte</h2>
+  <p class="spiega">
+    <b>Cosa succede:</b> l'operatore scrive in chat in linguaggio normale. L'assistente traduce la domanda
+    in una chiamata allo shim <b>con la sua email</b>: è l'identità che decide cosa può vedere
+    (un operatore vede la propria Casa, la rete vede tutto). Il permesso lo applica il database stesso
+    (Row-Level Security), quindi nessuna interfaccia può sbagliare e mostrare troppo.
+    La risposta arriva <b>sempre con l'etichetta di provenienza</b>.
+  </p>
+  <div class="diagramma">
+<pre class="mermaid">
+flowchart LR
+    A["1 · Operatore chiede in chat<br/>«cosa c'è aperto ora vicino a San Bao?»"]
+    B["2 · Assistente Onyx<br/>chiama lo shim portando l'email dell'operatore"]
+    C{"3 · SHIM: chi sei?"}
+    D["4 · Il DB risponde<br/>SOLO i dati che quel ruolo può vedere"]
+    E["5 · Risposta in chat, ogni informazione etichettata:<br/>[KB · fonte · data · affidabilità]<br/>oppure [Esterna · ora · non verificata dalla rete]"]
+    F["extra · Biglietto A6 stampabile<br/>per il cittadino (senza dati personali)"]
+    G["STOP 403<br/>identità non riconosciuta:<br/>nessuna query eseguita"]
+    A --> B --> C
+    C -->|"email riconosciuta"| D --> E --> F
+    C -->|"email sconosciuta"| G
+</pre>
+  </div>
+  <p class="spiega">
+    <b>Le due etichette da spiegare al gruppo:</b><br>
+    <span class="badge">[KB · fonte · data · affidabilità]</span> → il dato è nella memoria della rete, approvato da un umano.<br>
+    <span class="badge">[Esterna · ora · non verificata]</span> → il dato arriva da una fonte pubblica (es. OpenStreetMap): utile, ma il sistema lo dichiara non verificato invece di fingere.
+  </p>
+  <footer class="pagina-f">Trasi · schemi di flusso · pag. 2/4</footer>
+</section>
+
+<!-- ======================= PAGINA 3 ======================= -->
+<section class="pagina">
+  <h2><span class="num">4</span>Flusso di scrittura — il cuore del progetto: proponi → approva → applica</h2>
+  <p class="spiega">
+    <b>Il principio:</b> nessuno — nemmeno l'AI — scrive direttamente i dati. Chi vuole cambiare qualcosa
+    crea una <b>proposta</b>: cosa cambiare, perché, con il <i>diff</i> automatico prima/dopo e una scadenza.
+    La coda è una vista filtrata per ruolo: ogni approvatore vede solo ciò che può davvero decidere.
+    Se approva, il cambiamento diventa dato reale <b>durante la notte</b>, con riga di audit completa.
+  </p>
+  <div class="diagramma">
+<pre class="mermaid">
+flowchart TD
+    subgraph IN["Chi propone una modifica"]
+        W1["Operatore in chat<br/>«gli orari sono cambiati»"]
+        W2["Flusso notturno di coerenza<br/>«il sito del Comune è cambiato»"]
+    end
+    subgraph CODA["CODA DELLE PROPOSTE (nel DB)"]
+        P["PROPOSTA<br/>cosa + perché (max 80 caratteri)<br/>diff automatico prima/dopo<br/>scadenza: 30 giorni"]
+        V["Vista filtrata per ruolo:<br/>ogni approvatore vede solo<br/>le proposte che può decidere"]
+    end
+    U{"L'UMANO DECIDE<br/>approva?"}
+    subgraph NOTTE["Notte · ore 05:00"]
+        APPL["applica_proposte<br/>scrive il dato reale<br/>+ riga di audit"]
+    end
+    X["RIFIUTATA → muore qui<br/>(resta traccia in audit)"]
+    Y2["Dato aggiornato:<br/>il giorno dopo la chat lo cita"]
+    Z["SCADUTA dopo 30 gg<br/>promemoria automatico se attesa &gt; 7 gg"]
+    W1 --> P
+    W2 --> P
+    P --> V --> U
+    U -->|"no"| X
+    U -->|"sì"| APPL --> Y2
+    P -.-> Z
+</pre>
+  </div>
+  <span class="divieto">✕ Nessuno scrive i dati direttamente — solo proposte approvate</span>
+  <span class="divieto">✕ Nessuno approva la propria proposta — bloccato dal DB</span>
+  <span class="divieto">✕ Nessuno cancella — si «chiude», la storia resta</span>
+  <div class="regola">
+    <b>Unica eccezione:</b> gli eventi dai calendari iCal delle Case si aggiornano automaticamente
+    durante la notte — ma ogni cambiamento lascia comunque una riga di audit.
+    Se una fonte cambia troppo all'improvviso, il sistema non si fida e apre una proposta invece di scrivere.
+  </div>
+  <footer class="pagina-f">Trasi · schemi di flusso · pag. 3/4</footer>
+</section>
+
+<!-- ======================= PAGINA 4 ======================= -->
+<section class="pagina">
+  <h2><span class="num">4</span>Le tre sorgenti dei dati — e la tabella operativa per il gruppo servizi</h2>
+  <p class="spiega">
+    <b>Le informazioni nascono in tre posti diversi</b> ed entrano nel sistema con tre modalità diverse:
+    una scrittura immediata (il registro delle richieste), un aggiornamento automatico tracciato (i calendari),
+    e la coda delle proposte (tutto il resto).
+  </p>
+  <div class="diagramma">
+<pre class="mermaid">
+flowchart TD
+    subgraph SORGENTI["Dove nascono le informazioni"]
+        S1["A · Operatori<br/>ogni richiesta registrata in chat<br/>con esito: risolta / inviata altrove /<br/>non trovata / rinviata"]
+        S2["B · Calendari iCal delle Case<br/>le Case usano il calendario che già hanno,<br/>Trasi li importa di notte"]
+        S3["C · Fonti web e OpenStreetMap<br/>controllate ogni notte"]
+    end
+    DB[("DATABASE UNICO")]
+    S1 -->|"scrittura immediata<br/>(è un registro di fatto, non un'opinione)<br/>→ diventa la base dei report sui bisogni"| DB
+    S2 -->|"aggiornamento automatico + audit<br/>per ogni variazione"| DB
+    S3 -->|"entra in CODA come proposta<br/>oppure resta un dato 'Esterna' etichettato"| DB
+</pre>
+  </div>
+
+  <h2>Sintesi operativa — cosa dire in riunione</h2>
+  <table class="sintesi">
+    <tr><th>Se volete…</th><th>Passa da…</th><th>Chi decide</th></tr>
+    <tr><td>Correggere un orario o un servizio</td><td>Proposta in chat («proponi correzione»)</td><td>Gestore della Casa o coordinamento (AT)</td></tr>
+    <tr><td>Aggiungere eventi</td><td>Il calendario iCal della Casa, come oggi</td><td>Nessuno: automatico, tracciato in audit</td></tr>
+    <tr><td>Leggere statistiche sui bisogni</td><td>Dashboard Metabase (sola lettura)</td><td>—</td></tr>
+    <tr><td>Sapere se un dato è affidabile</td><td>L'etichetta in ogni risposta</td><td>—</td></tr>
+    <tr><td>Vedere cosa attende una decisione</td><td>Coda «da approvare» in chat/Home</td><td>Il ruolo competente, filtrato dal DB</td></tr>
+  </table>
+  <div class="regola">
+    <b>Nota sui numeri piccoli:</b> per privacy, le celle statistiche con meno di 5 casi mostrano «&lt;5»
+    invece del numero vero (k-anonimato). Non è un bug: va spiegato a chi legge i report.
+  </div>
+  <footer class="pagina-f">Trasi · schemi di flusso · pag. 4/4</footer>
+</section>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: "neutral",
+    flowchart: { curve: "basis", htmlLabels: true, nodeSpacing: 40, rankSpacing: 55 }
+  });
+  window.__mermaidDone = new Promise(res => {
+    const t = setInterval(() => {
+      if (document.querySelectorAll(".mermaid svg").length ===
+          document.querySelectorAll(".mermaid").length) { clearInterval(t); res(true); }
+    }, 200);
+    setTimeout(() => { clearInterval(t); res(false); }, 20000);
+  });
+</script>
+</body>
+</html>
