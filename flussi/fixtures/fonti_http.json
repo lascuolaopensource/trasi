@@ -1,0 +1,46 @@
+{
+  "_nota": "Bersagli del flusso fonti_http.py (B4-FLW-07). Configurazione, non codice: aggiungere una pagina sorvegliata non richiede di toccare lo script. `file` è valorizzato solo dalle fixture dei test; in esercizio si legge da `url`.",
+  "_campi": {
+    "fonte": "nome esatto nella allow-list `trasi.fonte` (deve essere attiva, altrimenti la fonte non si sorveglia — §3)",
+    "url": "pagina da sorvegliare",
+    "selettore": "selettore essenziale: `#id`, `.classe`, `tag`, `tag.classe`",
+    "entita": "luogo | scheda_servizio (le entità che questo flusso può proporre di modificare)",
+    "entita_id": "id nella tabella di dominio; null per una nuova entità",
+    "campo": "campo del payload che l'eventuale proposta toccherebbe",
+    "casa": "slug della Casa, se la proposta è di una Casa",
+    "attivo": "false finché il TI non ha verificato che URL e selettore esistono davvero (vedi sotto)"
+  },
+  "_attivo": [
+    "Perché un bersaglio può essere `attivo: false`, e perché è la scelta giusta.",
+    "",
+    "Gli URL dei siti istituzionali nel seed (`db/011_seed_fonti.sql`) sono dichiarati `[ASSUNZIONE]`:",
+    "sono le home page ufficiali note, ma nessuno ha verificato che la pagina degli orari esista e che",
+    "il selettore la individui. Lo stesso vale per i 10 siti degli ETS, che restano `attiva = false`",
+    "finché il TI non li verifica, e per i 2 CAF del seed, marcati «orari da verificare».",
+    "",
+    "Un bersaglio non verificato che resta attivo produce un errore a **ogni notte**: il flusso",
+    "prova `https://www.comune.brindisi.it/urp` (che risponde 404 da qui — verificato), registra",
+    "`fonte_run.esito = 'errore'` e l'alert di coerenza delle fonti segnala all'AT una fonte rotta che",
+    "non è rotta: non è ancora configurata. Un allarme che suona ogni notte per un motivo noto è un",
+    "allarme che si impara a ignorare — e il giorno in cui una fonte *vera* si rompe, nessuno guarda.",
+    "",
+    "Il bersaglio resta nel registro, inattivo e con la nota di cosa manca: è la stessa forma del seed",
+    "(`fonte.attiva = false`), e il TI lo accende quando ha verificato l'URL. Il flusso, dal canto",
+    "suo, non ignora i bersagli inattivi: li dichiara in `flusso_run.dettaglio.inattivi`, così il",
+    "registro dice «c'è una pagina che nessuno sorveglia» invece di lasciarlo implicito nella",
+    "configurazione."
+  ],
+  "bersagli": [
+    {
+      "fonte": "Comune di Brindisi-3",
+      "url": "https://www.comune.brindisi.it/urp",
+      "selettore": "#orari-urp",
+      "entita": "luogo",
+      "entita_id": 16,
+      "campo": "orari",
+      "casa": null,
+      "attivo": false,
+      "_nota": "URL e selettore da verificare: la home del Comune esiste, questa pagina risponde 404 (misurato il 16/09) e il blocco `#orari-urp` va individuato sulla pagina reale. Si accende con `attivo: true` dopo la verifica."
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+# SearXNG — istanza interna Trasi (nessuna porta pubblica, solo rete Docker).
+#
+# Perché un file locale: il settings.yml di default abilita SOLO il formato `html`,
+# mentre lo shim (B3-SHM-12) interroga SearXNG con `format=json` e filtra i risultati
+# sull'allow-list dei domini (`fonte WHERE tipo_accesso='web'`).
+#
+# `use_default_settings: true` mantiene motori e categorie dell'immagine: qui si
+# sovrascrivono solo i valori necessari.
+
+use_default_settings: true
+
+search:
+  formats:
+    - html
+    - json
+
+server:
+  # Sovrascritto a runtime da SEARXNG_SECRET (il segreto vero sta in .env, mode 600).
+  secret_key: "sovrascritto-da-SEARXNG_SECRET"
+  # Nessuna istanza pubblica: limiter off, image proxy off.
+  limiter: false
+  public_instance: false
+  image_proxy: false

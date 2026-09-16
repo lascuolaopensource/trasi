@@ -1,0 +1,22 @@
+{
+  "connector_id": 4,
+  "connector_name": "Trasi KB (export)",
+  "source": "ingestion_api",
+  "input_type": "load_state",
+  "credential_id": 4,
+  "cc_pair_id": 3,
+  "document_set_id": 1,
+  "document_set_name": "Trasi KB (export)",
+  "tool_id": 12,
+  "tool_name": "trasi_shim",
+  "persona_ids": {
+    "Trasi Presidio": 1,
+    "Trasi Casa": 2,
+    "Trasi Rete": 3,
+    "Trasi Staff PN": 4
+  },
+  "pat_id": 2,
+  "pat_var": "ONYX_TRASI_KB_API_KEY",
+  "created": "2026-09-15",
+  "note": "Identificativi Onyx della KB Trasi (B2-ONX-07/B2-ONX-04/B2-ONX-05). cc_pair_id alimenta F3 (POST /onyx-api/ingestion). tool_id e document_set_id alimentano i 4 assistenti. Nessun segreto qui: la PAT sta in deployment/.env (mode 600)."
+}

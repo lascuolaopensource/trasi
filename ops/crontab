@@ -1,0 +1,132 @@
+# Trasi — ops/crontab · i job di **esercizio** (blocco B6, §6 e §8 del piano)
+#
+# ------------------------------------------------------------------------------------------------
+# PERCHÉ QUESTO FILE ESISTE, SE C'È GIÀ `flussi/crontab`
+# ------------------------------------------------------------------------------------------------
+# `flussi/crontab` (B4, owner `trasi-flussi`) schedula i **flussi di dominio**: export KB, applica
+# proposte, fonti iCal/HTTP, alert. Sono la catena che trasforma decisioni umane in dati — girano nel
+# container `automazioni`, parlano al database Trasi come `automazioni`, e lasciano una riga in
+# `flusso_run`.
+#
+# Qui stanno i job di **esercizio**, che non sono flussi di dominio: non leggono né scrivono la
+# memoria, non passano da `proposta`, non hanno un ruolo applicativo, e non producono righe in
+# `flusso_run`. Il backup copia file; la retention cancella chat di Onyx; il ciclo mensile è
+# **schedulato qui ma eseguito dal codice di `flussi/`** (v. sotto).
+#
+# La separazione è stata concordata via `hub` con `trasi-flussi`, e la ragione non è burocratica:
+# mescolare i due insiemi nello stesso file significherebbe che ogni modifica mia tocca il suo file
+# (e viceversa), e che l'entrypoint del container `automazioni` — che valida il **suo** crontab e
+# conta le **sue** righe — diventerebbe il posto in cui si scoprono i miei errori di sintassi.
+#
+# **Riassunto della mappa dei job, perché una riga sola la dice meglio di tre paragrafi:**
+#
+#   flussi/crontab  (container `automazioni`, utente `automazioni`)
+#     01:00  export_kb      F3  — la KB di Onyx rispecchia il dominio
+#     05:00  applica.sh     F9  — proposte approvate → dato reale
+#     06:00  fonti_ical.py  F4  — upsert iCal (unica scrittura diretta)
+#     06:15  fonti_http.py  F4  — change-detection → proposte
+#     07:30  alert.py       F6  — proposte in attesa e coerenza fonti
+#
+#   ops/crontab  (host, utente root — questo file)
+#     02:00  backup.sh         — dominio + ruoli + chat + config + App-DB, con rotazione
+#     03:00  retention_chat.sh — chat di Onyx oltre gg_retention_chat (30)
+#     08:00  ciclo_mensile.sh  — F5 il giorno 3: digest per Casa + report PN  ← v. sotto
+#
+# ------------------------------------------------------------------------------------------------
+# FORMATO: CRONTAB UTENTE — cinque campi, **nessun campo utente**
+# ------------------------------------------------------------------------------------------------
+#     minuto ora giorno-del-mese mese giorno-della-settimana   COMANDO
+#
+# Non è una preferenza di stile. Un file `/etc/cron.d/trasi` ha la stessa sintassi **più** un campo
+# utente fra il giorno della settimana e il comando. Installare il formato sbagliato **non produce un
+# errore**: `cron` legge il campo utente come primo token del comando e prova a eseguire `root` come
+# programma. Il risultato — misurato dal worker `trasi-flussi` sul suo file, e riprodotto — è:
+#
+#     /bin/sh: 1: root: not found
+#
+# cioè **tutti i job morti**, `crontab -l` che mostra le righe, e nessun altro sintomo. La forma
+# corretta delle due varianti:
+#
+#     crontab utente   →   0 2 * * *   /percorso/comando
+#     /etc/cron.d      →   0 2 * * *   root  /percorso/comando
+#
+# Questo file è per `crontab -l` / `crontab ops/crontab`. `ops/install_cron.sh` lo installa e
+# **rifiuta** una riga con un campo utente di troppo, invece di installarla e lasciarla morire.
+#
+# ------------------------------------------------------------------------------------------------
+# PERCHÉ SULL'HOST E NON NEL CONTAINER `automazioni`
+# ------------------------------------------------------------------------------------------------
+# I tre job toccano cose che il container `automazioni` non ha e non deve avere:
+#   * `backup.sh` scrive in `/backups`, legge i volumi Docker (l'App-DB di Metabase) e fa `pg_dump`
+#     del database **di Onyx**: gli servono il socket Docker e la visibilità dei container;
+#   * `retention_chat.sh` esegue codice **dentro il container di Onyx**: gli serve `docker exec`;
+#   * `ciclo_mensile.sh` esegue `docker exec` sul container `automazioni` — è l'unico dei tre che
+#     *usa* quel container, e lo fa dalla parte giusta (dal di fuori, con un `-e` per il trigger).
+# Dare al container `automazioni` il socket Docker per far girare questi tre job significherebbe
+# dare a un esecutore del dominio il controllo dell'host. Non è un compromesso da 72h: è la
+# differenza fra un componente e il suo amministratore.
+#
+# ------------------------------------------------------------------------------------------------
+# IL CICLO MENSILE (giorno 3 · 08:00) — schedulazione mia, codice di `flussi/`
+# ------------------------------------------------------------------------------------------------
+# La tabella del piano assegna B6-FLW-02 (ciclo mensile) al worker FLW, ed è corretto: il ciclo
+# produce **messaggi** (10 digest, uno per Casa, più il report PN e un CSV), e i messaggi di Trasi —
+# il presidio V6, la catena di recapito da `v_flusso_recapiti` — sono di `alert.py`, cioè di B4.
+# Reimplementarli qui avrebbe duplicato entrambi; il coordinamento via `hub` ha portato a questa
+# divisione: `trasi-flussi` ha scritto `flussi/ciclo_mensile.py`, io lo **schedulo**.
+#
+# L'ora è **08:00**, non le 03:00 o le 07:00: il criterio B6-FLW-02 chiede «ora < 09:00 nel run
+# schedulato», e le 08:00 stanno dentro con un'ora di margine, prima che inizi la giornata degli
+# operatori. Il **giorno 3** arriva da `[P] giorno_ciclo_mensile`=3 (in `trasi.parametro`): se il
+# parametro cambia, questa riga va cambiata a mano — è un limite dichiarato, perché un crontab non
+# legge il database. `ops/ciclo_mensile.sh` **verifica** che il giorno coincida con il parametro e
+# non esegue se non coincide: così un parametro cambiato produce un messaggio chiaro invece di un
+# digest nel giorno sbagliato.
+#
+# ------------------------------------------------------------------------------------------------
+# AMBIENTE
+# ------------------------------------------------------------------------------------------------
+# `cron` non eredita l'ambiente della shell da cui si installa il crontab, e ha un `PATH` minimo.
+# Ogni variabile che serve a un job è dichiarata qui o letta dallo script da `deployment/.env`.
+# **Nessun segreto in questo file**: `backup.sh` e `retention_chat.sh` leggono `deployment/.env`
+# (mode 600) da soli, e il crontab non lo contiene. Un segreto in un crontab è un segreto in un file
+# che si legge con `crontab -l`, e questo file è versionato.
+#
+# `TZ`: cron usa il fuso del **sistema**, e i quattro orari del piano (§6) sono ore di Brindisi. Se
+# il sistema è in UTC — come è tipico su un host che non lo configura — «02:00» diventerebbe «04:00»
+# in estate, e il backup partirebbe due ore dopo, sovrapponendosi ad altre finestre. La variabile è
+# dichiarata qui perché `cron` onora `TZ` dal crontab senza bisogno di toccare `/etc/localtime`.
+#
+# `SHELL=/bin/bash` e non `/bin/sh`: gli script sono scritti per bash (usano `[[ ]]`, array).
+# `cron` usa `/bin/sh` (dash su Debian) di default, e una funzione bash in dash fallisce con un
+# messaggio che non dice dove.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+TZ=Europe/Rome
+# La radice del progetto: il crontab non ha un «cwd», quindi ogni comando comincia con questo
+# percorso e `cd` non serve. Gli script fanno `cd "$(dirname "$0")/.."` da soli, quindi restano
+# eseguibili anche a mano da qualunque directory.
+TRASI_ROOT=/root/orca/projects/onice
+
+# 02:00 — backup completo: dominio (pg_dump -Fc) + ruoli (pg_dumpall --globals-only) + chat di Onyx
+#         + configurazione + App-DB di Metabase, con rotazione a /backups.
+#         L'ora è prima dell'export e delle fonti: se la notte produce dati nuovi alle 05:00-06:00,
+#         il backup delle 02:00 è il **precedente**, e un ripristino riporta a uno stato noto —
+#         non a metà di un'applicazione. È la scelta conservativa, ed è quella che rende il rollback
+#         una decisione umana e non una scommessa.
+0 2 * * *   /root/orca/projects/onice/ops/backup.sh >> /var/log/trasi/backup.log 2>&1
+
+# 03:00 — retention delle chat di Onyx: cancella le chat più vecchie di `gg_retention_chat` (30).
+#         Dopo il backup e **prima** della notte dei flussi: se la retention cancellasse qualcosa di
+#         sbagliato, il backup delle 02:00 è già sul disco e il ripristino è possibile. Invertire le
+#         due ore renderebbe la retention irreversibile — ed è il tipo di dettaglio che si nota solo
+#         quando serve. ⚠️ Nota la finestra di reversibilità: è di **una** notte (la rotazione
+#         conserva 7 backup), non di 30 giorni.
+0 3 * * *   /root/orca/projects/onice/ops/retention_chat.sh >> /var/log/trasi/retention.log 2>&1
+
+# giorno 3 — ciclo mensile (F5): 10 digest (uno per Casa, Tuturano col fallback AT) + report PN + CSV.
+#         `ops/ciclo_mensile.sh` verifica che il giorno coincida con `giorno_ciclo_mensile` in
+#         `trasi.parametro` e chiama `flussi/ciclo_mensile.py` **dentro** il container `automazioni`,
+#         passando `TRASI_TRIGGER=cron` così il registro `flusso_run` distingue la schedulazione da
+#         una diagnosi a mano. Il codice è di `trasi-flussi`; qui c'è solo il quando.
+0 8 3 * *   /root/orca/projects/onice/ops/ciclo_mensile.sh >> /var/log/trasi/ciclo_mensile.log 2>&1

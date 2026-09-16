@@ -1,0 +1,14 @@
+# Dipendenze dello shim Trasi (contratto v0, blocco B0; implementazione reale in B3).
+# Versioni fissate: il contratto è congelato, l'ambiente deve esserlo altrettanto.
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic-settings==2.15.0
+PyYAML==6.0.3
+# Pool di connessioni async verso Postgres. `asyncpg` e non un ORM: lo shim esegue una manciata di query e la
+# transazione con `SET LOCAL ROLE` è il cuore del modello di sicurezza (§9.1, §11) — un ORM la nasconderebbe.
+asyncpg==0.31.0
+# Client HTTP per Overpass e SearXNG (B3-SHM-03/04/12).
+httpx==0.28.1
+# Interpretazione di `opening_hours` di OpenStreetMap, libreria indicata dal piano (B3-SHM-04): l'unica che
+# interpreta la sintassi OSM reale (`Mo-Fr 09:00-13:00`, `sunrise-sunset`, festivi).
+opening-hours-py==2.1.4

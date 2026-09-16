@@ -1,0 +1,290 @@
+/* Trasi Home — foglio di stile unico, senza dipendenze esterne (zero CDN).
+   Palette neutra, token in :root. I valori di contrasto sono misurati e
+   riportati in docs/wcag-home.md: ogni coppia testo/sfondo è >= 4,5:1. */
+
+:root {
+  /* superfici */
+  --sfondo: #f5f3ee;
+  --superficie: #ffffff;
+  --testata: #123a5c;
+  --testata-testo: #ffffff;
+  --testata-bordo: #0b2740;
+
+  /* testo */
+  --testo: #1c1c1c;
+  --testo-tenue: #4a4a4a;
+  --bordo: #8a8377;
+  --bordo-tenue: #c9c3b6;
+
+  /* segnalazione di stato «non attivo» (testo scuro su giallo: 8,6:1) */
+  --attenzione: #4a3800;
+  --attenzione-sfondo: #ffe9a8;
+
+  /* focus: due tonalità, così il contorno resta visibile sia sulle
+     superfici chiare sia sulla testata scura (>= 3:1 su entrambe) */
+  --focus: #ffd400;
+  --focus-contorno: #10233c;
+
+  --raggio: 10px;
+  --spazio: 16px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 16px; }          /* base >= 16 px (nessuna riduzione con rem) */
+
+body {
+  margin: 0;
+  background: var(--sfondo);
+  color: var(--testo);
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- tastiera */
+
+.salta {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10;
+  padding: 12px 16px;
+  background: var(--superficie);
+  color: var(--testo);
+  border: 2px solid var(--testo);
+  border-radius: 0 0 var(--raggio) 0;
+  font-weight: 600;
+}
+.salta:focus { left: 0; }
+
+/* Il focus è sempre visibile: contorno 3 px (>= 2 px richiesti) in giallo,
+   con un secondo anello scuro che lo stacca anche dalla testata blu. */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--focus-contorno);
+}
+a:focus-visible,
+button:focus-visible,
+select:focus-visible { border-radius: var(--raggio); }
+
+/* ---------------------------------------------------------------- testata */
+
+.testata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spazio) 24px;
+  background: var(--testata);
+  color: var(--testata-testo);
+  border-bottom: 4px solid var(--testata-bordo);
+}
+
+.marchio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  /* `min-width: 0`: senza, il <select> non può restringersi sotto la larghezza
+     della voce più lunga e a 320 px di viewport (WCAG 1.4.10 Reflow) esce
+     dallo schermo. Il testo della voce lunga viene troncato dal controllo:
+     è il comportamento atteso di un select stretto, non una perdita. */
+  min-width: 0;
+  margin: 0;
+  font-size: 1.125rem;
+}
+.marchio-nome { font-weight: 700; letter-spacing: .12em; }
+.marchio-sep { opacity: .7; }
+
+.etichetta-casa {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+#selettore-casa {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: min(22rem, 100%);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--testo);
+  background: var(--superficie);
+  border: 2px solid var(--testata-bordo);
+  border-radius: var(--raggio);
+}
+
+.azioni {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.uscita { margin: 0; }
+
+.azione {
+  display: inline-block;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--testata-testo);
+  background: transparent;
+  border: 2px solid var(--testata-testo);
+  border-radius: var(--raggio);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.azione:hover { background: var(--superficie); color: var(--testata); }
+
+.esito-uscita {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--testata-testo);
+  background: var(--testata-bordo);
+  border-radius: var(--raggio);
+}
+.esito-uscita[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- corpo */
+
+main {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.titolo {
+  margin: 0 0 20px;
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--testo-tenue);
+}
+
+.riquadri {
+  display: grid;
+  /* Due colonne, come il disegno di §4.3 dell'architettura: CHIEDI/MAPPA,
+     REGISTRA/OSSERVATORIO. `minmax(0, 1fr)` (non `1fr`): senza lo zero minimo
+     le colonne non possono scendere sotto la larghezza del contenuto, ed è
+     la stessa causa del reflow rotto a 320 px. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Sotto i 40 rem la griglia diventa una colonna sola: due riquadri da 17 rem
+   più lo spazio non ci stanno, e affiancarli comunque taglierebbe il testo. */
+@media (max-width: 40rem) {
+  .riquadri { grid-template-columns: minmax(0, 1fr); }
+}
+
+.cella { display: flex; flex-direction: column; gap: 8px; }
+
+.riquadro {
+  display: block;
+  flex: 1;
+  padding: 20px;
+  background: var(--superficie);
+  color: var(--testo);
+  border: 2px solid var(--bordo);
+  border-radius: var(--raggio);
+  text-decoration: none;
+}
+.riquadro:hover { border-color: var(--testata); background: #f0f5fa; }
+
+.riquadro-titolo {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--testata);
+}
+
+.riquadro-testo { margin: 0; }
+
+.stato-inattivo {
+  display: inline-block;
+  margin: 12px 0 0;
+  padding: 2px 8px;
+  color: var(--attenzione);
+  background: var(--attenzione-sfondo);
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.coda { margin: 0; padding-left: 4px; }
+.coda a { color: var(--testata); text-underline-offset: 3px; }
+.coda a:hover { color: var(--testata-bordo); }
+.nota-inattiva { color: var(--testo-tenue); }
+
+/* Riga «Oggi» */
+.oggi {
+  margin: 24px 0 0;
+  padding: 16px 18px;
+  background: var(--superficie);
+  border: 2px solid var(--bordo-tenue);
+  border-left: 6px solid var(--testata);
+  border-radius: var(--raggio);
+  font-size: 1.0625rem;
+}
+.oggi[data-stato="non-disponibile"] {
+  border-left-color: var(--attenzione);
+  color: var(--testo);
+}
+
+/* ---------------------------------------------------------------- aiuto */
+
+#aiuto {
+  max-width: 62rem;
+  margin: 0 auto 24px;
+  padding: 24px;
+  background: var(--superficie);
+  border: 2px solid var(--bordo-tenue);
+  border-radius: var(--raggio);
+}
+#aiuto h2 { margin: 0 0 12px; font-size: 1.375rem; color: var(--testata); }
+#aiuto h3 { margin: 20px 0 6px; font-size: 1.125rem; color: var(--testata); }
+#aiuto p { margin: 0 0 10px; }
+
+.aiuto-elenco { margin: 0; }
+.aiuto-elenco dt { font-weight: 700; margin-top: 12px; }
+.aiuto-elenco dd { margin: 2px 0 0 0; }
+
+.rinvio {
+  margin-top: 18px;
+  padding: 12px 14px;
+  background: var(--attenzione-sfondo);
+  color: var(--attenzione);
+  border-radius: var(--raggio);
+}
+
+/* ---------------------------------------------------------------- piede */
+
+.piede {
+  padding: 20px 24px 32px;
+  color: var(--testo-tenue);
+  text-align: center;
+}
+.piede p { margin: 0; }
+
+/* ---------------------------------------------------------------- stampa */
+
+@media print {
+  .saltare, .azioni, .uscita { display: none; }
+  body { background: #fff; }
+  .riquadro { break-inside: avoid; }
+}

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Trasi — ingresso</title>
+<meta name="description" content="Trasi: la porta della rete delle Case di Quartiere di Brindisi.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Le risorse (CSS/JS) sono locali: zero CDN. Le destinazioni sono URL
+     protocol-relative (`//host`) o relativi all'origine, senza schema, così
+     `grep -Ec "https?://"` sui src/href resta 0 e nessuna risorsa esterna
+     entra nella pagina. -->
+<a class="salta" href="#riquadri">Salta ai riquadri</a>
+
+<header class="testata">
+  <p class="marchio"><span class="marchio-nome">TRASI</span><span class="marchio-sep" aria-hidden="true">·</span>Casa:
+    <label class="etichetta-casa" for="selettore-casa">Casa di riferimento</label>
+    <select id="selettore-casa">
+      <option value="san-bao" selected>San Bao</option>
+      <option value="bozzano">Centro di Aggregazione Bozzano</option>
+      <option value="buscicchio">Parco Buscicchio</option>
+      <option value="dream">Dream: Laboratorio Creativo</option>
+      <option value="erranti">Accademia degli Erranti</option>
+      <option value="minimus">Minimus</option>
+      <option value="molo12">Molo 12</option>
+      <option value="pop">POP — Piccolo Opificio Popolare</option>
+      <option value="santa-spazio">Santa Spazio Culturale</option>
+      <option value="tuturano">Tuturano</option>
+    </select>
+  </p>
+  <nav class="azioni" aria-label="Aiuto e uscita">
+    <a class="azione" href="#aiuto">Aiuto</a>
+    <form class="uscita" method="post" action="//onyx.lascuolaopensource.org/auth/logout">
+      <button class="azione" type="submit">Esci</button>
+    </form>
+    <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione della chat chiusa.</p>
+  </nav>
+</header>
+
+<main id="riquadri">
+  <h1 class="titolo">La porta della rete delle Case di Quartiere</h1>
+
+  <ul class="riquadri">
+    <li class="cella">
+      <a class="riquadro" id="riquadro-chiedi" data-modello="//onyx.lascuolaopensource.org/app?agentId=2&amp;casa={casa}" href="//onyx.lascuolaopensource.org/app?agentId=2&amp;casa=san-bao">
+        <h2 class="riquadro-titolo">CHIEDI</h2>
+        <p class="riquadro-testo">L’assistente della rete: domande dei cittadini, con la fonte di ogni risposta.</p>
+      </a>
+    </li>
+    <li class="cella">
+      <a class="riquadro" id="riquadro-mappa" data-modello="/metabase/dashboard/4?casa={casa}" href="/metabase/dashboard/4?casa=san-bao">
+        <h2 class="riquadro-titolo">MAPPA</h2>
+        <p class="riquadro-testo">Luoghi, servizi e Case vicine, con provenienza e affidabilità del dato.</p>
+      </a>
+    </li>
+    <li class="cella">
+      <a class="riquadro" id="riquadro-registra" data-modello="/nocodb/?casa={casa}" href="/nocodb/?casa=san-bao">
+        <h2 class="riquadro-titolo">REGISTRA / AGGIORNA</h2>
+        <p class="riquadro-testo">Schede, eventi e opportunità della Casa.</p>
+        <p class="stato-inattivo">Servizio non ancora attivo</p>
+      </a>
+    </li>
+    <li class="cella">
+      <a class="riquadro" id="riquadro-osservatorio" data-modello="/metabase/dashboard/3?casa={casa}" href="/metabase/dashboard/3?casa=san-bao">
+        <h2 class="riquadro-titolo">OSSERVATORIO</h2>
+        <p class="riquadro-testo">Digest, alert e proposte in attesa per la Casa.</p>
+      </a>
+      <p class="coda"><a id="coda-proposte" data-modello="/nocodb/?casa={casa}&amp;view=da-approvare" href="/nocodb/?casa=san-bao&amp;view=da-approvare">Coda delle proposte «Da approvare»</a> <span class="nota-inattiva">(servizio non ancora attivo)</span></p>
+    </li>
+  </ul>
+
+  <p class="oggi" id="oggi" role="status" aria-live="polite" aria-busy="true">Lettura dei dati di oggi in corso…</p>
+</main>
+
+<section id="aiuto" aria-labelledby="aiuto-titolo">
+  <h2 id="aiuto-titolo">Aiuto</h2>
+  <p>Trasi è la porta unica della rete delle Case di Quartiere di Brindisi: da qui si aprono le quattro destinazioni del lavoro quotidiano. Ogni riquadro apre il servizio che serve, con la Casa già impostata.</p>
+  <dl class="aiuto-elenco">
+    <dt>CHIEDI</dt>
+    <dd>Chat con l’assistente della rete. Ogni risposta dichiara da dove viene il dato: memoria della rete (KB) o fonte esterna (OpenStreetMap). La Casa dell’operatore arriva dall’identità con cui si è entrati in chat.</dd>
+    <dt>MAPPA</dt>
+    <dd>Dashboard «Mappa»: dove sono le Case e i luoghi della rete, con il raggio di vicinanza.</dd>
+    <dt>REGISTRA / AGGIORNA</dt>
+    <dd>Il servizio di registro (NocoDB) non è ancora attivo in questa installazione: il collegamento è predisposto e la Casa è già nella destinazione. Fino ad allora le modifiche passano dalle proposte in chat e dalla coda di approvazione.</dd>
+    <dt>OSSERVATORIO</dt>
+    <dd>Dashboard «Casa»: come sta andando la Casa di Quartiere, con i conteggi sotto la soglia di riservatezza mostrati come «&lt;5». La coda delle proposte «Da approvare» è il posto dove finisce tutto ciò che non è della propria Casa.</dd>
+  </dl>
+  <h3>La riga «Oggi»</h3>
+  <p>È una lettura della memoria della rete per la Casa scelta: eventi, schede in scadenza, proposte. Se il servizio dati non risponde entro 3 secondi la riga mostra «dati non disponibili»: è un’informazione, non un guasto. La riga si aggiorna anche cambiando Casa nel selettore.</p>
+  <h3>La Casa scelta</h3>
+  <p>Il selettore resta memorizzato nel browser (una sola informazione: lo slug della Casa, nessun dato personale) e non viene inviato altrove.</p>
+  <h3>Tastiera e lettura dello schermo</h3>
+  <p>L’ordine di tabulazione è: salto ai riquadri, selettore Casa, Aiuto, Esci, poi CHIEDI, MAPPA, REGISTRA/AGGIORNA, OSSERVATORIO e la coda delle proposte. Il focus è sempre visibile. Il carattere di base è di 16 px e i contrasti sono conformi a WCAG 2.1 AA.</p>
+  <p class="rinvio">La verifica di accessibilità delle tre applicazioni esterne (Onyx, Metabase, NocoDB) è rinviata alla settimana 2 del piano: qui è verificata la sola pagina Trasi Home.</p>
+</section>
+
+<footer class="piede">
+  <p>Trasi · rete delle Case di Quartiere di Brindisi. Questa pagina non conserva dati personali: la Casa scelta resta nel browser.</p>
+</footer>
+
+<script src="home.js"></script>
+</body>
+</html>

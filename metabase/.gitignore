@@ -1,0 +1,3 @@
+# Segreti reali di Metabase (B5): MAI versionati.
+# Il modello senza segreti è `.secrets/creds.env.example`.
+.secrets/creds.env

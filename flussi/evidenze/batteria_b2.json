@@ -1,0 +1,295 @@
+[
+ {
+  "id": "K01",
+  "persona": 2,
+  "tipo": "KB",
+  "domanda": "Orari del Molo 12?",
+  "esito": "PASS",
+  "durata_s": 10.0,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": false,
+  "strumenti": [
+   "internal_search",
+   "cerca_luogo"
+  ],
+  "risposta": "Ecco gli orari del **Molo 12** (Casa di Quartiere, coworking e impresa, Centro Storico — ATS The Qube):\n\n- **Lun–Ven**: 09:00–18:00\n- **Sabato**: chiuso\n- **Domenica**: chiuso\n\n[KB · Rete-kb-3 · 15/09/2026 · 3] [[1]]()\n\nVuoi il biglietto con l'indirizzo e gli orari per la stampa?"
+ },
+ {
+  "id": "K02",
+  "persona": 2,
+  "tipo": "KB",
+  "domanda": "Che orari ha il Centro di Aggregazione Bozzano?",
+  "esito": "PASS",
+  "durata_s": 13.1,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]",
+   "[KB · Rete-kb-3 · 15/09/2026 · 2]",
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": false,
+  "strumenti": [
+   "cerca_luogo",
+   "internal_search"
+  ],
+  "risposta": "Ecco gli orari del **Centro di Aggregazione Bozzano** (gestito da L'Officina Sociale aps):\n\n- **Lunedì–Venerdì**: 09:00–12:30 e 15:30–18:30\n- **Sabato**: 09:00–12:30\n- **Domenica**: chiuso\n\n[KB · Rete-kb-3 · 15/09/2026 · 3] [[1]]()[[2]]()\n\nNota utile: la Casa dispone di un **bar interno** aperto lun–ven 08:00–18:30 (sab 09:00–12:30), e di un **presidio di ascolto** per over 60 lun–ven 09:00–12:30 ad accesso libero [[3]]()[[4]]().\n\n[KB · Rete-kb-3 · 15/09/2026 · 2] [[3]]()\n[KB · Rete-kb-3 · 15/09/2026 · 3] [[4]]()\n\nVuoi che prepari il biglietto con orari e indirizzo?"
+ },
+ {
+  "id": "K03",
+  "persona": 2,
+  "tipo": "KB",
+  "domanda": "Orari stagionali dell'Accademia degli Erranti?",
+  "esito": "PASS",
+  "durata_s": 22.5,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]",
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": true,
+  "strumenti": [
+   "cerca_luogo",
+   "internal_search"
+  ],
+  "risposta": "Gli orari regolari dell'Accademia degli Erranti sono: mar–sab 10:00–12:00 e 17:20–20:00; lun e dom chiuso. [KB · Rete-kb-3 · 15/09/2026 · 3]\n\n[KB · Rete-kb-3 · 15/09/2026 · 3]\n\nPer gli **orari stagionali** la memoria della rete rimanda alle eccezioni della Casa: al momento non ho il dettaglio delle eccezioni stagionali. Vuoi che cerchi altro o che ti prepari il biglietto per l'Accademia?"
+ },
+ {
+  "id": "K04",
+  "persona": 1,
+  "tipo": "KB",
+  "domanda": "C'è una psicologa di comunità nella rete? Dove si trova?",
+  "esito": "PASS",
+  "durata_s": 14.9,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": false,
+  "strumenti": [
+   "internal_search",
+   "cerca_luogo"
+  ],
+  "risposta": "Sì, nella rete c'è una **psicologa di comunità**, con un presidio di ascolto presso la Casa di Quartiere **Parco Buscicchio** (quartiere Sant'Elia).\n\n[KB · Rete-kb-3 · 15/09/2026 · 3]\n\n- **Psicologa di comunità — Parco Buscicchio**: servizio professionale interno alla Casa, **su appuntamento tramite la portineria di comunità** [[1]]()\n- **Presidio di ascolto — Parco Buscicchio**: accoglienza e ascolto, primo accesso senza appuntamento, accesso libero nella fascia di apertura:\n  - lun–ven 15:00–19:00 [[2]]()\n- **Casa di Quartiere Parco Buscicchio**: aperta lun–ven 15:00–19:00, sab 10:00–13:00, dom chiusa [[3]]()\n\nVuoi qualche informazione in più su come accedere al servizio?"
+ },
+ {
+  "id": "K05",
+  "persona": 2,
+  "tipo": "KB",
+  "domanda": "Quali Case di Quartiere hanno un presidio di ascolto?",
+  "esito": "PASS",
+  "durata_s": 39.0,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]",
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]",
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": false,
+  "strumenti": [
+   "internal_search"
+  ],
+  "risposta": "Le Case di Quartiere con un presidio di ascolto sono tre:\n\n**Parco Buscicchio** (Sant'Elia)\n- Presidio di ascolto: accoglienza e ascolto, primo accesso senza appuntamento\n- Orari: lun-ven 15:00-19:00, accesso libero\n- [KB · Rete-kb-3 · 15/09/2026 · 3] [[1]]()\n\n**San Bao** (La Rosa)\n- Presidio di ascolto: accoglienza e ascolto per persone anziane e famiglie\n- Orari: lun-ven 09:00-13:00, accesso libero\n- [KB · Rete-kb-3 · 15/09/2026 · 3] [[2]]()\n\n**Centro di Aggregazione Bozzano** (Bozzano)\n- Presidio di ascolto per over 60\n- Orari: lun-ven 09:00-12:30, accesso libero\n- [KB · Rete-kb-3 · 15/09/2026 · 3] [[3]]()\n\nVuoi che prepari un biglietto per una di queste?"
+ },
+ {
+  "id": "K06",
+  "persona": 2,
+  "tipo": "KB",
+  "domanda": "Cosa offre il Centro di Aggregazione Bozzano?",
+  "esito": "PASS",
+  "durata_s": 27.5,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 2]",
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]",
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": false,
+  "strumenti": [
+   "internal_search"
+  ],
+  "risposta": "Il **Centro di Aggregazione Bozzano** è una Casa di Quartiere a Bozzano, gestita da L'Officina Sociale aps.\n\nOffre:\n- **Bar interno** – bar a gestione interna della Casa, ingresso dalla Casa. Orari: lun-ven 08:00-18:30, sab 09:00-12:30, dom chiuso. [KB · Rete-kb-3 · 15/09/2026 · 2] [[1]]()\n- **Presidio di ascolto** – accoglienza e ascolto per over 60, accesso libero. Orari: lun-ven 09:00-12:30. [KB · Rete-kb-3 · 15/09/2026 · 3] [[2]]()\n\nOrari della Casa: lun-ven 09:00-12:30 e 15:30-18:30, sab 09:00-12:30, dom chiuso. [KB · Rete-kb-3 · 15/09/2026 · 3] [[3]]()\n\nVuoi che ti prepari un biglietto per il Centro di Aggregazione Bozzano?"
+ },
+ {
+  "id": "K07",
+  "persona": 2,
+  "tipo": "KB",
+  "domanda": "Il bar interno della Casa di Bozzano è aperto il sabato?",
+  "esito": "PASS",
+  "durata_s": 17.5,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 2]",
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": false,
+  "strumenti": [
+   "internal_search",
+   "cerca_luogo"
+  ],
+  "risposta": "Sì, il bar interno della Casa di Quartiere di Bozzano è aperto il sabato, dalle **09:00 alle 12:30** (la domenica è chiuso). [[1]]()\n\n[KB · Rete-kb-3 · 15/09/2026 · 2]\n[KB · Rete-kb-3 · 15/09/2026 · 3]\n\nVuoi che prepari il biglietto con l'indirizzo per arrivarci?"
+ },
+ {
+  "id": "K08",
+  "persona": 2,
+  "tipo": "KB",
+  "domanda": "Che orari ha l'URP del Comune di Brindisi?",
+  "esito": "PASS",
+  "durata_s": 14.3,
+  "etichette_kb": [
+   "[KB · Comune di Brindisi-3 · 15/09/2026 · 1]"
+  ],
+  "etichette_est": [],
+  "astensione": false,
+  "strumenti": [
+   "internal_search"
+  ],
+  "risposta": "L'URP del Comune di Brindisi ha questi orari:\n\n- **Lunedì**: 08:30–12:30\n- **Martedì**: 08:30–12:30\n- **Mercoledì**: 08:30–12:30\n- **Giovedì**: 08:30–12:30 e 15:00–17:00\n- **Venerdì**: 08:30–12:30\n\n[KB · Comune di Brindisi-3 · 15/09/2026 · 1] [[1]](https://www.comune.brindisi.it)\n\nVuoi che ti prepari il biglietto con indirizzo e come arrivare?"
+ },
+ {
+  "id": "K09",
+  "persona": 2,
+  "tipo": "KB",
+  "domanda": "Quali servizi ci sono in rete per autismo e disabilità?",
+  "esito": "PASS",
+  "durata_s": 34.6,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": false,
+  "strumenti": [
+   "internal_search",
+   "cerca_luogo",
+   "internal_search",
+   "cerca_luogo"
+  ],
+  "risposta": "Ecco i servizi in rete dedicati ad autismo e disabilità:\n\n**Dream — Laboratorio Creativo** *(Casa di Quartiere, quartiere Paradiso)*\n- Sportello informativo dedicato ad **autismo e disabilità** [[1]]()\n- Gestito da **ANGSA + Il Bene Che Ti Voglio** [[2]]()\n- Orari: lun–sab 09:00–13:00 (dom chiuso) [[1]]()[[2]]()\n\n**POP — Piccolo Opificio Popolare** *(Casa di Quartiere, Perrino)*\n- Attività con **CE.F.A.S.** per laboratori e formazione [[5]]()\n- Orari in via di definizione [[5]]()[[6]]()\n\n**Parco Buscicchio** *(Casa di Quartiere, Sant'Elia)*\n- Area educativa e famiglie, con **Legami di Comunità** [[8]]()[[9]]()\n- **Presidio di ascolto**: primo accesso senza appuntamento, lun–ven 15:00–19:00 [[8]]()\n- **Psicologa di comunità** interna alla Casa, su appuntamento tramite portineria [[10]]()\n\n[KB · Rete-kb-3 · 15/09/2026 · 3]\n\nVuoi che prepari un biglietto verso uno di questi luoghi? Dimmi quale."
+ },
+ {
+  "id": "K10",
+  "persona": 2,
+  "tipo": "KB",
+  "domanda": "La Casa di Quartiere di Tuturano che orari ha?",
+  "esito": "PASS",
+  "durata_s": 36.0,
+  "etichette_kb": [
+   "[KB · Tuturano · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": false,
+  "strumenti": [
+   "internal_search"
+  ],
+  "risposta": "Per la Casa di Quartiere di Tuturano, gli orari risultano ancora **in via di definizione** (dati provvisori) [[1]]()[[2]]().\n\n[KB · Tuturano · 15/09/2026 · 3]\n\nNon ci sono orari certi al momento. Vuoi che cerchi un altro riferimento utile, oppure posso verificare se c'è qualcosa di vicino a Tuturano (es. un CAF, farmacia o altro servizio) che ti interessa?"
+ },
+ {
+  "id": "N01",
+  "persona": 2,
+  "tipo": "FUORI",
+  "domanda": "Farmacie di turno domani a Tuturano?",
+  "esito": "PASS",
+  "durata_s": 50.1,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": true,
+  "strumenti": [
+   "internal_search",
+   "cerca_luogo",
+   "internal_search",
+   "vicino_a",
+   "cerca_web"
+  ],
+  "risposta": "Non trovo informazioni sulle farmacie di turno a Tuturano per domani.\n\nStato della ricerca:\n- La memoria della rete contiene solo dati provvisori sulla Casa di Quartiere di Tuturano, nessun dato sulle farmacie di turno. [KB · Rete-kb-3 · 15/09/2026 · 3]\n- Gli strumenti esterni (ricerca web, OpenStreetMap, ricerca luoghi) in questo momento **non rispondono** (`dettaglio: non implementato (contratto v0)`), quindi non posso verificare i turni.\n\nTi suggerisco di consultare il bollettino dei turni farmaceutici del territorio (ASL/sito comunale di Brindisi) oppure una farmacia del centro. Se vuoi, posso cercare le farmacie più vicine a Tuturano appena gli strumenti tornano disponibili — me lo chiedi di nuovo?"
+ },
+ {
+  "id": "N02",
+  "persona": 2,
+  "tipo": "FUORI",
+  "domanda": "Qual è il numero di telefono del CAF ACLI La Rosa?",
+  "esito": "PASS",
+  "durata_s": 22.0,
+  "etichette_kb": [
+   "[KB · CAF ACLI Brindisi · 15/09/2026 · 1]"
+  ],
+  "etichette_est": [],
+  "astensione": true,
+  "strumenti": [
+   "internal_search",
+   "cerca_luogo",
+   "cerca_web"
+  ],
+  "risposta": "Dalla memoria della rete trovo la scheda del **CAF ACLI La Rosa** (patronato ACLI, assistenza fiscale e ISEE), ma il numero di telefono **non è registrato**: la scheda riporta che orari e indirizzo sono \"da verificare\".\n\n[KB · CAF ACLI Brindisi · 15/09/2026 · 1]\n\nNon trovo altre informazioni: gli strumenti di ricerca web e di ricerca esterna non rispondono in questo momento, quindi non posso verificare il numero altrove.\n\nSe hai un numero di telefono o altri dati da aggiornare sulla scheda, posso preparare una proposta di modifica. Vuoi procedere?"
+ },
+ {
+  "id": "N03",
+  "persona": 2,
+  "tipo": "FUORI",
+  "domanda": "Quali autobus portano a Tuturano e a che ora partono?",
+  "esito": "PASS",
+  "durata_s": 26.5,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]",
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [],
+  "astensione": true,
+  "strumenti": [
+   "internal_search",
+   "vicino_a",
+   "cerca_web",
+   "cerca_luogo"
+  ],
+  "risposta": "Non trovo informazioni sugli autobus per Tuturano: la rete è in fase di definizione e gli strumenti per bus e fermate al momento non rispondono.\n\nDalla memoria della rete risulta soltanto che la Casa di Quartiere di Tuturano ha dati e orari provvisori, in via di definizione.\n\n[KB · Rete-kb-3 · 15/09/2026 · 3]\n\n- **Tuturano (Casa di Quartiere)**: orari in via di definizione [[1]]()\n- **Tuturano (luogo)**: dati provvisori, orari in definizione [[2]]()\n\n[[1]]()[[2]]() [KB · Rete-kb-3 · 15/09/2026 · 3]\n\nLo strumento per le fermate/linee bus non è disponibile in questo momento (`vicino_a`: non implementato; `cerca_web`: non implementato), quindi non posso indicarti linee né orari di partenza. Appena i dati saranno validati dalla rete potrò verificarti gli orari."
+ },
+ {
+  "id": "N04",
+  "persona": 2,
+  "tipo": "FUORI",
+  "domanda": "Chi è l'assessore ai servizi sociali del Comune di Brindisi?",
+  "esito": "PASS",
+  "durata_s": 39.4,
+  "etichette_kb": [
+   "[KB · Comune di Brindisi-3 · 15/09/2026 · 1]"
+  ],
+  "etichette_est": [],
+  "astensione": true,
+  "strumenti": [
+   "internal_search",
+   "cerca_web",
+   "internal_search"
+  ],
+  "risposta": "Non trovo informazioni sul nome dell'assessore ai servizi sociali del Comune di Brindisi nella memoria della rete. La ricerca web esterna non è disponibile in questo momento (strumento non implementato), quindi non posso confermare da fonti autorevoli esterne.\n\nPosso però segnalarti il punto di riferimento per chiederlo:\n\n- **Comune di Brindisi — URP** (Ufficio relazioni con il pubblico): lun-ven 08:30-12:30, gio anche 15:00-17:00.\n\n[KB · Comune di Brindisi-3 · 15/09/2026 · 1]\n\nVuoi che prepari il biglietto per l'URP del Comune di Brindisi?"
+ },
+ {
+  "id": "N05",
+  "persona": 4,
+  "tipo": "FUORI",
+  "domanda": "Quante persone ha accolto il presidio di San Bao lo scorso mese?",
+  "esito": "PASS",
+  "durata_s": 21.5,
+  "etichette_kb": [
+   "[KB · Rete-kb-3 · 15/09/2026 · 3]"
+  ],
+  "etichette_est": [
+   "[Esterna · cerca_web · 15/09/2026 · non verificata dalla rete]",
+   "[Esterna · cerca_luogo · 15/09/2026 · non verificata dalla rete]"
+  ],
+  "astensione": true,
+  "strumenti": [
+   "internal_search",
+   "cerca_luogo",
+   "internal_search",
+   "cerca_luogo",
+   "cerca_web",
+   "internal_search",
+   "internal_search",
+   "cerca_luogo"
+  ],
+  "risposta": "[KB · Rete-kb-3 · 15/09/2026 · 3] — nessun risultato per \"presidio San Bao\" o \"San Bao presidio\": la base di conoscenza non contiene informazioni su questo presidio.\n\n[Esterna · cerca_web · 15/09/2026 · non verificata dalla rete] — strumento non implementato (contratto v0): impossibile consultare fonti esterne.\n\n[Esterna · cerca_luogo · 15/09/2026 · non verificata dalla rete] — strumento non implementato (contratto v0): nessuna geolocalizzazione disponibile.\n\nNon trovo informazioni sul numero di persone accolte dal presidio di San Bao lo scorso mese. Se questo dato riguarda la tua Casa, posso proporre una correzione: vuoi che aggiorni ora? Sì / No."
+ }
+]

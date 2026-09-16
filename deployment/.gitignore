@@ -1,0 +1,13 @@
+# Segreti reali dello stack Trasi: MAI versionati.
+# Il modello senza segreti è versionato come `.env.example`.
+.env
+
+# Backup e dump locali.
+/backups/
+*.sql.gz
+
+# Log e stato locale dei servizi.
+*.log
+
+# Segnaposto del sito statico Trasi Home resta versionato (contenuto pubblico),
+# quindi non viene escluso.

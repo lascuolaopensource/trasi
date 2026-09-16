@@ -1,0 +1,9 @@
+-r requirements.txt
+pytest==9.1.1
+httpx==0.28.1
+# Mock delle fonti esterne (Overpass, SearXNG) nei test: i test non devono dipendere dalla rete, e il criterio
+# «timeout Overpass → 200 con stato dichiarato» è verificabile solo con un timeout simulato.
+respx==0.23.1
+# Validatore OpenAPI rigoroso: il validatore di Onyx non risolve i `$ref` né controlla la struttura del documento,
+# quindi non accorgerebbe di un riferimento rotto. Il contratto congelato è la base di B2: va verificato sul serio.
+openapi-spec-validator==0.9.0

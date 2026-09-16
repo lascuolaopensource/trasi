@@ -1,0 +1,1075 @@
+openapi: 3.0.3
+info:
+  title: Trasi — shim (contratto v0, congelato in B0 · gate V-09)
+  version: 0.0.0
+  description: "Contratto d'integrazione fra Onyx e lo shim Trasi, congelato nel blocco B0 (gate V-09) per rompere il ciclo\
+    \ B2↔B3:\nB2 (SA-Onyx) registra questo documento come tool custom **prima** che gli endpoint siano implementati; B3 (SA-Shim)\n\
+    implementa le stesse `operationId`, senza cambiarle.\n\nRegole di contratto (non negoziabili):\n- **Un solo server**:\
+    \ Onyx sostituisce lato server il letterale `USER_EMAIL` con l'email dell'utente autenticato e\n  invia l'header `X-Onyx-User-Email`;\
+    \ lo shim risolve l'identità in `identita_onyx` e apre `BEGIN; SET LOCAL ROLE <ruolo_db>; …; COMMIT`.\n  La RLS del database\
+    \ è l'unica autorità sui permessi.\n- **Nessun dato personale**: nessuno schema ammette campi liberi (`additionalProperties:\
+    \ false` ricorsivo) e nessun\n  campo è destinato al cittadino. `motivazione` e `payload` sono filtrati dallo shim (email,\
+    \ telefono italiano,\n  codice fiscale) → 422 `dato_personale_sospetto`.\n- **Errori**: 401 chiave shim assente o errata\
+    \ · 403 identità Onyx non riconosciuta o RLS che nega\n  (`{\"detail\":\"da approvare in coda\"}`) · 409 proposta scaduta\
+    \ · 422 payload o parametri non ammessi · 501 non ancora\n  implementato (stub v0). I corpi d'errore usano l'involucro\
+    \ `{\"detail\": <stringa>}`: in B3 gli errori di validazione\n  di pydantic (`extra=\"forbid\"`) vengono normalizzati\
+    \ a questo involucro da un handler dedicato.\n- **Timeout dichiarato, mai eccezione al chiamante**: 3 s per lo shim, 5\
+    \ s per Overpass; il guasto di una fonte\n  esterna si legge in `fonti_esterne[].stato`, non in un 5xx.\n- **Nessun endpoint\
+    \ scrive il dominio**: l'unica scrittura mediata possibile è `proponi_modifica` → approvazione →\n  `applica_proposte`\
+    \ (flusso F8/F9). Lo shim in B0 è uno stub: nessuna connessione al database, nessuna query.\n- Solo `application/json`\
+    \ per i corpi di richiesta; l'unica risposta non JSON è il biglietto stampabile (HTML A6),\n  come richiesto da §4.4 e\
+    \ da B3-SHM-07 dell'architettura.\n"
+servers:
+- url: http://shim:8000/v1/u/USER_EMAIL
+  description: '`USER_EMAIL` è un segnaposto: Onyx lo sostituisce lato server con l''email dell''utente autenticato (`tools/tool_constructor.py:436-447`,
+    `tool_implementations/custom/custom_tool.py:307-308`). Deve restare **l''unico** elemento di `servers`.'
+tags:
+- name: kb
+  description: Lettura della memoria della rete (base di conoscenza).
+- name: esterno
+  description: Fonti esterne (OpenStreetMap/Overpass, web su allow-list).
+- name: proposte
+  description: Ciclo di scrittura mediata — proposta, approvazione umana, applicazione.
+paths:
+  /cerca_luogo:
+    get:
+      operationId: cerca_luogo
+      tags:
+      - kb
+      summary: 'Cerca un luogo o un servizio nella memoria della rete. Usalo per domande su dove si trova qualcosa ("dove
+        si fa l''ISEE?", "dov''è la Casa di Quartiere di Bozzano?"), con filtro facoltativo per tipo e quartiere. Restituisce
+        solo dati già verificati dalla rete: il badge è già formattato, riportalo così com''è.'
+      parameters:
+      - name: q
+        in: query
+        required: true
+        description: Testo libero della ricerca, in italiano (obbligatorio). Es. "ISEE", "CAF", "spazio giovani".
+        schema:
+          type: string
+          minLength: 1
+      - name: tipo
+        in: query
+        required: false
+        description: Tipo di luogo, facoltativo; vocabolario chiuso di `luogo.tipo` (es. caf, presidio_ascolto, bar, farmacia,
+          casa_quartiere). Un valore fuori vocabolario non restringe la ricerca.
+        schema:
+          type: string
+      - name: quartiere
+        in: query
+        required: false
+        description: Quartiere o zona, facoltativo (es. "Bozzano", "Tuturano").
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Luoghi trovati nella memoria della rete, con provenienza e badge.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaCercaLuogo'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /eventi_oggi:
+    get:
+      operationId: eventi_oggi
+      tags:
+      - kb
+      summary: Elenca gli eventi di una Casa di Quartiere in una data (oggi se non indicata). Usalo quando l'operatore chiede
+        che cosa succede oggi, o in un giorno preciso, in una Casa.
+      parameters:
+      - name: casa
+        in: query
+        required: false
+        description: Slug della Casa di Quartiere. Se omesso, si usa la Casa dell'operatore autenticato (dall'identità); è
+          obbligatorio solo per i ruoli senza Casa (es. rete).
+        schema:
+          type: string
+          minLength: 1
+      - name: data
+        in: query
+        required: false
+        description: Data in formato ISO `AAAA-MM-GG`; se omessa si intende oggi (fuso Europe/Rome).
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Eventi della Casa nella data richiesta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaEventiOggi'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /vicino_a:
+    get:
+      operationId: vicino_a
+      tags:
+      - kb
+      - esterno
+      summary: 'Trova i luoghi di un certo tipo vicino a una Casa di Quartiere, unendo la memoria della rete (KB) e i punti
+        di interesse esterni di OpenStreetMap. Usalo per ogni domanda di vicinanza ("il bar più vicino", "una farmacia vicino
+        a Tuturano", "un CAF aperto adesso"). Ogni risultato dichiara se è verificato (KB) o esterno e porta un badge già
+        formattato: riportalo così com''è. Se una fonte esterna non risponde, dichiara `fonti_esterne[].stato` senza inventare
+        dati.'
+      parameters:
+      - name: casa
+        in: query
+        required: false
+        description: Slug della Casa di Quartiere. Se omesso, si usa la Casa dell'operatore autenticato (dall'identità); è
+          obbligatorio solo per i ruoli senza Casa (es. rete).
+        schema:
+          type: string
+          minLength: 1
+      - name: tipo
+        in: query
+        required: true
+        description: Tipo di luogo cercato (obbligatorio); mappa chiusa verso i tag OpenStreetMap. Un valore fuori elenco
+          risponde 422 con l'elenco ammesso.
+        schema:
+          type: string
+          enum:
+          - bar
+          - farmacia
+          - caf
+          - fermata
+          - poste
+          - medico
+          - ospedale
+          - supermercato
+          - biblioteca
+          - parco
+          - banca
+          - comune
+      - name: aperto_adesso
+        in: query
+        required: false
+        description: 'Se `true`, esclude i luoghi noti come chiusi in questo momento e ordina prima gli aperti. I luoghi senza
+          orari noti **non vengono scartati**: restano in coda con `aperto_adesso: null` e `orari_nota: "orari non disponibili"`.'
+        schema:
+          type: boolean
+      - name: raggio_m
+        in: query
+        required: false
+        description: Raggio di ricerca in metri, facoltativo; se omesso si usa `casa.raggio_m` o il parametro `raggio_vicinanza_m`.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Luoghi KB ed esterni entro il raggio, con provenienza, fiducia e badge.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaVicinoA'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /registra_richiesta:
+    post:
+      operationId: registra_richiesta
+      tags:
+      - proposte
+      summary: 'Registra la richiesta di orientamento al termine del colloquio: categoria, esito e destinazione scelta. Usalo
+        una volta sola, alla fine, dopo aver chiesto all''operatore se e dove la persona è stata indirizzata. Non chiedere
+        né trascrivere dati personali: se il corpo contiene campi non previsti lo strumento risponde 422.'
+      requestBody:
+        required: true
+        description: 'Solo i campi del modello dati `richiesta` (`categoria`, `esito`, `destinazione_*`): nessun campo per
+          il cittadino. Se `esito` è `inviata_altrove` serve `destinazione_id` oppure `destinazione_nota`, altrimenti 422.'
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - categoria
+              - esito
+              properties:
+                categoria:
+                  type: string
+                  enum:
+                  - orientamento
+                  - servizi_sociali
+                  - fiscale_isee
+                  - lavoro
+                  - abitare
+                  - salute
+                  - interculturale
+                  - ascolto_solitudine
+                  - eventi_attivita
+                  - altro
+                  description: Categoria della richiesta (obbligatoria). Elenco assunto dal piano §9 (lista `richiesta.categoria`).
+                esito:
+                  type: string
+                  minLength: 1
+                  description: Esito del colloquio (obbligatorio), vocabolario `richiesta.esito` definito dal CHECK in `db/001_schema.sql`
+                    (include almeno `inviata_altrove`).
+                destinazione_id:
+                  type: integer
+                  minimum: 1
+                  description: Identificativo del luogo della rete verso cui la persona è stata indirizzata, se noto.
+                destinazione_nota:
+                  type: string
+                  minLength: 1
+                  description: Destinazione in testo libero quando non è un luogo della rete (es. un POI esterno `osm:node:…`
+                    o un servizio non censito).
+      responses:
+        '201':
+          description: Richiesta registrata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaRegistraRichiesta'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /proponi_modifica:
+    post:
+      operationId: proponi_modifica
+      tags:
+      - proposte
+      summary: 'Propone una modifica alla memoria della rete **senza modificarla**: crea una proposta che una persona deve
+        approvare. Usalo ogni volta che l''operatore segnala un cambiamento (orario, chiusura, nuovo servizio) o quando vuoi
+        promuovere in memoria un luogo trovato fuori, oppure dopo una correzione richiesta dall''operatore. Non usarlo per
+        modificare dati: nessuno strumento scrive direttamente.'
+      requestBody:
+        required: true
+        description: 'Proposta di modifica. `payload` contiene solo i valori proposti per l''entità, scelti da un elenco chiuso
+          di colonne del modello dati: nessun campo per dati personali. `motivazione` è testo libero fino a 80 caratteri.'
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - tipo
+              - entita
+              - payload
+              - motivazione
+              properties:
+                tipo:
+                  type: string
+                  enum:
+                  - nuovo_luogo
+                  - modifica_luogo
+                  - chiudi_luogo
+                  - modifica_scheda
+                  - nuova_scheda
+                  - modifica_evento
+                  - nuova_opportunita
+                  - promuovi_esterno
+                  - modifica_orari_casa
+                  description: Tipo di proposta (obbligatorio), enum del modello dati `proposta.tipo` (§7.1).
+                entita:
+                  type: string
+                  minLength: 1
+                  description: 'Entità toccata dalla proposta (obbligatoria): nome della tabella di dominio (luogo, scheda_servizio,
+                    evento, opportunita, casa).'
+                entita_id:
+                  type: integer
+                  minimum: 1
+                  description: Identificativo dell'entità da modificare; assente per le proposte di creazione.
+                payload:
+                  $ref: '#/components/schemas/PayloadProposta'
+                motivazione:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                  description: 'Perché si propone la modifica, fino a 80 caratteri (obbligatoria). Non inserire dati personali:
+                    email, telefoni italiani e codici fiscali sono respinti con 422 `dato_personale_sospetto`.'
+      responses:
+        '201':
+          description: Proposta creata, in attesa di approvazione umana.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaProponiModifica'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /approva_proposta:
+    post:
+      operationId: approva_proposta
+      tags:
+      - proposte
+      summary: 'Approva o rifiuta una proposta già presentata. Usalo solo dopo che l''operatore ha confermato in chat, e solo
+        per le proposte della sua Casa di Quartiere. Se la proposta non è sua lo strumento risponde 403 "da approvare in coda":
+        in quel caso non insistere, la proposta resta in attesa della coda.'
+      requestBody:
+        required: true
+        description: Decisione su una proposta esistente.
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - proposta_id
+              - decisione
+              properties:
+                proposta_id:
+                  type: integer
+                  minimum: 1
+                  description: Identificativo della proposta da decidere (obbligatorio).
+                decisione:
+                  type: string
+                  enum:
+                  - approva
+                  - rifiuta
+                  description: Esito della decisione (obbligatorio).
+                nota:
+                  type: string
+                  maxLength: 80
+                  description: Nota facoltativa sulla decisione, fino a 80 caratteri.
+      responses:
+        '200':
+          description: Decisione registrata; la proposta cambia stato.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaApprovaProposta'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '409':
+          $ref: '#/components/responses/PropostaScaduta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /biglietto:
+    get:
+      operationId: biglietto
+      tags:
+      - kb
+      summary: 'Restituisce il biglietto stampabile (una pagina HTML A6) del luogo scelto: nome, indirizzo, orari, come arrivare,
+        fonte, data e badge. Usalo quando la persona ha deciso dove andare, subito prima di registrare la richiesta. Il biglietto
+        non contiene dati personali: mostralo all''operatore per la stampa.'
+      parameters:
+      - name: luogo_id
+        in: query
+        required: true
+        description: Identificativo del luogo della rete (obbligatorio); può essere anche un POI esterno.
+        schema:
+          type: integer
+          minimum: 1
+      - name: casa
+        in: query
+        required: false
+        description: Slug della Casa di Quartiere. Se omesso, si usa la Casa dell'operatore autenticato (dall'identità); è
+          obbligatorio solo per i ruoli senza Casa (es. rete).
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: 'Biglietto HTML A6 stampabile (§4.4, B3-SHM-07). È l''unica risposta non JSON del contratto: `text/html`,
+            non `application/json`.'
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /oggi:
+    get:
+      operationId: oggi
+      tags:
+      - kb
+      summary: 'Restituisce la riga «Oggi» di una Casa di Quartiere: quanti eventi, quante schede in scadenza e quante proposte
+        in attesa. Usalo quando l''operatore apre la sua Casa o chiede che cosa c''è da fare oggi.'
+      parameters:
+      - name: casa
+        in: query
+        required: false
+        description: Slug della Casa di Quartiere. Se omesso, si usa la Casa dell'operatore autenticato (dall'identità); è
+          obbligatorio solo per i ruoli senza Casa (es. rete).
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: Riepilogo «Oggi» della Casa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaOggi'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /cerca_web:
+    get:
+      operationId: cerca_web
+      tags:
+      - esterno
+      summary: 'Cerca sul web aperto restituendo **solo** risultati di fonti in allow-list. Usalo soltanto se la memoria della
+        rete non risponde, per informazioni correnti non verificate (turni, orari, avvisi): etichetta ogni risultato come
+        esterno e non verificato dalla rete, citando la fonte e l''ora. Se una fonte non risponde, dichiaralo.'
+      parameters:
+      - name: q
+        in: query
+        required: true
+        description: Testo della ricerca web, in italiano (obbligatorio). Non inserire dati personali.
+        schema:
+          type: string
+          minLength: 1
+      - name: max
+        in: query
+        required: false
+        description: Numero massimo di risultati richiesti, facoltativo; il server applica comunque il tetto `max_risultati_esterni`.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Risultati da fonti in allow-list, con provenienza esterna, fiducia e stato delle fonti.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaCercaWeb'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+components:
+  responses:
+    ChiaveShimNonValida:
+      description: La chiave dello shim (header `X-Trasi-Key`) è assente o errata.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Errore'
+    IdentitaNonRiconosciuta:
+      description: L'email dell'operatore non è in `identita_onyx` (403, nessuna query eseguita), oppure la RLS nega l'operazione
+        (`{"detail":"da approvare in coda"}`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Errore'
+    PropostaScaduta:
+      description: La proposta è scaduta (oltre il termine `gg_scadenza_proposta`) e non è più decidibile.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Errore'
+    ParametriNonAmmessi:
+      description: 'Parametri o corpo non ammessi: campo non previsto (`additionalProperties: false`), valore fuori vocabolario,
+        `motivazione` oltre 80 caratteri, destinazione mancante per `inviata_altrove`, oppure dato personale sospetto (email,
+        telefono italiano, codice fiscale) → `dato_personale_sospetto`.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Errore'
+    NonImplementato:
+      description: Operazione prevista dal contratto v0 e non ancora implementata (stub 501 di B0). L'implementazione reale
+        è il blocco B3, senza cambiare `operationId`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Errore'
+  schemas:
+    Errore:
+      type: object
+      additionalProperties: false
+      required:
+      - detail
+      description: Involucro unico degli errori; il dettaglio è una stringa in italiano, adatta anche al LLM.
+      properties:
+        detail:
+          type: string
+          description: Spiegazione dell'errore (es. «da approvare in coda», «non implementato (contratto v0)», «dato_personale_sospetto»).
+    FonteEsterna:
+      type: object
+      additionalProperties: false
+      required:
+      - fonte
+      - stato
+      - ms
+      description: Esito del tentativo di interrogare una fonte esterna. Non solleva mai eccezione al chiamante.
+      properties:
+        fonte:
+          type: string
+          description: Nome della fonte esterna interrogata (es. OpenStreetMap, SearXNG).
+        stato:
+          type: string
+          enum:
+          - ok
+          - timeout
+          - errore
+          - scartata_fiducia
+          description: '`ok` risposta utilizzata · `timeout` oltre il tempo dichiarato · `errore` fonte non raggiungibile
+            o risposta illeggibile · `scartata_fiducia` risultati sotto la soglia `fiducia_min_esterna`.'
+        ms:
+          type: integer
+          minimum: 0
+          description: Durata del tentativo in millisecondi.
+    ItemVicinanza:
+      type: object
+      additionalProperties: false
+      required:
+      - provenienza
+      - nome
+      - tipo
+      - indirizzo
+      - lat
+      - lon
+      - distanza_m
+      - aperto_adesso
+      - orari_testo
+      - orari_nota
+      - fonte
+      - url
+      - data_aggiornamento
+      - fiducia
+      - consultato_ts
+      - badge
+      description: Un luogo vicino alla Casa, dalla memoria della rete (kb) o da una fonte esterna (esterna). I campi facoltativi
+        sono `null`, non omessi, così il LLM vede sempre la stessa forma.
+      properties:
+        provenienza:
+          type: string
+          enum:
+          - kb
+          - esterna
+          description: Da dove viene il dato; determina il testo del badge.
+        nome:
+          type: string
+          description: Nome del luogo.
+        tipo:
+          type: string
+          description: Tipo richiesto (es. bar, farmacia).
+        indirizzo:
+          type: string
+          description: Indirizzo del luogo; stringa vuota se la fonte non lo fornisce.
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+          description: Latitudine in gradi decimali (WGS84).
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+          description: Longitudine in gradi decimali (WGS84).
+        distanza_m:
+          type: number
+          minimum: 0
+          description: Distanza in metri dalla Casa di riferimento.
+        aperto_adesso:
+          type: boolean
+          nullable: true
+          description: '`true` se risulta aperto adesso, `false` se risulta chiuso, `null` se non si conoscono gli orari (caso
+            frequente nei dati OpenStreetMap).'
+        orari_testo:
+          type: string
+          nullable: true
+          description: Orari leggibili per una persona (es. «lun-ven 9:00-13:00»); `null` se non noti.
+        orari_nota:
+          type: string
+          nullable: true
+          description: Nota sugli orari quando mancano (es. «orari non disponibili»); `null` quando gli orari sono noti.
+        fonte:
+          type: string
+          description: Fonte del dato (es. «Comune di Brindisi», «OpenStreetMap»).
+        url:
+          type: string
+          format: uri
+          nullable: true
+          description: Collegamento alla fonte o al dato originale; `null` se non disponibile.
+        data_aggiornamento:
+          type: string
+          format: date
+          nullable: true
+          description: Data dell'ultimo aggiornamento del dato in memoria; `null` per i dati esterni.
+        fiducia:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Livello di affidabilità della fonte (1 basso, 3 alto).
+        consultato_ts:
+          type: string
+          format: date-time
+          description: Istante in cui il dato è stato consultato o letto.
+        badge:
+          type: string
+          description: Etichetta di provenienza già formattata, da riportare nel testo così com'è, senza ricomporla (es. «[KB
+            · Comune di Brindisi · agg. 10/09/2026 · affidabilità 3]»).
+    ItemLuogo:
+      type: object
+      additionalProperties: false
+      required:
+      - provenienza
+      - nome
+      - tipo
+      - indirizzo
+      - lat
+      - lon
+      - orari_testo
+      - fonte
+      - url
+      - data_aggiornamento
+      - fiducia
+      - badge
+      description: Un luogo della memoria della rete con la sua etichetta di provenienza.
+      properties:
+        provenienza:
+          type: string
+          enum:
+          - kb
+          description: In questa risposta è sempre `kb`, cioè la memoria della rete.
+        nome:
+          type: string
+          description: Nome del luogo.
+        tipo:
+          type: string
+          description: Tipo del luogo, vocabolario `luogo.tipo`.
+        indirizzo:
+          type: string
+          description: Indirizzo del luogo; stringa vuota se non noto.
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+          description: Latitudine in gradi decimali (WGS84).
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+          description: Longitudine in gradi decimali (WGS84).
+        orari_testo:
+          type: string
+          nullable: true
+          description: Orari leggibili per una persona; `null` se non noti.
+        fonte:
+          type: string
+          description: Fonte del dato in memoria (es. «Comune di Brindisi»).
+        url:
+          type: string
+          format: uri
+          nullable: true
+          description: Collegamento alla fonte; `null` se non disponibile.
+        data_aggiornamento:
+          type: string
+          format: date
+          nullable: true
+          description: Data dell'ultimo aggiornamento del dato; `null` se non nota.
+        fiducia:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Livello di affidabilità della fonte (1 basso, 3 alto).
+        badge:
+          type: string
+          description: Etichetta di provenienza già formattata, da riportare così com'è.
+    ItemEvento:
+      type: object
+      additionalProperties: false
+      required:
+      - provenienza
+      - titolo
+      - dove
+      - data
+      - ora_inizio
+      - ora_fine
+      - orari_nota
+      - fonte
+      - url
+      - fiducia
+      - badge
+      description: Un evento in programma in una Casa di Quartiere.
+      properties:
+        provenienza:
+          type: string
+          enum:
+          - kb
+          description: In questa risposta è sempre `kb`.
+        titolo:
+          type: string
+          description: Titolo dell'evento.
+        dove:
+          type: string
+          description: Luogo o Casa in cui si svolge.
+        data:
+          type: string
+          format: date
+          description: Data dell'evento.
+        ora_inizio:
+          type: string
+          nullable: true
+          description: Ora di inizio `HH:MM`; `null` se non nota.
+        ora_fine:
+          type: string
+          nullable: true
+          description: Ora di fine `HH:MM`; `null` se non nota.
+        orari_nota:
+          type: string
+          nullable: true
+          description: Nota quando l'orario è provvisorio o non disponibile.
+        fonte:
+          type: string
+          description: Fonte del dato (es. calendario della Casa).
+        url:
+          type: string
+          format: uri
+          nullable: true
+          description: Collegamento alla fonte; `null` se non disponibile.
+        fiducia:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Livello di affidabilità della fonte.
+        badge:
+          type: string
+          description: Etichetta di provenienza già formattata, da riportare così com'è.
+    ItemWeb:
+      type: object
+      additionalProperties: false
+      required:
+      - provenienza
+      - titolo
+      - url
+      - estratto
+      - fonte
+      - consultato_ts
+      - fiducia
+      - badge
+      description: Un risultato web proveniente da una fonte in allow-list, quindi un dato esterno non verificato dalla rete.
+      properties:
+        provenienza:
+          type: string
+          enum:
+          - esterna
+          description: In questa risposta è sempre `esterna`.
+        titolo:
+          type: string
+          description: Titolo della pagina.
+        url:
+          type: string
+          format: uri
+          description: Indirizzo della pagina; il dominio deve essere in allow-list.
+        estratto:
+          type: string
+          nullable: true
+          description: Breve estratto della pagina; `null` se il motore non lo fornisce.
+        fonte:
+          type: string
+          description: Fonte dichiarata per quel dominio (tabella `fonte`, `tipo_accesso='web'`).
+        consultato_ts:
+          type: string
+          format: date-time
+          description: Istante della consultazione.
+        fiducia:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Livello di affidabilità della fonte (`fonte.livello_fiducia`).
+        badge:
+          type: string
+          description: Etichetta già formattata, da riportare così com'è (es. «[Esterna · Comune di Brindisi · ora · non verificata
+            dalla rete]»).
+    PayloadProposta:
+      type: object
+      additionalProperties: false
+      description: 'Valori proposti per l''entità, scelti da un elenco chiuso di colonne del modello dati (§7.1). Non esiste
+        alcun campo libero: è il presidio strutturale contro i dati personali nelle proposte. I valori testuali sono comunque
+        filtrati dallo shim (email, telefono italiano, codice fiscale) → 422 `dato_personale_sospetto`.'
+      properties:
+        nome:
+          type: string
+          description: Nome del luogo o della Casa.
+        tipo:
+          type: string
+          description: Tipo dell'entità, vocabolario `luogo.tipo`.
+        indirizzo:
+          type: string
+          description: Indirizzo del luogo.
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+          description: Latitudine proposta (WGS84).
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+          description: Longitudine proposta (WGS84).
+        orari:
+          type: object
+          additionalProperties: false
+          description: 'Orari settimanali proposti: chiavi `lun`…`dom` (tutte facoltative), valore = elenco di fasce `HH:MM`
+            a coppie («apertura», «chiusura»); elenco vuoto = chiuso quel giorno.'
+          properties:
+            lun:
+              $ref: '#/components/schemas/FasceOrario'
+            mar:
+              $ref: '#/components/schemas/FasceOrario'
+            mer:
+              $ref: '#/components/schemas/FasceOrario'
+            gio:
+              $ref: '#/components/schemas/FasceOrario'
+            ven:
+              $ref: '#/components/schemas/FasceOrario'
+            sab:
+              $ref: '#/components/schemas/FasceOrario'
+            dom:
+              $ref: '#/components/schemas/FasceOrario'
+        orari_provvisori:
+          type: boolean
+          description: Vero se gli orari proposti sono in via di definizione.
+        zona:
+          type: string
+          description: Zona o quartiere della Casa.
+        raggio_m:
+          type: integer
+          minimum: 1
+          description: Raggio di vicinanza della Casa, in metri.
+        descrizione:
+          type: string
+          description: Descrizione del servizio o dell'iniziativa (testo breve, senza dati personali).
+        scadenza:
+          type: string
+          format: date
+          description: Data di scadenza, per opportunità e bandi.
+        chiuso_il:
+          type: string
+          format: date
+          description: Data da cui il luogo risulta chiuso.
+        ext_ref:
+          type: string
+          description: Riferimento esterno stabile del luogo (es. `osm:node:123456`).
+        affidabilita:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Affidabilità proposta per il dato (1 basso, 3 alto).
+        data_aggiornamento:
+          type: string
+          format: date
+          description: Data dell'aggiornamento proposto.
+        casa_id:
+          type: integer
+          minimum: 1
+          description: Identificativo della Casa di Quartiere a cui l'entità appartiene.
+        anomalo:
+          type: boolean
+          description: Vero se la proposta nasce da un'anomalia rilevata su una fonte automatica.
+    FasceOrario:
+      type: array
+      description: Fasce orarie del giorno, in coppie «apertura», «chiusura» (elenco vuoto = chiuso).
+      items:
+        type: string
+        pattern: ^[0-2][0-9]:[0-5][0-9]$
+    RispostaCercaLuogo:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      description: Esito della ricerca nella memoria della rete.
+      properties:
+        items:
+          type: array
+          description: Luoghi trovati, dal più pertinente.
+          items:
+            $ref: '#/components/schemas/ItemLuogo'
+    RispostaEventiOggi:
+      type: object
+      additionalProperties: false
+      required:
+      - casa
+      - data
+      - eventi
+      description: Eventi di una Casa in una data.
+      properties:
+        casa:
+          type: string
+          description: Slug della Casa interrogata.
+        data:
+          type: string
+          format: date
+          description: Data effettivamente interrogata.
+        eventi:
+          type: array
+          description: Eventi in programma quel giorno.
+          items:
+            $ref: '#/components/schemas/ItemEvento'
+    RispostaVicinoA:
+      type: object
+      additionalProperties: false
+      required:
+      - casa
+      - tipo
+      - raggio_m
+      - items
+      - fonti_esterne
+      description: Luoghi vicini alla Casa, ordinati per gruppo (prima `kb`, poi `esterna`), poi per apertura (`true`, `null`)
+        e infine per distanza.
+      properties:
+        casa:
+          type: string
+          description: Slug della Casa da cui è stata misurata la distanza.
+        tipo:
+          type: string
+          description: Tipo di luogo cercato.
+        raggio_m:
+          type: integer
+          minimum: 1
+          description: Raggio effettivamente applicato, in metri.
+        items:
+          type: array
+          description: Luoghi trovati entro il raggio, dalla memoria della rete e dalle fonti esterne.
+          items:
+            $ref: '#/components/schemas/ItemVicinanza'
+        fonti_esterne:
+          type: array
+          description: Esito di ogni fonte esterna interrogata (anche quando non ha risposto).
+          items:
+            $ref: '#/components/schemas/FonteEsterna'
+    RispostaRegistraRichiesta:
+      type: object
+      additionalProperties: false
+      required:
+      - richiesta_id
+      description: Conferma di registrazione; nessun dato personale viene restituito.
+      properties:
+        richiesta_id:
+          type: integer
+          minimum: 1
+          description: Identificativo della richiesta registrata.
+    RispostaProponiModifica:
+      type: object
+      additionalProperties: false
+      required:
+      - proposta_id
+      - approvatore_ruolo
+      - in_chat
+      description: Proposta creata. Nulla è stato modificato nel dominio.
+      properties:
+        proposta_id:
+          type: integer
+          minimum: 1
+          description: Identificativo della proposta creata.
+        approvatore_ruolo:
+          type: string
+          enum:
+          - gestore
+          - at
+          - ti
+          description: Ruolo che deve approvare, deciso dalla funzione di default del database.
+        in_chat:
+          type: boolean
+          description: Vero se la proposta può essere approvata subito in chat (riguarda la Casa dell'operatore), falso se
+            va in coda.
+    RispostaApprovaProposta:
+      type: object
+      additionalProperties: false
+      required:
+      - proposta_id
+      - stato
+      description: Esito della decisione sulla proposta.
+      properties:
+        proposta_id:
+          type: integer
+          minimum: 1
+          description: Identificativo della proposta decisa.
+        stato:
+          type: string
+          enum:
+          - proposta
+          - approvata
+          - rifiutata
+          - applicata
+          - scaduta
+          description: 'Stato della proposta dopo la decisione. `applicata` non è immediato: l''applicazione avviene nel flusso
+            F9 con scrittura di `audit`.'
+    RispostaOggi:
+      type: object
+      additionalProperties: false
+      required:
+      - casa
+      - eventi
+      - schede_in_scadenza
+      - proposte
+      - testo
+      description: Riga «Oggi» della Casa, per la Home e per la chat.
+      properties:
+        casa:
+          type: string
+          description: Slug della Casa interrogata.
+        eventi:
+          type: integer
+          minimum: 0
+          description: Numero di eventi di oggi.
+        schede_in_scadenza:
+          type: integer
+          minimum: 0
+          description: Numero di schede di servizio in scadenza.
+        proposte:
+          type: integer
+          minimum: 0
+          description: Numero di proposte in attesa di approvazione.
+        testo:
+          type: string
+          description: 'Riepilogo già formattato per la Home, da riportare così com''è (es. «Oggi a San Bao: 2 eventi · 1
+            scheda in scadenza · 3 proposte»).'
+    RispostaCercaWeb:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - fonti_esterne
+      description: Risultati da fonti web in allow-list; i domini fuori elenco sono esclusi.
+      properties:
+        items:
+          type: array
+          description: Risultati ammessi, entro il tetto `max_risultati_esterni`.
+          items:
+            $ref: '#/components/schemas/ItemWeb'
+        fonti_esterne:
+          type: array
+          description: Esito del motore di ricerca interrogato.
+          items:
+            $ref: '#/components/schemas/FonteEsterna'

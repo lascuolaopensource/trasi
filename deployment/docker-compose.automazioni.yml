@@ -1,0 +1,148 @@
+# Trasi — servizio `automazioni` (blocco B4: flussi notturni).
+#
+# **File separato di proposito.** `deployment/docker-compose.yml` è del worker `trasi-stack` e non va
+# modificato da altri: questo file aggiunge il solo servizio `automazioni` e si include con
+#
+#     docker compose -f deployment/docker-compose.yml \
+#                    -f deployment/docker-compose.automazioni.yml up -d automazioni
+#
+# oppure con una riga nel compose principale, così `docker compose up -d` del runbook §8 lo include
+# senza cambiare l'invocazione:
+#
+#     include:
+#       - docker-compose.automazioni.yml
+#
+# L'inclusione è una decisione di `trasi-stack` (B4-0h): qui c'è il servizio, con le variabili e i
+# vincoli già dichiarati, e la richiesta è stata inviata via `hub`. Il servizio è **indipendente**:
+# nessun'altra parte dello stack lo richiede e non avviarlo non rompe nulla.
+#
+# Questo file **non** si avvia da solo: `depends_on: db_trasi` riferisce un servizio definito nel
+# compose principale, quindi senza `-f deployment/docker-compose.yml` (o senza `include:`) compose
+# risponde «service automazioni depends on undefined service db_trasi». È corretto così — l'esecutore
+# dipende dal database, e fingersi autonomo significherebbe un errore di autenticazione al primo run
+# invece di un errore di configurazione subito.
+#
+# Cosa fa e cosa NON fa:
+#   * esegue i flussi di `flussi/` (F3 export KB, F4 fonti, F6 alert, F9 applica) con cron;
+#   * **non** ha alcuna porta pubblicata e non espone un'API: è un esecutore, non un servizio di rete;
+#   * **non** ha un volume sul codice: i flussi sono montati **read-only**, perché un flusso che si
+#     riscrive da solo in esercizio è un flusso di cui non si conosce il contenuto;
+#   * **non** gira come root e non ha la password dell'amministratore del database: si connette come
+#     `automazioni` (ruolo applicativo), che è il contratto di V4 — la scrittura della memoria passa
+#     da `proposta` → approvazione → `applica_proposte_approvate`, più l'eccezione iCal su `evento`.
+#
+# Perché non Activepieces: la decisione d'architettura è «logica DB in funzioni SQL, I/O esterno in
+# Python, cron come punto d'ingresso primario» (§8). Activepieces resta definito nel compose principale
+# e spento (RAM: ~6 GB liberi sull'host; Activepieces vuole 1.2 GB più il suo Postgres e il suo Redis).
+# `flussi/notte.sh` è il fallback previsto dal gate B4-0h.
+#
+# Immagine: `python:3.12-slim` con `psql` (client) e `cron`. Nessuna dipendenza Python: i flussi usano
+# la sola stdlib e parlano al database via `psql` — è la stessa scelta di `flussi/export_kb.py` e di
+# `db/apply.sh`, e significa che l'immagine non ha una superficie di aggiornamento.
+
+name: trasi
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  automazioni:
+    build:
+      context: ..
+      dockerfile: deployment/automazioni/Dockerfile
+    image: trasi-automazioni:local
+    restart: unless-stopped
+    # Il container esegue cron e quattro script brevi: 256 MB sono ampi. Il limite è **esplicito**
+    # come per ogni altro servizio dello stack (nessun over-commit: l'host è condiviso con Onyx).
+    mem_limit: 256m
+    depends_on:
+      db_trasi:
+        # I flussi scrivono nel database: partire prima che sia pronto significherebbe un primo run
+        # in errore a ogni riavvio, e un registro che si sporca di errori non dovuti.
+        condition: service_healthy
+    environment:
+      # Fuso di riferimento: cron usa quello del sistema, e «05:00» deve voler dire 05:00 a Brindisi
+      # (§6), non 05:00 UTC. `TZ` è la stessa variabile del resto dello stack.
+      TZ: ${TZ:-Europe/Rome}
+      # Ruolo applicativo dei flussi. Mai `postgres`: un flusso che girasse da amministratore non
+      # proverebbe che i privilegi di `automazioni` bastano, e — misurato — con `SET ROLE` da una
+      # connessione amministrativa il trigger dell'audit iCal non riconoscerebbe il percorso e
+      # **non scriverebbe la riga di audit**. L'identità è la connessione, non un `SET ROLE`.
+      PGUSER: automazioni
+      PGDATABASE: ${TRASI_DB:-trasi_db}
+      PGHOST: db_trasi
+      PGPORT: "5432"
+      # `scram-sha-256` per le connessioni non-locali (`pg_hba.conf`): senza password la connessione
+      # da un altro container viene rifiutata con «fe_sendauth: no password supplied» — verificato.
+      # La password è quella di `automazioni` (non `shim_rw`, non `postgres`), provisionata da
+      # `flussi/provisiona.sh`, che la legge da `deployment/.env` e non la stampa mai.
+      PGPASSWORD: ${AUTOMAZIONI_DB_PASSWORD:-}
+      # **`TRASI_TRIGGER` NON è qui.** È `cron` per i job schedulati e `manuale` per una diagnosi, ed
+      # è il `crontab` a dichiararlo riga per riga. Metterlo nell'ambiente del container lo
+      # renderebbe vero per *ogni* processo che ci gira dentro: verificato, un `job.sh` eseguito a
+      # mano per diagnosticare si registrava `trigger='cron'` in `flusso_run`. Il campo esiste proprio
+      # per distinguere la notte da un intervento umano, e una variabile d'ambiente lo annullava.
+      #
+      # Trasporto diretto: nel container `docker` non esiste, i flussi usano `psql` locale.
+      TRASI_DB_VIA: diretta
+      # Registro dell'export KB e degli alert. La PAT è la stessa dell'export di B2 (mai stampata).
+      # `http://nginx/api` è la base dell'API di Onyx **vista dalla rete Docker** (`nginx:80`), e
+      # presuppone che questo container stia anche su `onyx_net` — v. `networks:` in fondo al file.
+      ONYX_API_URL: ${ONYX_API_URL:-http://nginx/api}
+      ONYX_TRASI_KB_API_KEY: ${ONYX_TRASI_KB_API_KEY:-}
+      ONYX_KB_CC_PAIR_ID: ${ONYX_KB_CC_PAIR_ID:-3}
+      # SMTP: se assente, gli alert vanno su file in `flussi/evidenze/alert/` e la scelta è dichiarata
+      # in `flusso_run.dettaglio.modo`. Non è un ripiego silenzioso.
+      TRASI_SMTP_HOST: ${TRASI_SMTP_HOST:-}
+      TRASI_SMTP_PORT: ${TRASI_SMTP_PORT:-25}
+      TRASI_SMTP_USER: ${TRASI_SMTP_USER:-}
+      TRASI_SMTP_PASSWORD: ${TRASI_SMTP_PASSWORD:-}
+      TRASI_SMTP_FROM: ${TRASI_SMTP_FROM:-trasi@trasi.local}
+    volumes:
+      # Il codice dei flussi, in sola lettura: in esercizio non si modifica dall'interno.
+      - ../flussi:/app/flussi:ro
+      # Il registro in chiaro è anche su file: `flusso_run` dice *cosa* è successo, i log dicono
+      # *perché* un errore imprevisto è successo (un'eccezione, uno stack, un timeout di rete).
+      - automazioni_log:/var/log/trasi
+      # Gli alert su file quando SMTP non è configurato: volume, perché sono l'evidenza di cosa è
+      # stato comunicato e devono sopravvivere al container.
+      - automazioni_evidenze:/app/flussi/evidenze
+    logging: *default-logging
+    # `onyx_net` **non è opzionale**: l'export KB (F3) chiama `http://nginx/api/onyx-api/ingestion`
+    # e `nginx` risolve **solo** su `onyx_default`. Verificato: da `trasi_net` il nome `nginx` non
+    # risolve (NXDOMAIN) e l'export da container fallirebbe; da `onyx_default` risponde
+    # (`/api/onyx-api/ingestion` → 403 senza PAT, cioè la rotta esiste ed è protetta, non assente).
+    # `onyx_net` è dichiarata `external` nel compose principale: la rete è di Onyx, non nostra.
+    networks: [trasi_net, onyx_net]
+
+volumes:
+  automazioni_log:
+  automazioni_evidenze:
+
+networks:
+  # **Non `external: true`.** La rete è dichiarata con `name: trasi_net` e driver `bridge`, esattamente
+  # come nel compose principale: i due file convergono sulla stessa rete senza conflitto, e restano
+  # avviabili sia insieme (l'invocazione a due `-f`, o `include:`) sia da soli.
+  #
+  # Perché non `external` — segnalato e riprodotto da `trasi-stack`. `external` dichiara «la rete esiste
+  # già»: nel `config` aggregato `trasi_net` diventa esterna, e su un host pulito il runbook
+  # §8 (`cd /opt/trasi/deployment && docker compose up -d`) **non parte più** con
+  # «network trasi_net declared as external, but could not be found». Nessuno la creerebbe, perché è il
+  # compose principale a crearla e `external` glielo impedisce. Su un host dove `trasi_net` esiste già
+  # da B0 il difetto non si vede — è un difetto di *prima installazione*, che si manifesta solo su una
+  # macchina nuova, cioè quando è più costoso da diagnosticare. La motivazione che avevo scritto
+  # («serve per avviare il file da solo») era sbagliata: con `name` esplicito la rete si crea comunque.
+  trasi_net:
+    name: trasi_net
+    driver: bridge
+
+  # Rete del compose Onyx (già attiva sull'host), dichiarata **come nel compose principale**:
+  # `name: onyx_default` + `external: true`. Qui è legittimo `external` — la rete **non** è nostra e
+  # non dobbiamo crearla: è Onyx a possederla. (Il difetto di prima installazione descritto sopra
+  # riguardava `trasi_net`, che invece è nostra e va creata da questo stack.)
+  onyx_net:
+    name: onyx_default
+    external: true

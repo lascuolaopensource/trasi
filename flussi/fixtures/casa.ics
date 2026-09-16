@@ -1,0 +1,59 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Trasi//Fixture B4-FLW-06//IT
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Centro di Aggregazione Bozzano
+
+BEGIN:VEVENT
+UID:bozzano-2026-09-16-1@trasi.local
+DTSTAMP:20260915T060000Z
+DTSTART:20260916T100000
+DTEND:20260916T120000
+SUMMARY:Cineforum pomeridiano
+LOCATION:Sala grande — Centro di Aggregazione Bozzano
+URL:https://trasi.lascuolaopensource.org/eventi/cineforum
+DESCRIPTION:Ritrovo aperto agli over 60. Per info chiedere di Anna al 340 99 88 776.
+ATTENDEE;CN=Anna Rossi;EMAIL=anna.rossi@example.org:mailto:anna.rossi@example.org
+ORGANIZER;CN=Mario Bianchi:mailto:mario.bianchi@example.org
+END:VEVENT
+
+BEGIN:VEVENT
+UID:bozzano-2026-09-18-1@trasi.local
+DTSTAMP:20260915T060000Z
+DTSTART:20260918T153000
+DTEND:20260918T173000
+SUMMARY:Spazio compiti
+LOCATION:Sala piccola — Centro di Aggregazione Bozzano
+END:VEVENT
+
+BEGIN:VEVENT
+UID:bozzano-2026-09-20-1@trasi.local
+DTSTAMP:20260915T060000Z
+DTSTART:20260920T180000
+DTEND:20260920T200000
+SUMMARY:Assemblea della rete delle Case
+LOCATION:Sala grande — Centro di Aggregazione Bozzano
+URL:https://trasi.lascuolaopensource.org/eventi/assemblea
+END:VEVENT
+
+BEGIN:VEVENT
+UID:bozzano-2026-09-22-1@trasi.local
+DTSTAMP:20260915T060000Z
+DTSTART:20260922T090000
+DTEND:20260922T110000
+SUMMARY:Sportello orientamento
+LOCATION:Ingresso — Centro di Aggregazione Bozzano
+END:VEVENT
+
+BEGIN:VEVENT
+UID:bozzano-2026-10-01-1@trasi.local
+DTSTAMP:20260915T060000Z
+DTSTART:20261001T170000
+DTEND:20261001T190000
+SUMMARY:Festa di quartiere
+LOCATION:Piazzale — Centro di Aggregazione Bozzano
+URL:https://trasi.lascuolaopensource.org/eventi/festa
+END:VEVENT
+
+END:VCALENDAR
