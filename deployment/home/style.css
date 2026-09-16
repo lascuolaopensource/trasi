@@ -176,6 +176,37 @@ font-size: .9375rem;
 color: var(--testo-tenue); 
 }
 
+/* La lista degli eventi è la stessa scatola della riga «Oggi», continuata: il
+   filetto blu mare prosegue e la riga sopra perde gli angoli in basso. Una scatola
+   separata direbbe che sono due informazioni; è una sola, letta due volte. */
+.oggi[data-eventi="si"] { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.oggi-eventi {
+  margin: calc(-1 * var(--s-3)) 0 0;
+  padding: 0 var(--s-4) var(--s-3);
+  list-style: none;
+  background: var(--superficie);
+  border: 2px solid var(--bordo-tenue);
+  border-top: 0;
+  border-left: 4px solid var(--mare);
+  border-radius: 0 0 var(--raggio) var(--raggio);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.oggi-eventi[hidden] { display: none; }
+.oggi-evento {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s-3);
+  padding: var(--s-1) 0;
+  border-top: 1px solid var(--bordo-tenue);
+}
+/* L'ora ha larghezza fissa così i titoli si allineano: si legge come un orario, non
+   come una frase. Numeri tabellari per lo stesso motivo. */
+.oggi-evento-ora { min-width: 7.5ch; font-variant-numeric: tabular-nums; color: var(--testo-tenue); }
+.oggi-evento-titolo { font-weight: 600; }
+.oggi-evento-dove { color: var(--testo-tenue); }
+.oggi-evento-dove::before { content: "\00b7\00a0"; }
+
 .coda {
   display: flex;
   flex-wrap: wrap;

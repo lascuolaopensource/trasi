@@ -29,6 +29,7 @@
   var casaNota = document.getElementById("casa-nota");
   var riquadroCoda = document.getElementById("coda");
   var testoCoda = document.getElementById("coda-testo");
+  var listaEventi = document.getElementById("oggi-eventi");
   var contatore = document.getElementById("osservatorio-contatore");
   var notaChiedi = document.getElementById("chiedi-nota");
   var hrefInCorso = null;
@@ -171,6 +172,53 @@
     if (contatore) contatore.hidden = true;
   }
 
+  /* Gli eventi del giorno, sotto il conteggio. Titolo, orario e luogo come li
+     dà `eventi_oggi`: nessuna formattazione qui che la chat non farebbe. La
+     lista è nascosta quando è vuota o quando la lettura fallisce — il conteggio
+     nella riga sopra è già la risposta, e una lista vuota sotto «2 eventi»
+     direbbe il falso. */
+  function mostraEventi(eventi) {
+    if (!listaEventi) return;
+    while (listaEventi.firstChild) listaEventi.removeChild(listaEventi.firstChild);
+    if (!eventi.length) {
+      nascondiEventi();
+      return;
+    }
+    for (var i = 0; i < eventi.length; i++) {
+      var e = eventi[i];
+      var voce = document.createElement("li");
+      voce.className = "oggi-evento";
+
+      var quando = e.ora_inizio ? e.ora_inizio + (e.ora_fine ? "\u2013" + e.ora_fine : "") : (e.orari_nota || "");
+      if (quando) {
+        var ora = document.createElement("span");
+        ora.className = "oggi-evento-ora";
+        ora.textContent = quando;
+        voce.appendChild(ora);
+      }
+
+      var titolo = document.createElement("span");
+      titolo.className = "oggi-evento-titolo";
+      titolo.textContent = e.titolo;
+      voce.appendChild(titolo);
+
+      if (e.dove) {
+        var dove = document.createElement("span");
+        dove.className = "oggi-evento-dove";
+        dove.textContent = e.dove;
+        voce.appendChild(dove);
+      }
+      listaEventi.appendChild(voce);
+    }
+    listaEventi.hidden = false;
+    rigaOggi.setAttribute("data-eventi", "si");
+  }
+
+  function nascondiEventi() {
+    if (listaEventi) listaEventi.hidden = true;
+    rigaOggi.removeAttribute("data-eventi");
+  }
+
   /* Una lettura per volta: se il selettore cambia due volte di fila, la risposta
      della Casa precedente non deve sovrascrivere quella nuova. */
   function leggiOggi(slug) {
@@ -183,28 +231,51 @@
     /* Nascosta durante la lettura: un numero della Casa precedente sarebbe
        sbagliato, ed è peggio di nessun numero. */
     if (riquadroCoda) riquadroCoda.hidden = true;
+    nascondiEventi();
 
     var scadenza = window.setTimeout(function () {
       if (controllo) controllo.abort();
     }, ATTESA_MS);
 
+    /* Due letture sotto la stessa scadenza: il timer si spegne quando è arrivata
+       anche la seconda, altrimenti la lista resterebbe senza limite di attesa. */
+    var inAttesa = 2;
     function finisci() {
+      if (--inAttesa > 0) return;
       window.clearTimeout(scadenza);
       hrefInCorso = null;
     }
 
+    var base = "/api/shim/v1/u/" + encodeURIComponent(IDENTITA) + "/";
+    var opzioni = { signal: controllo ? controllo.signal : undefined, headers: { Accept: "application/json" } };
     var richiesta;
+    var richiestaEventi;
     try {
-      richiesta = fetch(
-        "/api/shim/v1/u/" + encodeURIComponent(IDENTITA) + "/oggi?casa=" + encodeURIComponent(slug),
-        { signal: controllo ? controllo.signal : undefined, headers: { Accept: "application/json" } }
-      );
+      richiesta = fetch(base + "oggi?casa=" + encodeURIComponent(slug), opzioni);
+      /* Stessa scadenza e stesso `abort` della riga: una lista della Casa
+         precedente non deve comparire sotto il conteggio di quella nuova. */
+      richiestaEventi = fetch(base + "eventi_oggi?casa=" + encodeURIComponent(slug), opzioni);
     } catch (e) {
-      finisci();
+      window.clearTimeout(scadenza);
+      hrefInCorso = null;
       mostraTesto(TESTO_ASSENTE, "non-disponibile", NOTA_ASSENTE);
       nascondiCoda();
       return;
     }
+
+    richiestaEventi
+      .then(function (risposta) {
+        if (!risposta.ok) throw new Error("risposta " + risposta.status);
+        return risposta.json();
+      })
+      .then(function (dati) {
+        finisci();
+        mostraEventi(dati && Array.isArray(dati.eventi) ? dati.eventi : []);
+      })
+      .catch(function () {
+        finisci();
+        nascondiEventi();
+      });
 
     richiesta
       .then(function (risposta) {
