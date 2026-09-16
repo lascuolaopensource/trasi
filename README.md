@@ -17,6 +17,7 @@ Sei servizi, tutti `healthy`:
 | `trasi-searxng-1` | Ricerca web con filtro sull'allow-list | 200, `format=json` |
 | `trasi-metabase-1` | 3 dashboard + 40 card-alert | k-anonimato, 40 query concorrenti |
 | `trasi-automazioni-1` | Cron: export KB, fonti, alert, applica proposte | job eseguito, `flusso_run` |
+| `trasi-nocodb-1` | CRM + coda proposte (V-06) | healthy, `/nocodb/` → 200 |
 | `trasi-caddy-1` | Ingress unico + Trasi Home | 200 con `Host` header |
 
 **Onyx v4.7.2** (11 container, intatto): KB di 32 documenti, tool `trasi_shim`, 4 assistenti.
@@ -112,7 +113,7 @@ bash ops/backup.sh && ls /backups/
 | 1 | **Ingress Cloudflare** per `trasi.…` → `http://localhost:8088` | TI | la Home non è raggiungibile dall'esterno |
 | 2 | **SMTP** | TI | alert e digest scrivono su file, non consegnano (US-05 parziale) |
 | 3 | **Drive (V-02)**: Google tiene il consent in *Testing* | Google/TI | la KB usa l'Ingestion API (fallback previsto) |
-| 4 | **NocoDB** non avviato (RAM) | TI | la coda proposte fuori dalla chat |
+| 4 | ~~NocoDB non avviato~~ **risolto**: attivo con heap Node esplicito | — | — |
 | 5 | **Sessione B7 con operatori umani**: stampa A6, cronometro, feedback | team | le parti che richiedono persone |
 | 6 | Proposte in attesa in chat: verifica del flusso completo di approvazione in-chat | team | — |
 
