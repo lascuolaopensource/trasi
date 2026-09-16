@@ -93,8 +93,13 @@ http://{$TRASI_DOMAIN} {
 	}
 
 	# Trasi Home: sito statico servito da ./home (popolato dal blocco B6/UX).
+	# `no-cache` non vieta di conservare: obbliga a **rivalidare** (l'ETag di file_server
+	# rende la rivalidazione un 304). Senza, Cloudflare e i browser tengono `.js`/`.css`
+	# per ore con la loro euristica, e una modifica alla Home compare a chi la ricarica
+	# forzando e non a chi la apre — che è chi la usa allo sportello.
 	handle {
 		root * /srv/home
+		header Cache-Control "no-cache"
 		file_server
 	}
 
