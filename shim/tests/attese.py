@@ -35,12 +35,17 @@ EMAIL_OP_SANBAO = "op.san-bao@trasi.local"
 EMAIL_OP_BOZZANO = "op.bozzano@trasi.local"
 EMAIL_RETE = "rete@trasi.local"
 EMAIL_SCONOSCIUTA = "nessuno@trasi.local"
+# Il TI: identità **attiva** con un utente Onyx, il cui ruolo DB `ti` non è però assumibile da `shim_rw`
+# (`db/000_roles.sql` concede le 10 Case più `rete`, e revoca `ti` di proposito). Il caso serviva a un test:
+# senza, il difetto si presentava come 500 su ogni endpoint per quell'unica identità.
+EMAIL_TI = "ti@trasi.local"
 
 # Dettagli d'errore del contratto (§9.1), ripetuti qui per non leggerli dal codice che li produce.
 DETAIL_IDENTITA_NON_RICONOSCIUTA = "identità non riconosciuta"
 DETAIL_CHIAVE_NON_VALIDA = "chiave shim non valida"
 DETAIL_DA_APPROVARE_IN_CODA = "da approvare in coda"
 DETAIL_DATO_PERSONALE_SOSPETTO = "dato_personale_sospetto"
+DETAIL_RUOLO_SENZA_ACCESSO = "identità senza accesso operativo: ruolo non abilitato allo shim"
 
 # I tipi ammessi da `vicino_a` (enum del contratto congelato, `parameters[tipo].schema.enum`), ripetuti a mano.
 TIPI_VICINO_A = (

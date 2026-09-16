@@ -24,8 +24,10 @@ import pytest
 from attese import (
     DETAIL_CHIAVE_NON_VALIDA,
     DETAIL_IDENTITA_NON_RICONOSCIUTA,
+    DETAIL_RUOLO_SENZA_ACCESSO,
     EMAIL_OP_SANBAO,
     EMAIL_SCONOSCIUTA,
+    EMAIL_TI,
 )
 
 URL = "/v1/u/{email}"
@@ -299,3 +301,45 @@ def test_log_di_una_scrittura_non_contiene_il_payload(client, caplog):
 
     assert "orientamento" not in testo.getvalue()
     assert EMAIL_OP_SANBAO not in testo.getvalue()
+
+
+def test_ruolo_non_assumibile_risponde_403_non_500(client, db_vivo):
+    """Un'identità **attiva** il cui ruolo non è concesso a `shim_rw` dà 403 parlante, non un 500.
+
+    Il caso è reale: `ti@trasi.local` esiste in `identita_onyx` con `attiva = true` e ha un utente Onyx, quindi dalla
+    chat lo si raggiunge come ogni altro operatore. Ma `db/000_roles.sql` concede a `shim_rw` le dieci Case più
+    `rete`, e **revoca `ti`**: il `SET LOCAL ROLE ti` della dipendenza di sessione solleva
+    `InsufficientPrivilegeError`, che senza traduzione diventa un **500 «errore interno dello shim»** — cioè un
+    guasto dichiarato al posto di un ruolo non abilitato, e chi diagnostica cerca un bug che non c'è.
+
+    Misurato prima del fix: 21 identità su 22 rispondevano 200 su `oggi`, `ti` rispondeva 500 su ogni endpoint.
+
+    Il test asserisce **entrambe** le metà dell'invariante: che il rifiuto sia dichiarato (403 col dettaglio del
+    contratto) **e** che il ruolo non venga concesso — se un giorno `ti` fosse aggiunto a `shim_rw`, questo test
+    diventa rosso e la decisione di least-privilege passa da una revisione, non da una riga silenziosa.
+    """
+    if not db_vivo:
+        pytest.skip("serve il database: la risoluzione dell'identità legge `identita_onyx`")
+
+    risposta = _apri(client, EMAIL_TI)
+
+    assert risposta.status_code == 403, (
+        f"atteso 403 (ruolo non abilitato), ottenuto {risposta.status_code}: {risposta.text[:200]}"
+    )
+    assert risposta.json() == {"detail": DETAIL_RUOLO_SENZA_ACCESSO}
+
+
+def test_il_ti_non_e_membro_di_shim_rw():
+    """La premessa del test precedente, verificata dove sta la decisione: `db/000_roles.sql`.
+
+    Se questo test diventa rosso, la riga `REVOKE ti FROM shim_rw` è sparita e l'identità TI ha accesso operativo:
+    è una decisione di least-privilege, e va presa deliberatamente.
+    """
+    from pathlib import Path
+
+    sorgente = Path(__file__).resolve().parents[2] / "db" / "000_roles.sql"
+    testo = sorgente.read_text(encoding="utf-8")
+
+    assert "REVOKE ti FROM shim_rw" in testo, (
+        "db/000_roles.sql non revoca più `ti` da `shim_rw`: il TI avrebbe accesso allo shim"
+    )

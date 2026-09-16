@@ -18,6 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 # Dettagli condivisi: stringhe esatte del contratto, scritte una volta sola.
 DETAIL_CHIAVE_NON_VALIDA = "chiave shim non valida"
 DETAIL_IDENTITA_NON_RICONOSCIUTA = "identità non riconosciuta"
+DETAIL_RUOLO_SENZA_ACCESSO = "identità senza accesso operativo: ruolo non abilitato allo shim"
 DETAIL_DA_APPROVARE_IN_CODA = "da approvare in coda"
 DETAIL_DATO_PERSONALE_SOSPETTO = "dato_personale_sospetto"
 DETAIL_ERRORE_INTERNO = "errore interno dello shim"

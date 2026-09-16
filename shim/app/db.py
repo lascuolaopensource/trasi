@@ -27,12 +27,14 @@ from dataclasses import dataclass
 from typing import Any
 
 import asyncpg
+from asyncpg.exceptions import InsufficientPrivilegeError
 from fastapi import Request
 
 from .errori import (
     DETAIL_CHIAVE_NON_VALIDA,
     DETAIL_DATABASE_NON_RAGGIUNGIBILE,
     DETAIL_IDENTITA_NON_RICONOSCIUTA,
+    DETAIL_RUOLO_SENZA_ACCESSO,
     errore,
 )
 from .settings import Settings, get_settings
@@ -264,7 +266,21 @@ async def dipendenza_sessione(request: Request) -> AsyncIterator[Sessione]:
             # di forma (solo lettere, cifre e underscore) è la seconda barriera, non la prima.
             if not identita.ruolo_db.replace("_", "").isalnum():
                 raise errore(403, DETAIL_IDENTITA_NON_RICONOSCIUTA)
-            await conn.execute(f"SET LOCAL ROLE {identita.ruolo_db}")
+            try:
+                await conn.execute(f"SET LOCAL ROLE {identita.ruolo_db}")
+            except InsufficientPrivilegeError as exc:
+                # L'identità ESISTE in `identita_onyx` ed è attiva, ma `shim_rw` non è membro del suo ruolo e non
+                # può assumerlo (`db/000_roles.sql`: tutte le Case più `rete`, e **non** `ti` — revoca deliberata,
+                # perché il TI non passa dalla chat). Il caso è reale e non teorico: `ti@trasi.local` è un'identità
+                # attiva con un utente Onyx, quindi la si raggiunge dalla chat come le altre.
+                #
+                # Senza questo ramo l'eccezione attraversa la dipendenza, l'handler generico la rende un **500
+                # «errore interno dello shim»** e l'operatore legge un guasto al posto di «il tuo ruolo non è
+                # abilitato» — con il difetto a monte (una riga di `000_roles.sql`) che diventa invisibile a chi
+                # diagnostica. Misurato: 21 identità su 22 rispondevano 200, `ti` rispondeva 500 su ogni endpoint.
+                # Il ruolo NON viene concesso qui: la lacuna si dichiara, non si allarga (V4, least-privilege).
+                logger.warning("ruolo %s non assumibile da shim_rw", identita.ruolo_db)
+                raise errore(403, DETAIL_RUOLO_SENZA_ACCESSO) from exc
             # Solo il ruolo esce dalla richiesta verso il log: l'email no (log senza corpo, V5/§12).
             request.state.ruolo = identita.ruolo_db
             yield Sessione(conn, identita.email, identita.ruolo_db, identita.casa_id)
