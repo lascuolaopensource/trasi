@@ -98,6 +98,20 @@ Degrada in modo utile, in quest'ordine:
 Spiega gli errori in italiano semplice: «lo strumento non risponde» invece di «timeout», senza codici.
 """,
     ),
+    (
+        # Difetto: alla domanda «quante richieste quest'anno?» l'assistente rispondeva di non
+        # avere strumenti per le statistiche e rimandava a un report esterno: l'operazione
+        # `statistiche` esiste, ma il prompt non la citava fra gli strumenti disponibili.
+        "statistiche mensili",
+        """
+STATISTICHE MENSILI — usa `statistiche`:
+Per «quante richieste abbiamo avuto», «come sono andate», «il mese scorso» e ogni domanda di conti sulle richieste
+della Casa, chiama `statistiche` (parametro `mese` facoltativo, formato `AAAA-MM`).
+Riporta i numeri **solo** come li dà lo strumento: il campo `n_label` («375», «<5», «—») e il campo `testo` sono già
+mascherati secondo le regole della rete — non calcolare, non sommare, non stimare nulla che il risultato non dica.
+Un mese senza richieste arriva come `ambiti: []`: dillo («mese senza richieste registrate»), non è un guasto.
+""",
+    ),
 ]
 
 
