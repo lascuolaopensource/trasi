@@ -19,17 +19,19 @@ autorevoli), e si dichiara con la `nota` invece di allentare il filtro.
 Il confronto è per **host**, non per sottostringa: `inps.it` non deve autorizzare `falso-inps.it.example`, e
 `comune.brindisi.it` deve autorizzare `www.comune.brindisi.it` (il `www.` è lo stesso host, non un altro dominio).
 """
-
 from __future__ import annotations
 
+import base64
 import html
+import io
 from datetime import datetime
-from typing import Any
+from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 
 from .auth import SessioneOperatore, sessione_corrente
 from .badge import NOTA_ORARI_ASSENTI, badge_esterna, badge_kb, nome_fonte
@@ -193,6 +195,49 @@ def _metri(valore: float) -> str:
     return f"{valore / 1000:.1f}".replace(".", ",") + " km"
 
 
+# --- Font e PDF -----------------------------------------------------------------------------------------------
+
+# Il font dei fogli, incorporato in **ogni** pagina: nel PDF (WeasyPrint non segue URL esterni) e nella
+# Home statica (il riferimento `/assets/…` non esiste nel PDF e rompe l'apertura da un altro dominio).
+# Letto una volta per processo: è un file dell'immagine, non cambia a caldo.
+_FONT_COMMISSIONER = Path(__file__).parent / "assets" / "CommissionerVF.ttf"
+
+
+@lru_cache(maxsize=1)
+def _font_commissioner() -> str:
+    """Il font incorporato come base64, oppure stringa vuota: senza il file la pagina cade sui font di sistema
+    invece di fallire — un biglietto leggibile in un font sostituito è meglio di nessun biglietto."""
+    try:
+        return base64.b64encode(_FONT_COMMISSIONER.read_bytes()).decode("ascii")
+    except OSError:
+        return ""
+
+
+# La query del PDF, relativa alla pagina corrente: il pulsante «Scarica il PDF» deve funzionare sia sul
+# `/biglietto` del contratto sia sulla `/op/scheda_evento` del browser, senza che `_foglio` sappia su quale
+# dei due canali sta stampando. `formato=pdf` sostituito alla stringa di query precedente.
+def _query_pdf() -> str:
+    """Il `href` del pulsante «Scarica il PDF»: la stessa pagina con `formato=pdf`."""
+    return "?formato=pdf"
+
+
+def _pdf_dall_html(html_foglio: str, nome_file: str) -> Response:
+    """La stessa pagina, resa come file: `application/pdf` con `Content-Disposition` per il nome al download.
+
+    La conversione è sincrona e blocca l'event loop per l'intera resa: su un foglio A6/A5 è decine di
+    millisecondi (misurato sull'immagine), e la complessità di un thread dedicato non compra nulla —
+    la richiesta successiva può attendere una resa di decine di ms.
+    """
+    import weasyprint  # import locale: l'immagine lo porta, l'host di sviluppo può non averlo
+
+    pdf = weasyprint.HTML(string=html_foglio).write_pdf()
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{nome_file}.pdf"'},
+    )
+
+
 def _foglio(
     *,
     titolo: str,
@@ -217,6 +262,11 @@ def _foglio(
     arrivano da OpenStreetMap, dai calendari delle Case e dalla memoria — fonti che non controlliamo — e un `<` in un
     titolo non deve rompere il documento. Il piè di pagina dichiara che il foglio non contiene dati personali: è
     un'affermazione su ciò che **non** c'è, non un campo da compilare.
+
+    Il font Commissioner è **incorporato** (base64) e non più caricato da `/assets`: nel PDF la risorsa esterna non
+    esiste (WeasyPrint non segue l'URL relativo del browser) e nella Home statica il riferimento assoluto romperebbe
+    l'apertura del foglio da un dominio diverso. Un solo sorgente del font, qui: il file vive in `app/assets/` ed è
+    lo stesso che la Home pubblica — due copie diverrebbero due identità visive.
     """
     caption = f'\n    <caption class="luogo">{html.escape(didascalia)}</caption>' if didascalia else ""
     return f"""<!DOCTYPE html>
@@ -227,10 +277,9 @@ def _foglio(
   <style>
     @font-face {{
       font-family: "Commissioner";
-      src: url("/assets/CommissionerVF.ttf") format("truetype");
+      src: url(data:font/ttf;base64,{_font_commissioner()}) format("truetype");
       font-style: normal;
       font-weight: 100 900;
-      font-display: swap;
     }}
     @page {{ size: {formato}; margin: 8mm }}
     @media print {{ body {{ margin: 0 }} .no-print {{ display: none }} }}
@@ -246,6 +295,11 @@ def _foglio(
     footer {{ margin-top: .6rem; font-size: 8pt; color: #3d4756; border-top: 1px solid #c8cfd9; padding-top: .3rem }}
     .luogo {{ font-weight: 600 }}
     .nota {{ font-size: 8pt; color: #3d4756; margin-top: .4rem }}
+    /* Il pulsante PDF è azione del browser (scaricamento), non parte del foglio: non si stampa. */
+    .azioni-stampa {{ margin-top: .8rem }}
+    .azioni-stampa a {{ display: inline-block; font-size: 9pt; color: #14181f; text-decoration: none;
+              border: 1px solid #c8cfd9; border-radius: 3px; padding: .3rem .6rem; background: #f2f5f8 }}
+    @media print {{ .azioni-stampa {{ display: none }} }}
   </style>
 </head>
 <body>
@@ -259,6 +313,7 @@ def _foglio(
     Fonte: {html.escape(fonte)} · consultato il {consultato.strftime('%d/%m/%Y')} alle {consultato.strftime('%H:%M')}
     <p class="nota">{html.escape(nota)}</p>
   </footer>
+  <p class="azioni-stampa"><a href="{_query_pdf()}" class="no-print">Scarica il PDF</a></p>
 </body>
 </html>
 """
@@ -357,14 +412,18 @@ def _identificativo_osm(valore: str) -> int | None:
 async def biglietto(
     luogo_id: str = Query(..., min_length=1),
     casa: str | None = Query(default=None, min_length=1),
+    formato: str = Query(default="html", pattern="^(html|pdf)$"),
     sess: Sessione = Depends(sessione),
-) -> HTMLResponse:
-    """Il biglietto stampabile (A6) del luogo scelto: `text/html`, l'unica risposta non JSON del contratto.
+) -> Response:
+    """Il biglietto stampabile (A6) del luogo scelto: `text/html` (default) o `application/pdf` con `formato=pdf`.
 
     Due origini, un solo foglio: un luogo della memoria della rete (badge `[KB …]`) o un POI esterno indicato come
     `osm:node:<id>` (badge `[Esterna …]`, ricaricato da Overpass). Nel secondo caso il POI **non viene scritto** in
     `luogo` — lo shim non scrive il dominio (V4): il foglio serve a indicare la destinazione, e la promozione in
     memoria resta una proposta.
+
+    Il PDF è la **stessa pagina** (una sola pipeline, `_foglio`) resa come file: l'operatore lo scarica invece di
+    mandare l'HTML alla stampante. Il nome file è il nome del luogo: è ciò che resta sul disco della Casa.
     """
     riferimento = await _casa_riferimento(sess, casa)
     consultato = adesso_locale()
@@ -400,19 +459,20 @@ async def biglietto(
             riferimento["nome"] if riferimento else None,
             riga["indirizzo"] or riga["note_accesso"],
         )
-        return HTMLResponse(
-            _documento_biglietto(
-                nome=riga["nome"],
-                indirizzo=riga["indirizzo"],
-                orari_testo=riga["orari_testo"],
-                orari_nota=None if riga["orari_testo"] else NOTA_ORARI_ASSENTI,
-                come_arrivare=arrivo,
-                fonte=fonte,
-                badge=badge_kb(fonte, riga["data_aggiornamento"], riga["affidabilita"]),
-                consultato=consultato,
-                tipo=riga["tipo"],
-            )
+        documento = _documento_biglietto(
+            nome=riga["nome"],
+            indirizzo=riga["indirizzo"],
+            orari_testo=riga["orari_testo"],
+            orari_nota=None if riga["orari_testo"] else NOTA_ORARI_ASSENTI,
+            come_arrivare=arrivo,
+            fonte=fonte,
+            badge=badge_kb(fonte, riga["data_aggiornamento"], riga["affidabilita"]),
+            consultato=consultato,
+            tipo=riga["tipo"],
         )
+        if formato == "pdf":
+            return _pdf_dall_html(documento, f"biglietto - {riga['nome']}")
+        return HTMLResponse(documento)
 
     config = await _configurazione_osm(sess)
     poi = await nodo_osm(
@@ -431,19 +491,20 @@ async def biglietto(
         if riferimento is not None and riferimento["lat"] is not None
         else None
     )
-    return HTMLResponse(
-        _documento_biglietto(
-            nome=poi.nome,
-            indirizzo=poi.indirizzo,
-            orari_testo=poi.orari_testo,
-            orari_nota=poi.orari_nota,
-            come_arrivare=_arrivo(distanza, riferimento["nome"] if riferimento else None, poi.indirizzo),
-            fonte=fonte,
-            badge=badge_esterna(fonte, consultato),
-            consultato=consultato,
-            tipo=poi.tipo or "luogo esterno",
-        )
+    documento = _documento_biglietto(
+        nome=poi.nome,
+        indirizzo=poi.indirizzo,
+        orari_testo=poi.orari_testo,
+        orari_nota=poi.orari_nota,
+        come_arrivare=_arrivo(distanza, riferimento["nome"] if riferimento else None, poi.indirizzo),
+        fonte=fonte,
+        badge=badge_esterna(fonte, consultato),
+        consultato=consultato,
+        tipo=poi.tipo or "luogo esterno",
     )
+    if formato == "pdf":
+        return _pdf_dall_html(documento, f"biglietto - {poi.nome}")
+    return HTMLResponse(documento)
 
 
 async def _configurazione_osm(sess: Sessione) -> dict[str, Any]:
@@ -782,8 +843,9 @@ async def _evento_kb(sess: SessioneOperatore, evento_id: int) -> dict[str, Any] 
 )
 async def op_scheda_evento(
     evento_id: int = Query(..., ge=1, description="Identificativo dell'evento (`trasi.evento.id`)."),
+    formato: str = Query(default="html", pattern="^(html|pdf)$"),
     sess: SessioneOperatore = Depends(sessione_corrente),
-) -> HTMLResponse:
+) -> Response:
     """GET /op/scheda_evento?evento_id= — il foglio stampabile di un evento, per il browser dell'operatore.
 
     **Read-only**, come tutti gli output dello shim: legge `trasi.evento` unito a `casa` e `fonte` e
@@ -842,22 +904,22 @@ async def op_scheda_evento(
     # luogo della Casa che organizza. Quando non c'è, la scheda **lo dichiara** invece di dedurre
     # «gratuito» o «su prenotazione» — sono affermazioni che solo la Casa può fare.
     accesso = (riga["casa_accesso"] or "").strip() or NOTA_ACCESSO_ASSENTE
-
-    return HTMLResponse(
-        _documento_scheda_evento(
-            titolo=titolo,
-            periodo=_periodo(riga["inizio"], riga["fine"]),
-            dove=dove,
-            accesso=accesso,
-            descrizione=descrizione,
-            # Il contatto pubblico è quello della Casa che organizza l'evento: l'ente gestore, che è
-            # un'informazione pubblica e istituzionale (V5). Nessun recapito di persona, mai.
-            contatto=riga["casa_ente"] or NOTA_CONTATTO_ASSENTE,
-            fonte=nome,
-            badge=badge,
-            aggiornamento=aggiornamento,
-            casa=casa,
-            url=riga["url"],
-            consultato=consultato,
-        )
+    documento = _documento_scheda_evento(
+        titolo=titolo,
+        periodo=_periodo(riga["inizio"], riga["fine"]),
+        dove=dove,
+        accesso=accesso,
+        descrizione=descrizione,
+        # Il contatto pubblico è quello della Casa che organizza l'evento: l'ente gestore, che è
+        # un'informazione pubblica e istituzionale (V5). Nessun recapito di persona, mai.
+        contatto=riga["casa_ente"] or NOTA_CONTATTO_ASSENTE,
+        fonte=nome,
+        badge=badge,
+        aggiornamento=aggiornamento,
+        casa=casa,
+        url=riga["url"],
+        consultato=consultato,
     )
+    if formato == "pdf":
+        return _pdf_dall_html(documento, f"scheda evento - {titolo}")
+    return HTMLResponse(documento)
