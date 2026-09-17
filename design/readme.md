@@ -5,15 +5,14 @@ di Brindisi** (PN Metro Plus e Città Medie Sud 2021-2027, BR5.4.11.1a). Lo usan
 sociali**, non tecnici: l'operatore sta allo sportello con una persona davanti, poco tempo, e deve
 capire dove mandarla, con quale informazione, e stampare un promemoria.
 
-Il prodotto è una **porta**: una pagina d'ingresso che apre quattro destinazioni con la Casa
-dell'operatore già impostata.
+Il prodotto è una **shell autenticata** con tre pagine pubblicate. La Casa dell'operatore è già impostata
+all'accesso.
 
-| Destinazione | Cosa apre oggi | Cosa ci fa l'operatore |
+| Pagina pubblicata | Cosa apre | Cosa ci fa l'operatore |
 |---|---|---|
-| **CHIEDI** | assistente Onyx (`?agentId=2`) | risponde alla persona davanti, con la fonte citata |
-| **MAPPA** | dashboard Metabase «Mappa» | guarda insieme alla persona dove sono i luoghi |
-| **REGISTRA / AGGIORNA** | NocoDB (dichiarato non ancora attivo nella Home) | schede, eventi, opportunità della Casa |
-| **OSSERVATORIO** | dashboard Metabase «Casa» + coda proposte | legge i numeri e decide sulle proposte |
+| **Home** | la conversazione con l'assistente | cerca una risposta per la persona allo sportello |
+| **Osservatorio** | la mappa e l'elenco dei luoghi | legge ciò che la rete conosce e ciò che è stato trovato fuori |
+| **Account** | le otto sezioni della Casa | legge i dati, registra una proposta e segue la coda |
 
 ## I due principi che danno forma a tutto
 
@@ -27,8 +26,8 @@ dell'operatore già impostata.
 ## Vincoli non negoziabili (valgono anche per il design)
 
 - **WCAG 2.1 AA**: contrasto testo ≥ 4,5:1, focus sempre visibile, tutto da tastiera, base ≥ 16 px.
-- **Zero dipendenze esterne**: nessun CDN, nessun font remoto, nessuna richiesta a domini terzi. Il font Commissioner è incluso nell'asset locale `assets/CommissionerVF.ttf`.
-- **Peso**: la pagina reale resta leggera nel codice; il font locale aggiunge circa 1 MB al primo caricamento e usa `font-display: swap`.
+- **Zero dipendenze esterne**: nessun CDN, nessun font remoto e nessun carattere aggiuntivo da scaricare; il testo usa lo stack di sistema.
+- **Peso**: la pagina reale resta leggera nel codice e non scarica un font dedicato.
 - **Nessun dato personale**: l'unica cosa conservata è lo slug della Casa nel browser.
 - **Italiano semplice**, nessun imperativo verso le persone.
 
@@ -70,10 +69,10 @@ risponde entro 3 secondi, la riga dice «dati non disponibili» e — nella vest
 A6 stampabile), *la persona* o *il cittadino* nei documenti di progetto — mai nei campi: non si
 chiedono né si trascrivono dati personali.
 
-**Maiuscole.** I nomi delle quattro destinazioni sono in maiuscolo, sempre, con la spaziatura di
-0,06 em: `CHIEDI`, `MAPPA`, `REGISTRA / AGGIORNA`, `OSSERVATORIO`. Sono nomi propri di luoghi, non
-titoli di sezione. Tutto il resto è in minuscolo normale, con la maiuscola su *Casa* e *Case di
-Quartiere* (è un'istituzione, non un edificio).
+**Maiuscole.** I nomi delle pagine pubblicate sono *Home*, *Osservatorio* e *Account*. Le sezioni
+dell'Account hanno nomi propri in maiuscolo iniziale: *La Casa*, *Numeri*, *Proposte*, *Registra*,
+*Attrezzoteca*, *Messaggi*, *Conversazioni* e *Impostazioni*. Tutto il resto è in minuscolo normale, con
+la maiuscola su *Casa* e *Case di Quartiere* (è un'istituzione, non un edificio).
 
 **Numeri e date.** Date in `15/09/2026`, ore in `11:42`, distanze come si leggono ad alta voce
 (`840 m`, `2,1 km`), separatore `·` fra le voci di una riga. I conteggi sotto la soglia di
@@ -101,7 +100,7 @@ vivono in filetti, fondi e marchio. Il testo usa le varianti profonde (`--mare-p
 (#06405A). **Un solo colore di sfondo** per la pagina e uno per la testata: non ce ne sono altri.
 Nessun rosso, da nessuna parte: in Trasi nulla è un allarme rivolto a una persona.
 
-**Tipografia.** Il carattere dell'interfaccia è **Commissioner**, incluso localmente come variabile (`assets/CommissionerVF.ttf`) e seguito da uno stack di sistema come fallback. Base 16 px, scala breve (15 · 16 · 17 · 18 · 20 · 22 · 28 · 36). Pesi 400 / 600 / 700, niente leggeri. Il monospaziato di sistema è riservato alle **etichette di provenienza**, perché sono stringhe da citare e si devono poter confrontare carattere per carattere. Il marchio «TRASI» è tipografico, con 0,12 em di spaziatura; il logo «Case di Quartiere» è in **Janna LT Bold** e resta un'immagine.
+**Tipografia.** Il carattere dell'interfaccia usa lo **stack di sistema**. Base 16 px, scala breve (15 · 16 · 17 · 18 · 20 · 22 · 28 · 36). Pesi 400 / 600 / 700, niente leggeri. Il monospaziato di sistema è riservato alle **etichette di provenienza**, perché sono stringhe da citare e si devono poter confrontare carattere per carattere. Il marchio «TRASI» è tipografico, con 0,12 em di spaziatura; il logo della rete resta un'immagine.
 
 **Sfondi.** Nessuna immagine di sfondo, nessun gradiente, nessuna texture, nessun pattern. La carta
 calda e il bianco fanno tutto il lavoro. L'unica immagine della pagina è il logo della rete.
@@ -129,8 +128,8 @@ dichiara in parole («Servizio non ancora attivo») e resta leggibile.
 
 **Layout.** Colonna di lettura di 62 rem centrata, margine di pagina 24 px, griglia a due colonne
 `minmax(0, 1fr)` che diventa una sotto 40 rem. Bersagli tattili minimi 44 px. Nessun elemento fisso
-in sovrimpressione, tranne il compositore della chat in CHIEDI. La gerarchia si legge dalla
-**dimensione del riquadro**, non dal colore: è l'unica cosa che cambia fra CHIEDI e le altre.
+in sovrimpressione, tranne il compositore della chat in Home. La gerarchia si legge dalla
+**dimensione del riquadro**, non dal colore: è l'unica cosa che cambia fra Home e le altre pagine.
 
 **Immagini e illustrazioni.** Il manuale contiene un'illustrazione (un calendario, tratto a mano,
 `assets/illustrazione-calendario.png`) usata nella comunicazione interna del progetto: **non entra in
@@ -148,7 +147,7 @@ vocabolario nuovo da imparare a chi ha trenta secondi e turnover alto.
 
 Al posto delle icone il sistema usa:
 
-- **parole**: `CHIEDI`, `MAPPA`, `Servizio non ancora attivo`, `Apri la coda delle proposte`;
+- **parole**: `Home`, `Osservatorio`, `Account`, `Servizio non ancora attivo`, `Apri la coda delle proposte`;
 - **il filetto di 4 px** a sinistra di una scheda come segno di stato;
 - **il separatore `·`** fra le voci di una riga (è la convenzione già usata dal servizio nelle
   stringhe di provenienza e nella riga «Oggi»);
@@ -207,9 +206,9 @@ Case di Quartiere va sempre accanto al logo del Comune di Brindisi e di Palazzo 
 | `Intestazione` | `components/navigazione/` | la testata blu notte con logo, Casa e azioni |
 | `SelettoreCasa` | `components/navigazione/` | la Casa di riferimento (più la costante `CASE` con le 10 Case) |
 | `SaltaContenuto` | `components/navigazione/` | il salto al contenuto, primo elemento focalizzabile |
-| `Destinazione` | `components/destinazioni/` | i riquadri CHIEDI / MAPPA / REGISTRA / OSSERVATORIO |
+| `Destinazione` | `components/destinazioni/` | i contenuti delle pagine pubblicate, mantenendo il nome tecnico del componente |
 | `Tabella` | `components/dati/` | tabelle di dati con provenienza per riga |
-| `MessaggioChat` | `components/chat/` | un turno della chat CHIEDI, con la provenienza sotto |
+| `MessaggioChat` | `components/chat/` | un turno della chat in Home, con la provenienza sotto |
 
 **Aggiunte intenzionali.** Il codice attuale non ha una libreria di componenti: è una pagina statica
 con CSS. I tredici componenti qui sopra sono l'estrazione di ciò che quella pagina già fa
@@ -238,10 +237,10 @@ colonna di lettura, fascia di stato, piede sulla privacy.
 
 ## Caveat
 
-- **Font del marchio.** «Case di Quartiere» è composto in **Janna LT Bold**, che il manuale distribuisce come file da installare e che non è disponibile come webfont libero. Il logo resta quindi un'immagine PNG estratta dal manuale. Il logotipo «TRASI» e il testo dell'interfaccia usano Commissioner, distribuito localmente; Janna resta confinato al logo immagine.
+- **Font del marchio.** «Case di Quartiere» è composto in **Janna LT Bold**, che il manuale distribuisce come file da installare e che non è disponibile come webfont libero. Il logo resta quindi un'immagine PNG estratta dal manuale. Il testo dell'interfaccia usa lo stack di sistema; Janna resta confinato al logo immagine.
 - **Loghi come PNG, non SVG.** Nel PDF i loghi sono immagini raster: l'estrazione conserva la
   massima risoluzione disponibile (795×331 per la versione a colori). Se esiste il file vettoriale
   originale, è meglio.
 - **Nessuna cartografia.** Le coordinate delle Case e dei luoghi stanno nel database del progetto e
-  la mappa è resa da Metabase: il kit MAPPA dichiara il riquadro invece di disegnare una geografia
-  non verificata.
+  la mappa è resa dal modulo dell'Osservatorio: il kit tecnico mantiene il proprio nome di cartella
+  per compatibilità, mentre la pagina pubblicata si chiama Osservatorio.

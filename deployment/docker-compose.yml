@@ -310,7 +310,8 @@ services:
       - "127.0.0.1:${HOST_PORT_CADDY_HTTP}:80"
       - "127.0.0.1:${HOST_PORT_CADDY_HTTPS}:443"
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:2019/config/"]
+      # Un conflitto irrisolto rende il rilascio non valido, anche se Caddy risponde.
+      test: ["CMD-SHELL", "wget --quiet --spider http://127.0.0.1:2019/config/ && ! grep -R -I -n -E '^(<<<<<<<|=======|>>>>>>>)' /srv/home"]
       interval: 20s
       timeout: 5s
       retries: 5

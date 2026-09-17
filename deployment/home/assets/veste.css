@@ -97,10 +97,9 @@
 
 /* ---- da design/tokens/tipografia.css ---- */
 /* Tipografia — Trasi.
-   Vincolo di progetto: zero dipendenze esterne, quindi nessun font remoto.
-   Il testo dell'interfaccia usa lo stack di sistema; il logo «Case di Quartiere»
-   è in Janna LT Bold e resta un'immagine (assets/logo-*.png).
-   Base 16 px: nessuna misura scende sotto 1rem per il testo corrente. */
+   Il testo dell'interfaccia usa lo stack di sistema: resta leggibile senza scaricare un carattere
+   aggiuntivo. Il monospaziato resta riservato alle etichette di provenienza, che si citano verbatim.
+   Il logo «Case di Quartiere» è un'immagine. */
 :root {
   --font-sistema: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
