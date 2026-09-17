@@ -188,6 +188,70 @@ def test_luogo_senza_coordinate_e_dichiarato_non_geolocalizzato_e_non_rompe_la_r
 
 
 @pytest.mark.live
+def test_cerca_luogo_non_lascia_che_il_servizio_con_piu_righe_monopolizzi_la_risposta(client, db_vivo):
+    """T08 — una domanda che tocca più servizi riceve **tutti** i servizi pertinenti, non il più numeroso.
+
+    Fixture (8 righe, marcate come dati di prova): sei CAF, una farmacia e un'associazione, tutti con lo stesso
+    testo nel nome. L'ordine per «affidabilità, nome» metteva i sei CAF davanti (alfabetico) e con un tetto basso
+    la farmacia non entrava. Con l'ordine bilanciato per tipo, **le prime tre voci sono tre tipi diversi** e le
+    successive riprendono il giro: il servizio con più righe non è più rilevante per il solo fatto di averne di più.
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    marcatore = "Prova T08 multi-servizio (rimosso dal test)"
+    fixture = [(f"CAF {chr(65 + n)} {marcatore}", "caf") for n in range(6)] + [
+        (f"Farmacia {marcatore}", "farmacia"),
+        (f"Associazione {marcatore}", "associazione"),
+    ]
+
+    async def inserisci() -> list[int]:
+        import asyncpg
+
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            ids = []
+            for nome, tipo in fixture:
+                ids.append(
+                    await conn.fetchval(
+                        """
+                        INSERT INTO trasi.luogo (nome, tipo, descrizione, geom, fonte_id, affidabilita, casa_id)
+                        SELECT $1, $2, 'Fixture di test T08', NULL, f.id, 3, c.id
+                          FROM trasi.fonte f, trasi.casa c WHERE f.nome = 'Rete-kb-3' AND c.slug = 'san-bao'
+                        RETURNING id
+                        """,
+                        nome,
+                        tipo,
+                    )
+                )
+            return ids
+        finally:
+            await conn.close()
+
+    async def rimuovi(ids: list[int]) -> None:
+        import asyncpg
+
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            await conn.execute("DELETE FROM trasi.luogo WHERE id = ANY($1::int[])", ids)
+        finally:
+            await conn.close()
+
+    ids = asyncio.run(inserisci())
+    try:
+        risposta = _cerca(client, "q=Prova%20T08")
+    finally:
+        asyncio.run(rimuovi(ids))
+
+    assert risposta.status_code == 200, risposta.text
+    tipi = [i["tipo"] for i in risposta.json()["items"]]
+    assert len(tipi) == len(fixture)
+    # Primo giro: un rappresentante per ogni servizio, prima di qualunque secondo CAF.
+    assert set(tipi[:3]) == {"caf", "farmacia", "associazione"}
+    # Il resto è la coda del servizio numeroso: nessun servizio è sparito, nessuno è raddoppiato in testa.
+    assert tipi[3:] == ["caf"] * 5
+
+@pytest.mark.live
 def test_eventi_oggi_di_una_casa_senza_eventi_risponde_200_con_lista_vuota(client, db_vivo):
     """Una Casa esistente senza eventi in una data è 200 con `eventi: []`: la Casa c'è, la giornata è vuota.
 

@@ -1104,6 +1104,7 @@ components:
       - orari_nota
       - fonte
       - url
+      - telefono
       - data_aggiornamento
       - fiducia
       - consultato_ts
@@ -1161,6 +1162,13 @@ components:
           format: uri
           nullable: true
           description: Collegamento alla fonte o al dato originale; `null` se non disponibile.
+        telefono:
+          type: string
+          nullable: true
+          description: 'Recapito telefonico **così com''è scritto dalla fonte** (per `esterna`: il tag OpenStreetMap
+            `phone`/`contact:phone`, anche con più numeri separati da `;`); `null` per la memoria della rete e per i
+            luoghi senza recapito nella fonte. Se `null`, di'' «Recapito telefonico non disponibile.» — mai un
+            numero da altre fonti o dalla memoria del modello.'
         data_aggiornamento:
           type: string
           format: date
@@ -1193,6 +1201,7 @@ components:
       - orari_testo
       - fonte
       - url
+      - telefono
       - data_aggiornamento
       - fiducia
       - badge
@@ -1241,6 +1250,12 @@ components:
           format: uri
           nullable: true
           description: Collegamento alla fonte; `null` se non disponibile.
+        telefono:
+          type: string
+          nullable: true
+          description: 'Recapito telefonico **della memoria della rete**; oggi sempre `null` (la memoria non
+            registra recapiti, per decisione). Se `null`, di'' «Recapito telefonico non disponibile.» Non
+            cercarlo altrove, non ricordarlo, non comporlo.'
         data_aggiornamento:
           type: string
           format: date

@@ -47,6 +47,10 @@ class ItemLuogo(BaseModel):
     orari_testo: str | None
     fonte: str
     url: str | None
+    # Recapito telefonico (P1.3): il campo c'è sempre, il valore è `None` finché la memoria della rete non ha un
+    # recapito **di servizio** verificato (db/025: oggi nessuna colonna lo porta, per decisione). Il LLM legge
+    # `null` e dice «Recapito telefonico non disponibile»: un campo assente lo lascerebbe libero di inventarlo.
+    telefono: str | None
     data_aggiornamento: date | None
     fiducia: int = Field(ge=1, le=3)
     badge: str
@@ -132,6 +136,9 @@ class ItemVicinanza(BaseModel):
     orari_nota: str | None
     fonte: str
     url: str | None
+    # Il recapito della **fonte** (tag OSM `phone`/`contact:phone`, verbatim) per `esterna`; `None` per `kb`
+    # (db/025) e per i POI senza tag. Mai composto, mai normalizzato dallo shim.
+    telefono: str | None
     data_aggiornamento: date | None
     fiducia: int = Field(ge=1, le=3)
     consultato_ts: datetime

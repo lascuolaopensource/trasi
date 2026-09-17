@@ -271,6 +271,36 @@ def test_vicino_a_ogni_item_porta_badge_e_provenienza(client, db_vivo):
 
 @pytest.mark.live
 @respx.mock
+def test_vicino_a_il_telefono_e_quello_della_fonte_o_e_dichiarato_assente(client, db_vivo):
+    """T11/T12 — il recapito arriva **solo** dal dato dell'entità nella fonte, e l'assenza è `null`.
+
+    Tre POI di prova (numeri chiaramente di test): uno con `phone`, uno con il sinonimo `contact:phone` e **due
+    recapiti** nella convenzione OSM (`;`), uno senza. Il numero esce verbatim dal tag del **suo** elemento (nessun
+    rimescolamento fra entità), e chi non lo ha esce `null`. I luoghi della memoria della rete (`kb`) sono sempre
+    `null`: il dominio non registra recapiti (db/025), e il campo lo dichiara invece di lasciarlo indovinare.
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    con_phone = dict(BAR_APERTO, tags=dict(BAR_APERTO["tags"], name="Bar T11 con telefono", phone="+39 0000 000000"))
+    con_contact = dict(
+        BAR_SENZA_ORARI,
+        tags=dict(BAR_SENZA_ORARI["tags"], name="Bar T11 due recapiti", **{"contact:phone": "+39 0000 000001; +39 0000 000002"}),
+    )
+    senza = dict(BAR_CHIUSO, tags=dict(BAR_CHIUSO["tags"], name="Bar T12 senza telefono"))
+    respx.post(ENDPOINT_OVERPASS).mock(return_value=_risposta_overpass([con_phone, con_contact, senza]))
+
+    corpo = _vicino_a(client, "casa=san-bao&tipo=bar&raggio_m=3000").json()
+    per_nome = {item["nome"]: item for item in corpo["items"]}
+
+    assert per_nome["Bar T11 con telefono"]["telefono"] == "+39 0000 000000"
+    assert per_nome["Bar T11 due recapiti"]["telefono"] == "+39 0000 000001; +39 0000 000002"
+    assert per_nome["Bar T12 senza telefono"]["telefono"] is None
+    assert all(item["telefono"] is None for item in corpo["items"] if item["provenienza"] == "kb")
+    assert "telefono" in per_nome["Bar T12 senza telefono"], "il campo c'è anche quando il valore manca"
+
+@pytest.mark.live
+@respx.mock
 def test_vicino_a_aperto_adesso_true_tiene_i_poi_senza_orari_ma_esclude_i_chiusi(client, db_vivo):
     """Con `aperto_adesso=true` i POI senza orari **restano** con `null` + `orari_nota`; i chiusi noti escono.
 

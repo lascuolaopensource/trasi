@@ -55,25 +55,37 @@ TETTO_CERCA_LUOGO = 20
 # duplica). Conseguenza dichiarata: un tipo che è nel vocabolario del database ma non ha righe in memoria (oggi
 # `fermata`) non restringe nemmeno lui. È il verso giusto dell'errore: il contratto preferisce restituire troppo
 # poco filtrato che rispondere `items: []` a un tipo scritto male dall'assistente.
+#
+# Ordine **bilanciato per tipo** (P1.1, 17/09/2026): prima il migliore di ogni tipo di servizio, poi il secondo di
+# ognuno, e così via — e solo dentro lo stesso giro contano affidabilità e nome. Con «affidabilità, nome» e il tetto
+# a 20, una domanda che tocca due servizi («CAF e farmacia a Casale») usciva con i venti CAF in ordine alfabetico e
+# nessuna farmacia: il servizio con più righe in memoria monopolizzava la risposta per il solo fatto di averne di
+# più, e il LLM leggeva «nessuna farmacia» dove la memoria ne aveva una. La quantità di righe di un tipo non è un
+# criterio di rilevanza; l'affidabilità sì, ma **fra pari** di ogni servizio.
 SQL_CERCA_LUOGO = """
-SELECT l.id, l.nome, l.tipo, COALESCE(l.indirizzo, '') AS indirizzo, l.descrizione,
-       l.orari,
-       round(st_y(l.geom::geometry)::numeric, 5) AS lat,
-       round(st_x(l.geom::geometry)::numeric, 5) AS lon,
-       trasi.orari_testo(l.orari) AS orari_testo,
-       COALESCE(l.url, f.url) AS url, l.data_aggiornamento, l.affidabilita,
-       f.nome AS fonte_nome, f.autorita AS fonte_autorita,
-       c.slug AS casa_slug, c.zona AS casa_zona
-FROM trasi.luogo l
-LEFT JOIN trasi.fonte f ON f.id = l.fonte_id
-LEFT JOIN trasi.casa c ON c.id = l.casa_id
-WHERE l.chiuso_il IS NULL
-  AND (l.nome ILIKE $1 OR COALESCE(l.descrizione, '') ILIKE $1 OR COALESCE(l.indirizzo, '') ILIKE $1)
-  AND ($2::text IS NULL OR l.tipo = $2
-       OR NOT EXISTS (SELECT 1 FROM trasi.luogo v WHERE v.tipo = $2))
-  AND ($3::text IS NULL OR COALESCE(c.zona, '') ILIKE $3 OR COALESCE(l.indirizzo, '') ILIKE $3)
-ORDER BY l.affidabilita DESC, l.nome
-LIMIT $4
+SELECT id, nome, tipo, indirizzo, descrizione, orari, lat, lon, orari_testo, url, data_aggiornamento,
+       affidabilita, fonte_nome, fonte_autorita, casa_slug, casa_zona
+  FROM (
+    SELECT l.id, l.nome, l.tipo, COALESCE(l.indirizzo, '') AS indirizzo, l.descrizione,
+           l.orari,
+           round(st_y(l.geom::geometry)::numeric, 5) AS lat,
+           round(st_x(l.geom::geometry)::numeric, 5) AS lon,
+           trasi.orari_testo(l.orari) AS orari_testo,
+           COALESCE(l.url, f.url) AS url, l.data_aggiornamento, l.affidabilita,
+           f.nome AS fonte_nome, f.autorita AS fonte_autorita,
+           c.slug AS casa_slug, c.zona AS casa_zona,
+           row_number() OVER (PARTITION BY l.tipo ORDER BY l.affidabilita DESC, l.nome) AS giro
+    FROM trasi.luogo l
+    LEFT JOIN trasi.fonte f ON f.id = l.fonte_id
+    LEFT JOIN trasi.casa c ON c.id = l.casa_id
+    WHERE l.chiuso_il IS NULL
+      AND (l.nome ILIKE $1 OR COALESCE(l.descrizione, '') ILIKE $1 OR COALESCE(l.indirizzo, '') ILIKE $1)
+      AND ($2::text IS NULL OR l.tipo = $2
+           OR NOT EXISTS (SELECT 1 FROM trasi.luogo v WHERE v.tipo = $2))
+      AND ($3::text IS NULL OR COALESCE(c.zona, '') ILIKE $3 OR COALESCE(l.indirizzo, '') ILIKE $3)
+  ) trovati
+ ORDER BY giro, affidabilita DESC, nome
+ LIMIT $4
 """
 
 SQL_CASA_ESISTE = "SELECT id FROM trasi.casa WHERE slug = $1"
@@ -215,6 +227,7 @@ def _item_luogo(riga) -> ItemLuogo:
         orari_testo=riga["orari_testo"],
         fonte=fonte,
         url=riga["url"],
+        telefono=None,  # la memoria della rete non porta recapiti (db/025); dichiarato, non inventato
         data_aggiornamento=riga["data_aggiornamento"],
         fiducia=riga["affidabilita"],
         badge=badge_kb(fonte, riga["data_aggiornamento"], riga["affidabilita"]),
