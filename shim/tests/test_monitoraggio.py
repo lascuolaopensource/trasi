@@ -144,6 +144,10 @@ def client_monitoraggio(monkeypatch, tmp_path):
     ambiente.configura_ambiente()
     monkeypatch.setattr("app.chat.PERCORSO_ENV", tmp_path / "env-inesistente")
     monkeypatch.setenv("ONYX_CHAT_TOKEN", "pat-di-prova")
+    # La chat PA ha la **sua** PAT (è l'identità con cui Onyx invoca i tool del monitoraggio):
+    # senza questa variabile l'endpoint risponde 503 «chat PA non configurata», che è il suo
+    # comportamento dichiarato — e i test qui sotto verificano il percorso configurato.
+    monkeypatch.setenv("ONYX_CHAT_PA_TOKEN", "pat-pa-di-prova")
     monkeypatch.setenv("ONYX_CHAT_API_URL", BASE_ONYX)
 
     from app import chat as modulo_chat
@@ -462,6 +466,8 @@ def test_chat_pa_risponde_con_fonte_e_logga_in_chat_interazione(client_monitorag
     arriva dallo shim, non da Onyx (V3).
     """
     client, spia = client_monitoraggio()
+    sessione = _SessionePa()
+    client.app.dependency_overrides[_DIPENDENZA_DASHBOARD] = lambda: sessione
 
     with respx.mock:
         respx.post(f"{BASE_ONYX}/chat/create-chat-session").mock(
@@ -475,22 +481,25 @@ def test_chat_pa_risponde_con_fonte_e_logga_in_chat_interazione(client_monitorag
     assert risposta.status_code == 200
     assert risposta.json()["risposta"] == "Le lacune sono tre:…"
     assert "Rete-kb-3" in risposta.json()["fonte"]
-    # Il log è scritto: canale 'pa', esito 'risposta', fonte 'kb' (dal badge KB), mai il testo.
-    inserimenti = [i for i in spia.inserimenti if len(i) == 4]
+    # Il log è scritto **sulla connessione della sessione** (dove il ruolo `pa` è già assunto): è la policy
+    # `chatlog_ins_pa` a decidere, e una connessione presa dal pool avrebbe il ruolo `shim_rw`, senza policy.
+    inserimenti = [q for q in sessione.query if "chat_interazione_log" in " ".join(q[0].split())]
     assert inserimenti, "chat_interazione_log deve avere una riga per la conversazione"
-    casa_id, canale, esito, fonte = inserimenti[0]
-    assert canale == "pa"
-    assert esito == "risposta"
-    assert fonte == "kb"
+    args = inserimenti[0][1]
+    assert args[1] == "pa", "canale='pa'"
+    assert args[2] == "risposta"
+    assert args[3] == "kb"
+    assert spia.inserimenti == [], "il log non usa una connessione propria: passa dalla sessione"
 
 
 def test_chat_pa_senza_token_risponde_503_dichiarato(client_monitoraggio, monkeypatch, tmp_path):
-    """Senza `ONYX_CHAT_TOKEN` la chat PA risponde 503 «non configurata», non 500.
+    """Senza `ONYX_CHAT_PA_TOKEN` la chat PA risponde 503 «non configurata», non 500.
 
-    Il messaggio è diverso da quello dello sportello: la mancanza del PAT è la stessa, ma la diagnosi è di questo
-    canale — il referente deve sapere che è la chat PA a non essere pronta, non la chat dello sportello.
+    La chat PA ha una PAT **sua** perché è l'identità con cui Onyx invoca i tool del monitoraggio: la
+    mancanza della PAT dedicata è una diagnosi di questo canale, e non si ripiega su quella dello sportello
+    (che appartiene a una Casa e farebbe rispondere 403 a ogni tool).
     """
-    monkeypatch.delenv("ONYX_CHAT_TOKEN", raising=False)
+    monkeypatch.delenv("ONYX_CHAT_PA_TOKEN", raising=False)
     monkeypatch.setattr("app.chat.PERCORSO_ENV", tmp_path / "env-inesistente")
     client, _ = client_monitoraggio()
 
@@ -515,6 +524,8 @@ def test_chat_pa_con_dato_personale_risponde_422(client_monitoraggio):
 def test_chat_pa_on_guasto_logga_errore_e_risponde_503(client_monitoraggio):
     """Se Onyx non risponde, la chat PA risponde 503 e il log porta 'errore': il fatto che il canale sia vivo si vede."""
     client, spia = client_monitoraggio()
+    sessione = _SessionePa()
+    client.app.dependency_overrides[_DIPENDENZA_DASHBOARD] = lambda: sessione
 
     with respx.mock:
         respx.post(f"{BASE_ONYX}/chat/create-chat-session").mock(
@@ -524,9 +535,10 @@ def test_chat_pa_on_guasto_logga_errore_e_risponde_503(client_monitoraggio):
 
     assert risposta.status_code == 503
     assert risposta.json() == {"detail": DETAIL_CHAT_NON_DISPONIBILE}
-    inserimenti = [i for i in spia.inserimenti if len(i) == 4]
-    assert inserimenti[0][2] == "errore", "il ramo Guasto lascia una riga con esito 'errore'"
-    assert inserimenti[0][3] is None, "il guasto non dichiara una fonte"
+    inserimenti = [q for q in sessione.query if "chat_interazione_log" in " ".join(q[0].split())]
+    assert inserimenti, "il ramo Guasto lascia una riga: la traccia esiste anche quando la chat non risponde"
+    assert inserimenti[0][1][2] == "errore", "il ramo Guasto lascia una riga con esito 'errore'"
+    assert inserimenti[0][1][3] is None, "il guasto non dichiara una fonte"
 
 
 # --- /v1/m/{email} — i tool di Onyx, solo per ruolo `pa` -----------------------------------------------------------

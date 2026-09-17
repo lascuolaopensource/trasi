@@ -578,6 +578,13 @@ GRANT SELECT ON trasi.v_commento TO pa;
 -- Le viste aggregate chiamano k_anon → p_int, che leggono `parametro`: senza questo GRANT ogni
 -- vista k-anonima fallirebbe per `pa` con «permission denied for table parametro» (misurato).
 GRANT SELECT ON trasi.parametro TO pa;
+-- Le viste di report di db/004 esistono **prima** del ruolo `pa` (che nasce con questa migrazione): il
+-- loro GRANT elenca i ruoli di allora, e `pa` non c'è. `v_report_mensile` è la base della sezione
+-- «lacune» della dashboard (richieste con esito `non_trovata`), quindi senza questa riga l'endpoint
+-- risponde 500 con «permission denied for view v_report_mensile» (misurato il 17/09).
+-- Sono viste aggregate k-anonime: esporle a `pa` è l'intento, non un allargamento (`v_report_mensile`
+-- esce già mascherata da `k_anon`, e i ruoli Casa le leggono da sempre).
+GRANT SELECT ON trasi.v_report_mensile TO pa;
 -- La policy decide le RIGHE, il GRANT concede l'OPERAZIONE: servono entrambi (la 024 concedeva
 -- SELECT report alle Case/rete/ti; `pa` è nato dopo e va dichiarato qui, nel suo file).
 GRANT SELECT ON trasi.report TO pa;

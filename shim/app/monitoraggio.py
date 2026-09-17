@@ -264,28 +264,46 @@ SELECT mese, casa_slug, canale, esito, fonte, n, n_label
     return [_riga_dict(r) for r in righe]
 
 
-async def _log_chat(casa_id: int | None, canale: str, esito: str, fonte: str | None, pool: Any | None = None) -> None:
+async def _log_chat(
+    sess: SessioneServizio, canale: str, esito: str, fonte: str | None, pool: Any | None = None
+) -> None:
     """La traccia della conversazione in `chat_interazione_log`, senza il testo (V5). Mai far fallire la risposta.
 
-    Il log va inserito **best-effort**: se il database non accetta la riga (policy non applicata, migrazione 026
-    non ancora arrivata), la conversazione risponde lo stesso e il guasto resta nel log dello shim. `pool` è il
-    parametro che i test passano per intercettare l'INSERT; in produzione è `_pool_corrente()`.
+    **L'INSERT passa dalla connessione della sessione** (ruolo `pa` già assunto), per la stessa ragione dello
+    sportello: la policy `chatlog_ins_pa` (db/026) ammette il ruolo `pa`, mentre una connessione presa dal pool
+    avrebbe il ruolo `shim_rw`, che non ha policy INSERT — la riga non entrava mai (misurato il 17/09).
+    Il log resta **best-effort**: se il database non accetta la riga, la conversazione risponde lo stesso e il
+    guasto resta nel log dello shim. `pool` è il parametro che i test passano per intercettare l'INSERT.
     """
     try:
-        pool_effettivo = pool or _pool_corrente()
-        async with pool_effettivo.acquire() as conn:
-            await conn.execute(
-                """
+        if pool is not None:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
 INSERT INTO trasi.chat_interazione_log (casa_id, canale, esito, fonte)
 VALUES ($1, $2, $3, $4)
-                """,
-                casa_id,
-                canale,
-                esito,
-                fonte,
-            )
-    except Exception:
-        logger.warning("log chat non scritto: la risposta resta valida")
+                    """,
+                    None,
+                    canale,
+                    esito,
+                    fonte,
+                )
+            return
+        await sess.execute(
+            """
+INSERT INTO trasi.chat_interazione_log (casa_id, canale, esito, fonte)
+VALUES ($1, $2, $3, $4)
+            """,
+            None,
+            canale,
+            esito,
+            fonte,
+        )
+    except Exception as guasto:
+        # Il **tipo** dell'errore, non il contenuto della conversazione: senza questo, «il log non entra»
+        # resta una diagnosi impossibile (è già successo: l'INSERT passava da una connessione col ruolo
+        # sbagliato e l'unico sintomo era un warning muto).
+        logger.warning("log chat non scritto (%s: %s): la risposta resta valida", type(guasto).__name__, guasto)
 
 
 def _fonte_conversazione(esito: Any) -> str:
@@ -569,11 +587,21 @@ async def pa_chat(
     if not configurazione_chat.token:
         raise errore(503, DETAIL_CHAT_PA_NON_CONFIGURATA)
 
+    # **La chat PA usa una PAT propria** (`ONYX_CHAT_PA_TOKEN`), non quella dello sportello: la PAT decide
+    # l'identità con cui Onyx invoca i tool, e il canale di monitoraggio accetta solo `pa@trasi.local`
+    # (guardia `_sessione_pa`). Con la PAT dello sportello — che appartiene a una Casa — ogni tool del
+    # monitoraggio risponde 403 e l'assistente non ha dati: verificato in esercizio il 17/09.
+    # Se la PAT dedicata non è configurata, la chat PA **dichiara** di non essere configurata invece di
+    # usare quella sbagliata: un 503 leggibile è meglio di una risposta costruita su un rifiuto.
+    token_pa = modulo_chat._variabile("ONYX_CHAT_PA_TOKEN")
+    if not token_pa:
+        raise errore(503, DETAIL_CHAT_PA_NON_CONFIGURATA)
+
     configurazione_pa = modulo_chat.ConfigurazioneChat(
         base_url=configurazione_chat.base_url,
-        token=configurazione_chat.token,
+        token=token_pa,
         # La persona PA ha una variabile **sua** (`ONYX_PERSONA_PA_ID`), non quella dello sportello: gli assistenti
-        # sono due identità distinte in Onyx, e il default è dichiarato nel contratto (5).
+        # sono due identità distinte in Onyx, e il default è l'id reale provisionato (7).
         persona_id=modulo_chat._intero(modulo_chat._variabile("ONYX_PERSONA_PA_ID"), PERSONA_PA_DEFAULT),
         timeout_s=configurazione_chat.timeout_s,
     )
@@ -581,10 +609,10 @@ async def pa_chat(
     email = EMAIL_PA  # la conversazione è attribuita alla PA; nessuna email di persona in questa via
     esito = await modulo_chat._conversa(configurazione_pa, corpo.messaggio, email)
     if isinstance(esito, modulo_chat.Guasto):
-        await _log_chat(None, "pa", "errore", None)
+        await _log_chat(sess, "pa", "errore", None)
         raise errore(503, esito.detail)
 
-    await _log_chat(None, "pa", "risposta", _fonte_conversazione(esito))
+    await _log_chat(sess, "pa", "risposta", _fonte_conversazione(esito))
     return {"risposta": esito.testo, "fonte": esito.fonte}
 
 
