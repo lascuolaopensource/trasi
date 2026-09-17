@@ -743,20 +743,18 @@ l'invocazione).
 
 ## 10 · Trasi Home (il sito statico)
 
-La Home è la porta unica della rete (`deployment/home/`, tre file: `index.html`, `style.css`,
-`home.js`). Non ha un processo proprio: la serve Caddy come sito statico. Per la verifica
-dell'endpoint e per i due difetti di avvio di Caddy **v. §1.1** e **§1.2**; qui c'è il contratto
-della pagina e le prove che la riguardano.
+La shell autenticata è composta da `index.html` per l'accesso, `home.html`, `osservatorio.html`, `account.html`
+e `aiuto.html` per le pagine pubblicate. Caddy la serve come sito statico da `/srv/home` in sola lettura.
 
 ### 10.1 · Come è servita
 
 | Rotta | Cosa serve | Prova |
 |---|---|---|
-| `/` | `index.html` da `/srv/home` (`deployment/home/` montata in sola lettura) | `curl -H 'Host: trasi…' http://127.0.0.1:8088/` → 200 |
-| `/style.css`, `/home.js` | gli altri due file | 200, `text/css` / `application/javascript` |
-| `/api/shim/*` | la riga «Oggi»: proxy verso `shim:8000`, con la chiave iniettata **da Caddy** | vedi §10.3 |
-| `/metabase/*` | le dashboard (MAPPA, OSSERVATORIO) | 200 |
-| `/nocodb/*` | la destinazione REGISTRA | **502** con servizio spento (§10.5) |
+| `/` | `index.html`, il modulo di accesso | `curl -H 'Host: trasi…' http://127.0.0.1:8088/` → 200 |
+| `/home.html`, `/osservatorio.html`, `/account.html`, `/aiuto.html` | pagine della shell | 200 dopo l'accesso |
+| `/assets/*`, `/vendor/leaflet/*` | CSS, JavaScript e Leaflet locale | file esistente nella web root |
+| `/api/shim/*` | API della sessione e dei dati, con la chiave iniettata da Caddy | vedi §10.3 |
+| `/operatore.html`, `/operatore.js`, `/home.js`, `/style.css` | vecchi percorsi | 410 |
 
 ```bash
 $ curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: trasi.lascuolaopensource.org' http://127.0.0.1:8088/
@@ -831,80 +829,53 @@ entro la scadenza prevista. È il caso che discrimina: con lo shim fermo la conn
 subito e il fallback comparirebbe anche senza timeout, mentre un servizio che non risponde è ciò che
 il `AbortController` esiste per gestire.
 
-### 10.4 · Il contratto degli `href` (e la Casa scelta)
+### 10.4 · Le pagine pubblicate e la sessione
 
-Le destinazioni e la coda delle proposte portano lo slug della Casa in `?casa=<slug>`. Gli
-indirizzi sono scritti una volta sola, in `data-modello`, con `{casa}` al posto dello slug; cambiarli
-significa cambiare quel solo attributo (e l'attributo `href` statico, che è la destinazione
-predefinita senza JS).
+La radice del sito serve `index.html`, il punto di accesso. Dopo un accesso valido la sessione è un cookie
+HttpOnly e la pagina porta a `home.html`. Le tre pagine della shell condividono la Casa della sessione:
 
-| Destinazione | Modello dell'`href` | Destinazione reale |
+| Pagina | File | Contenuto |
 |---|---|---|
-| CHIEDI | `//onyx.lascuolaopensource.org/app?agentId=2&casa={casa}` | Onyx, assistente «Trasi Casa» preselezionato (`agentId` 1=Presidio, 2=Casa, 3=Rete, 4=Staff PN) |
-| MAPPA | `/metabase/dashboard/4?casa={casa}` | dashboard «Trasi · Mappa» |
-| REGISTRA / AGGIORNA | `/nocodb/?casa={casa}` | NocoDB (spento: §10.5) |
-| OSSERVATORIO | `/metabase/dashboard/3?casa={casa}` | dashboard «Trasi · Casa» |
-| Coda delle proposte | `/nocodb/?casa={casa}&view=da-approvare` | NocoDB, vista «Da approvare» |
+| Home | `home.html` | conversazione con l'assistente |
+| Osservatorio | `osservatorio.html` | mappa, elenco equivalente e scheda dei luoghi |
+| Account | `account.html` | otto sezioni della Casa e coda delle proposte |
+| Aiuto | `aiuto.html` | spiegazione dello strumento, delle fonti e dei dati non disponibili |
 
-La Casa scelta sta in `localStorage` sotto **una sola** chiave, `trasi.casa_id`, con il **solo slug**
-(nessun dato personale: V5). Un valore che non corrisponde a una voce del selettore viene ignorato:
-un residuo di una versione precedente non può costruire un indirizzo arbitrario. Se lo storage è
-disabilitato (navigazione privata) la pagina funziona lo stesso e semplicemente non ricorda la scelta.
+La mappa è una sezione dell'Osservatorio. «Registra» è una sezione dell'Account. I collegamenti della sidebar
+usano `home.html`, `osservatorio.html` e `account.html`; non usano più `index.html` come Home.
 
-```bash
-# La persistenza si prova nel browser: scelgo Bozzano, ricarico, e i 4 href lo contengono
-$ # (estratto dalla verifica B6: localStorage dopo il cambio)
-[["trasi.casa_id","bozzano"]]
-$ # href dopo il ricarico, con la Casa Bozzano:
-//onyx.lascuolaopensource.org/app?agentId=2&casa=bozzano
-/metabase/dashboard/4?casa=bozzano
-/nocodb/?casa=bozzano
-/metabase/dashboard/3?casa=bozzano
-/nocodb/?casa=bozzano&view=da-approvare
-```
+Nel browser la sessione non espone dati personali. L'eventuale valore conservato localmente è solo lo slug della
+Casa. I vecchi percorsi `operatore.html`, `operatore.js`, `home.js` e `style.css` rispondono `410` in Caddy.
 
-### 10.5 · Le quattro destinazioni: esito reale, una per una
+### 10.5 · Controlli della Home pubblicata
 
-| # | Destinazione | Esito misurato | Nota |
-|---|---|---|---|
-| 1 | CHIEDI → Onyx | **200**, assistente «Trasi Casa» preselezionato | richiede la sessione Onyx (la chat chiede il login: la Home non ha un SSO, §10.6) |
-| 2 | MAPPA → Metabase `dashboard/4?casa=bozzano` | **200**, filtro «Casa: bozzano» applicato | richiede la sessione Metabase |
-| 3 | REGISTRA → NocoDB | **502** | servizio **spento per RAM** (dichiarato inattivo). Il `502` è corretto: la rotta esiste, il servizio dietro no. Un `404` sarebbe un link sbagliato |
-| 4 | OSSERVATORIO → Metabase `dashboard/3?casa=bozzano` | **200**, filtro «Casa: bozzano» applicato | idem 2 |
+Il controllo statico verifica che ogni `href` e `src` dei documenti pubblicati punti a un file della web root.
+Il controllo del deploy rifiuta inoltre i marcatori di conflitto all'inizio di una riga sotto `deployment/home/`.
+La verifica comportamentale usa una sessione di anteprima e controlla:
 
-**Nessuna delle quattro destinazioni dà un `404`.** Tre rispondono; la quarta è dichiarata inattiva.
+1. un accesso valido porta a `home.html`, senza mostrare il modulo di accesso alle pagine della shell;
+2. Home, Osservatorio, Account e Aiuto restano raggiungibili dalla sidebar;
+3. il cambio di sezione dell'Account sposta il focus sul titolo della sezione;
+4. la mappa mantiene l'elenco equivalente usabile da tastiera;
+5. con lo shim non disponibile ogni stato resta una frase italiana, senza codici o stack trace.
 
-### 10.6 · Cosa la Home **non** fa (limiti dichiarati)
+### 10.6 · Limiti dichiarati
 
-- **Non autentica.** È una pagina pubblica che apre i servizi; i servizi si autenticano da sé. Se
-  l'operatore non ha una sessione attiva, CHIEDI/MAPPA/OSSERVATORIO mostrano la schermata di accesso
-  del servizio, non un errore. Un SSO unico non è nel perimetro del MVP (§3: shell applicativa in
-  S2+).
-- **Il pulsante [Esci]** chiude la sessione **della chat** (fa un POST a
-  `onyx.lascuolaopensource.org/auth/logout`, in un `<form>`: nessun `fetch`, così funziona anche se
-  in futuro il logout richiedesse un token) e **non** chiude la sessione di Metabase, che è un
-  prodotto separato. Verificato nel browser: dopo il clic il cookie di sessione di Onyx sparisce e
-  `/api/me` passa da `200` a `403`, mentre la pagina resta la Home e mostra «Sessione della chat
-  chiusa.». Un logout unico per i tre servizi richiederebbe un SSO: S2.
-- **Non è un cruscotto.** Non mostra numeri propri e non dà istruzioni (V6): la riga «Oggi» è una
-  lettura della memoria della rete, le destinazioni sono porte.
-- **La coda delle proposte è una riga, non un riquadro.** Il conteggio sta in testa (quante ne
-  aspettano una decisione, e da quanto aspetta la più vecchia) e anche sul riquadro OSSERVATORIO,
-  perché è là che si decide. Se la lettura fallisce, la riga **sparisce**: non sapendo quante
-  proposte ci sono, dire «nessuna in attesa» sarebbe falso.
-- **REGISTRA / AGGIORNA e la coda sono dichiarati inattivi.** NocoDB è in esecuzione ma non ha
-  ancora le basi collegate (`nc_bases_v2` e `nc_users_v2` sono vuote, verificato): il collegamento è
-  predisposto e la nota dice che per ora si approva dalla chat. Senza la nota l'operatore atterrerebbe
-  su una registrazione e leggerebbe un guasto dove c'è un servizio non ancora configurato.
-- **Non conserva dati personali** (V5): in `localStorage` c'è solo lo slug della Casa.
+- **Non conserva dati personali nel browser**: la chat rifiuta nomi, telefoni, email e codici fiscali.
+- **La memoria della rete decide cosa mostrare**: quando non risponde, la pagina dichiara «Dati non disponibili:
+  la memoria della rete non risponde in questo momento».
+- **Le proposte non cambiano la memoria da sole**: la decisione appartiene alla Casa o al ruolo competente e
+  l'applicazione segue il flusso previsto.
+- **La coda delle proposte è una riga nell'Account**, non un allarme e non una scadenza.
+- **La cache usa una sola versione `v=2`** per link e script delle pagine pubblicate. Caddy mantiene la
+  rivalidazione con `Cache-Control: no-cache`.
+- **Il font Commissioner è locale** e usa `font-display: swap`; non ci sono font remoti o CDN.
 
 ### 10.7 · Verifica di accessibilità
 
-Vedi **`deployment/home/WCAG.md`** (rifatta dopo la revisione della veste): axe-core → **0
-violazioni** WCAG 2.1 A/AA **in tutti e quattro gli stati** della pagina, 12 coppie di contrasto
-misurate (minimo **6,71:1**), ordine di tabulazione verificato con `Tab` reale (salta → Casa → Aiuto →
-Esci → coda → CHIEDI → MAPPA → OSSERVATORIO), reflow a 320 px senza scorrimento, bersagli ≥ 24×24.
-La verifica WCAG delle tre applicazioni esterne è **rinviata a S2** (§9 e App. A V-08): non è fatta.
+Vedi **`deployment/home/WCAG.md`** per la verifica della shell: contrasto, ordine di tabulazione, focus,
+reflow e bersagli. La prova manuale copre il salto al contenuto, la sidebar, la navigazione delle sezioni
+dell'Account, l'elenco della mappa e il compositore della Home.
 
 ---
 

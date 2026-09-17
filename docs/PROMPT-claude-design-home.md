@@ -22,18 +22,20 @@ Trasi serve **operatori sociali**, non tecnici. L'operatore sta allo sportello c
 
 **Header**: il nome **TRASI**, un **selettore della Casa** (10 Case: Santa Spazio Culturale, Molo 12, Accademia degli Erranti, Parco Buscicchio, San Bao, Minimus, POP, Centro di Aggregazione Bozzano, Dream, Tuturano), due azioni: **Aiuto** e **Esci**.
 
-**Quattro riquadri**, ognuno apre un servizio diverso con la Casa già impostata:
+**Tre pagine pubblicate**, con la Casa della sessione già impostata:
 
-| Riquadro | Cosa apre | Cosa ci fa l'operatore |
+| Pagina | Cosa apre | Cosa ci fa l'operatore |
 |---|---|---|
-| **CHIEDI** | la chat con l'assistente | risponde alla persona davanti: dove andare, con quali orari, con la fonte citata |
-| **MAPPA** | una mappa | guarda insieme alla persona dove sono i luoghi e le Case vicine |
-| **REGISTRA / AGGIORNA** | un modulo tabellare | inserisce o corregge schede, eventi, opportunità della sua Casa |
-| **OSSERVATORIO** | un cruscotto | legge i numeri della sua Casa e **approva le proposte** in attesa |
+| **Home** | la conversazione con l'assistente | cerca una risposta per la persona davanti |
+| **Osservatorio** | la mappa e l'elenco dei luoghi | confronta ciò che la rete conosce con ciò che è stato trovato fuori |
+| **Account** | otto sezioni della Casa | legge i dati, registra proposte e segue la coda |
 
-**Riga «Oggi»** (in fondo): una lettura dal database, tipo *«Oggi a Centro di Aggregazione Bozzano: 1 evento · 0 schede in scadenza · 1 proposta»*. Se il servizio non risponde entro 3 secondi, mostra *«dati non disponibili»* — **è un'informazione, non un guasto**.
+La riga della coda nell'Account dichiara quante proposte aspettano una decisione. Se il servizio non risponde,
+la pagina mostra «Dati non disponibili: la memoria della rete non risponde in questo momento» — è un'informazione,
+non un guasto.
 
-**Sezione Aiuto**: spiega in linguaggio semplice cosa sono i quattro riquadri, come si legge un'etichetta di provenienza, cosa sono le proposte.
+**Sezione Aiuto**: spiega in linguaggio semplice cosa fanno le tre pagine, come si legge un'etichetta di
+provenienza e cosa sono le proposte.
 
 **Footer**: una riga sulla privacy (nessun dato personale conservato).
 
@@ -50,7 +52,9 @@ E c'è un secondo meccanismo che ti riguarda: il sistema **non modifica mai la m
 
 ## Il tuo compito
 
-1. **Architettura dell'informazione.** La struttura attuale è giusta? Quattro riquadri uguali comunicano che le quattro cose hanno la stessa frequenza d'uso — probabilmente **non è vero**: CHIEDI si usa decine di volte al giorno, OSSERVATORIO una volta a settimana, REGISTRA quando capita. Progetta una gerarchia che rispecchi **il lavoro reale**, non la simmetria. Dimmi cosa cambieresti e perché.
+1. **Architettura dell'informazione.** La struttura delle tre pagine è comprensibile? La Home serve la domanda,
+   l'Osservatorio raccoglie la mappa e l'Account raccoglie le funzioni della Casa. Progetta una gerarchia che
+   rispecchi il lavoro reale, non una simmetria decorativa. Dimmi cosa cambieresti e perché.
 
 2. **Veste UX/UI.** Palette, tipografia, spaziature, stati (hover, focus, attivo), comportamento su tablet. Puoi partire dai token CSS esistenti o proporne di nuovi. **Deve restare sobria**: è uno strumento di servizio sociale, non una landing page. Niente illustrazioni decorative, niente animazioni che distraggono, niente gergo.
 
