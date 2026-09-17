@@ -1038,3 +1038,51 @@ chat fatte con credenziali admin (PAT `trasi-kb-export`) rispondono **403** — 
 **dell'utente della chat** (`tool_constructor.py:436-447`), e l'admin non ha un'identità in
 `trasi.identita_onyx`: è il comportamento atteso, non un difetto. Il tool Onyx (id 12) è stato
 ri-registrato con il contratto a 12 operazioni.
+## 12 · Notifica report PA (US-4)
+
+Il passaggio del report mensile alla PA **non è un invio diretto**: è una catena in tre stati, in cui
+ogni transizione richiede un atto esplicito e resta tracciata.
+
+1. **Giorno 3, 08:00 — il ciclo mensile (F5) persiste le bozze.** Per ogni Casa una riga
+   `trasi.report` (`ambito='casa'`, `stato='bozza'`) e **una** riga `ambito='osservatorio'` con il CSV
+   in colonna. Se il report del mese esiste già **non viene riscritto** (divieto di UPDATE per
+   costruzione, db/024/026): il run lo dichiara in `flusso_run.dettaglio.report.gia_esistenti`.
+   `--forza` rimanda i digest ma **non** duplica i report.
+2. **L'operatore referente (ruolo rete/AT) approva dalla dashboard PA.** È un atto umano, non del
+   flusso: `trasi.approva_report(id)` è SECURITY DEFINER con audit a transizione; da quel momento il
+   report compare in `trasi.v_report_da_notificare` (approvato, `inviato_pa_ts IS NULL`).
+3. **Giorno successivo, 07:30 — l'alert (F6) notifica.** `flussi/alert.py` legge la vista; per ogni
+   report invia «Trasi · report osservatorio `<mese>` approvato — disponibile in dashboard PA» al
+   recapito del parametro `[P] email_report_pa` e marca `trasi.marca_report_inviato(id)`. Se il
+   parametro è **vuoto** il messaggio va su file (`flussi/evidenze/alert/`) e il modo è dichiarato in
+   `flusso_run.dettaglio.report_pa` — la stessa filosofia degli invii senza SMTP: il recapito mancante
+   non blocca la marcatura, e non deve far rinotificare il report ogni mattina.
+
+**Perché la marcatura e non la deduplicazione di contenuto.** Gli altri avvisi si deduplicano per
+impronta del contenuto (§2/bug 2026-09-16); la notifica PA no: la vista filtra già
+`inviato_pa_ts IS NULL`, quindi il marcatore di stato *è* l'idempotenza. Un report notificato ma non
+marcato ripartirebbe ogni mattina — per questo un'invo fallito **non** marca (il report torna in
+vista al prossimo run) e una marcatura impossibile (funzione SQL assente) ferma il run in errore,
+non tace.
+
+**V6 anche qui.** Il messaggio dice *chi decide* (l'approvazione è dell'operatore referente, la
+pubblicazione resta alla PA) e attraversa lo stesso presidio lessicale degli altri avvisi: un
+template con un imperativo blocca l'intero job delle 07:30, compreso il passo PA.
+
+**Diagnosi rapida:**
+
+```bash
+# Cosa aspetta di essere notificato (vista del contract):
+docker compose -f deployment/docker-compose.yml exec -T db_trasi \
+  psql -U automazioni -d trasi_db -c "SELECT id, mese, approvato_ts FROM trasi.v_report_da_notificare;"
+
+# Com'è andato l'ultimo passo PA dell'alert:
+docker compose -f deployment/docker-compose.yml exec -T db_trasi \
+  psql -U automazioni -d trasi_db -c \
+  "SELECT esito, dettaglio->'report_pa' AS report_pa FROM trasi.flusso_run
+   WHERE nome = 'alert' ORDER BY id DESC LIMIT 1;"
+
+# Recapito configurato (vuoto = modalità file):
+docker compose -f deployment/docker-compose.yml exec -T db_trasi \
+  psql -U automazioni -d trasi_db -c "SELECT trasi.p_text('email_report_pa');"
+```

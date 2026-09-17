@@ -24,6 +24,7 @@ DECLARE
     ['shim_rw',          'true',  'false'],
     ['rete',             'true',  'true' ],
     ['ti',               'true',  'true' ],
+    ['pa',               'false', 'true' ],
     ['metabase_ro',      'true',  'true' ],
     ['automazioni',      'true',  'true' ],
     ['casa_santaspazio', 'true',  'true' ],
@@ -53,17 +54,29 @@ BEGIN
   END LOOP;
 END $$;
 
+-- 1b) Pa del canale di monitoraggio ------------------------------------------
+-- `pa` è l'identità DB della dashboard «Monitoraggio PA» (US-4): legge solo i report di
+-- osservatorio **approvati** e le viste k-anonime di rete, mai una riga di dominio.
+-- NOLOGIN come `trasi_owner`/`applicatore`: non è un'identità applicativa — vi si arriva solo con
+-- `SET LOCAL ROLE` da `shim_rw` dopo `crea_sessione_servizio` (db/026), così la RLS resta
+-- l'autorità e il canale non ha una connessione diretta da gestire. INHERIT come gli altri ruoli
+-- applicativi; la membership in shim_rw è concessa sotto, e `pa` NON è membro di `metabase_ro`.
+
 -- 2) Schema dedicato ---------------------------------------------------------
 -- Dopo i ruoli: `trasi_owner` deve esistere per esserne il proprietario.
 CREATE SCHEMA IF NOT EXISTS trasi AUTHORIZATION trasi_owner;
 ALTER SCHEMA trasi OWNER TO trasi_owner;
 REVOKE ALL ON SCHEMA trasi FROM PUBLIC;
 
--- 3) shim_rw: membro delle 10 Case e di `rete`, NON di `ti` -------------------
+-- 3) shim_rw: membro delle 10 Case, di `rete` e di `pa`; NON di `ti` ---------
 -- Le membership non danno privilegi (NOINHERIT): servono solo a poter fare SET LOCAL ROLE.
+-- `pa` è incluso perché lo shim impersona il canale di monitoraggio PA dopo il login di servizio
+-- (`sessione_servizio_corrente`, db/026): senza membership il SET LOCAL ROLE fallirebbe.
+-- NOTA: con `pa` NOLOGIN e NOINHERIT=false erediterebbe le tabelle di `shim_rw` SE ne fosse membro
+-- — non lo è: la relazione è shim_rw → pa (shim_rw può vestire pa, mai il contrario).
 GRANT casa_santaspazio, casa_molo12, casa_erranti, casa_buscicchio, casa_sanbao,
       casa_minimus, casa_pop, casa_bozzano, casa_dream, casa_tuturano,
-      rete
+      rete, pa
   TO shim_rw;
 REVOKE ti FROM shim_rw;
 
@@ -72,7 +85,7 @@ REVOKE ti FROM shim_rw;
 GRANT USAGE ON SCHEMA trasi TO
   casa_santaspazio, casa_molo12, casa_erranti, casa_buscicchio, casa_sanbao,
   casa_minimus, casa_pop, casa_bozzano, casa_dream, casa_tuturano,
-  rete, ti, metabase_ro, automazioni, shim_rw, applicatore;
+  rete, ti, metabase_ro, automazioni, shim_rw, applicatore, pa;
 -- CREATE: `applicatore` è owner delle funzioni SECURITY DEFINER di db/005+db/006 (F9): PostgreSQL
 -- richiede il CREATE sullo schema al nuovo owner di un oggetto.
 GRANT CREATE ON SCHEMA trasi TO applicatore;

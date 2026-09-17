@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Trasi — monitoraggio PA</title>
+<meta name="description" content="Monitoraggio del servizio per la Pubblica Amministrazione: report mensili della rete, confronto tra mesi, lacune, approfondimenti con l’assistente.">
+<link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+<!-- Dashboard di monitoraggio per la PA e per la Rete AT. Un solo indirizzo,
+     nessun redirect verso altri domini: la sessione è il solito cookie HttpOnly
+     dello shim (`POST /api/shim/servizio/login`), e questa pagina non vede né
+     conserva credenziali oltre l'invio del modulo.
+     Dati aggregati e anonimi: ogni conteggio passa dalla k-anonimato e sotto
+     soglia resta «<5»; nessuna conversazione individuale è accessibile da qui. -->
+<a class="salta" href="#banco">Salta al banco di lavoro</a>
+
+<header class="testata">
+  <p class="marchio"><span class="marchio-nome">TRASI</span><span class="marchio-sep" aria-hidden="true">·</span>monitoraggio PA —
+    <span id="pa-ruolo">accesso in corso…</span>
+  </p>
+  <nav class="azioni" aria-label="Navigazione monitoraggio">
+    <a class="azione" href="/">Home</a>
+    <a class="azione" href="#aiuto">Aiuto</a>
+    <button class="azione" type="button" id="pulsante-esci">Esci</button>
+    <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
+  </nav>
+</header>
+
+<!-- ============================ accesso ================================== -->
+<main id="accesso" hidden>
+  <h1 class="titolo">Accesso monitoraggio</h1>
+  <form class="modulo" id="modulo-accesso" novalidate>
+    <p>
+      <label class="etichetta" for="accesso-ruolo">Soggetto</label>
+      <select id="accesso-ruolo" required>
+        <option value="pa">Pubblica Amministrazione</option>
+        <option value="rete">Rete AT</option>
+      </select>
+    </p>
+    <p>
+      <label class="etichetta" for="accesso-password">Parola d’ordine</label>
+      <input id="accesso-password" type="password" autocomplete="current-password" required>
+    </p>
+    <p><button class="riquadro-azione" type="submit">Entra</button></p>
+    <p class="messaggio-errore" id="accesso-errore" role="alert" hidden></p>
+  </form>
+  <p class="messaggio-nota">Dati aggregati e anonimi: nessuna conversazione individuale è accessibile da qui.</p>
+</main>
+
+<!-- ========================== banco di lavoro ============================ -->
+<main id="banco" hidden>
+  <h1 class="titolo">Monitoraggio del servizio</h1>
+
+  <nav class="linguette" aria-label="Funzioni monitoraggio">
+    <button class="linguetta" type="button" data-pannello="report" aria-pressed="true">Report</button>
+    <button class="linguetta" type="button" data-pannello="confronto" aria-pressed="false">Confronto</button>
+    <button class="linguetta" type="button" data-pannello="lacune" aria-pressed="false">Lacune</button>
+    <button class="linguetta" type="button" data-pannello="approfondimenti" aria-pressed="false">Approfondimenti</button>
+  </nav>
+
+  <!-- ----------------------------- report ------------------------------- -->
+  <section class="pannello" id="pannello-report" aria-labelledby="report-titolo">
+    <h2 id="report-titolo">Report mensili della rete</h2>
+    <p class="messaggio-nota">Ogni conteggio passa dalla k-anonimato: sotto soglia compare «&lt;5». La pubblicazione alla PA avviene con l’approvazione della Rete AT; la notifica parte al flusso delle 07:30.</p>
+    <ul class="elenco-messaggi" id="elenco-report"><li>Caricamento…</li></ul>
+    <div id="dettaglio-report" hidden>
+      <h3 id="dettaglio-titolo">Dettaglio report</h3>
+      <div id="dettaglio-contenuti"></div>
+      <h4>Commenti della rete</h4>
+      <ul class="elenco-messaggi" id="dettaglio-commenti"><li>Nessun commento.</li></ul>
+      <p>
+        <button class="riquadro-azione" type="button" id="pulsante-export">Esporta report stampabile</button>
+        <button class="riquadro-azione" type="button" id="pulsante-approva" hidden>Approva report</button>
+      </p>
+      <p class="messaggio-ok" id="report-ok" role="status" hidden></p>
+      <p class="messaggio-errore" id="report-errore" role="alert" hidden></p>
+    </div>
+  </section>
+
+  <!-- ----------------------------- confronto ----------------------------- -->
+  <section class="pannello" id="pannello-confronto" hidden aria-labelledby="confronto-titolo">
+    <h2 id="confronto-titolo">Confronto tra mesi</h2>
+    <p class="messaggio-nota">Mese corrente a confronto con il precedente, per categoria ed esito. Quando uno dei due mesi è sotto soglia il confronto non è possibile e compare «—».</p>
+    <table class="tabella" id="tabella-confronto">
+      <caption class="solo-lettore">Confronto dei conteggi tra mese corrente e mese precedente, per categoria ed esito</caption>
+      <thead>
+        <tr><th scope="col">Categoria</th><th scope="col">Esito</th><th scope="col">Mese corrente</th><th scope="col">Mese precedente</th><th scope="col">Variazione %</th></tr>
+      </thead>
+      <tbody id="corpo-confronto"><tr><td colspan="5">Caricamento…</td></tr></tbody>
+    </table>
+    <p class="messaggio-nota" id="confronto-nota" hidden>Alcune righe riportano «—»: il confronto non è disponibile sotto soglia k-anonimato.</p>
+  </section>
+
+  <!-- ------------------------------ lacune ------------------------------- -->
+  <section class="pannello" id="pannello-lacune" hidden aria-labelledby="lacune-titolo">
+    <h2 id="lacune-titolo">Lacune della rete</h2>
+    <p class="messaggio-nota">Le richieste senza risposta. Le lacune della chat sono conteggiate da errori e assenza di risposta, mai da contenuti testuali.</p>
+    <table class="tabella" id="tabella-lacune">
+      <caption class="solo-lettore">Categorie con richieste senza risposta, conteggi mascherati sotto soglia</caption>
+      <thead>
+        <tr><th scope="col">Origine</th><th scope="col">Categoria o canale</th><th scope="col">Dettaglio</th><th scope="col">Conteggio</th></tr>
+      </thead>
+      <tbody id="corpo-lacune"><tr><td colspan="4">Caricamento…</td></tr></tbody>
+    </table>
+  </section>
+
+  <!-- -------------------------- approfondimenti -------------------------- -->
+  <section class="pannello" id="pannello-approfondimenti" hidden aria-labelledby="approfondimenti-titolo">
+    <h2 id="approfondimenti-titolo">Approfondisci con l’assistente</h2>
+    <p class="messaggio-nota">L’assistente risponde solo dai dati aggregati del monitoraggio e dichiara da dove viene ogni informazione. Non conosce e non restituisce conversazioni individuali.</p>
+    <ol class="chat-registro" id="chat-registro" aria-live="polite" aria-label="Conversazione"></ol>
+    <form class="chat-modulo" id="chat-modulo">
+      <label class="etichetta" for="chat-testo">Domanda</label>
+      <textarea id="chat-testo" rows="3" maxlength="2000" required></textarea>
+      <button class="riquadro-azione" type="submit">Invia</button>
+    </form>
+  </section>
+</main>
+
+<section id="aiuto" aria-labelledby="aiuto-titolo">
+  <h2 id="aiuto-titolo">Aiuto</h2>
+  <p>Questa è la dashboard di monitoraggio del servizio per la Pubblica Amministrazione e per la Rete ATM: le quattro linguette corrispondono alle quattro letture del mese.</p>
+  <dl class="aiuto-elenco">
+    <dt>Report</dt><dd>I report mensili prodotti dal ciclo notturno. Il dettaglio mostra i conteggi del mese e i commenti della rete; il pulsante di esportazione apre una versione stampabile. Per la Rete AT è presente l’approvazione dei report in bozza.</dd>
+    <dt>Confronto</dt><dd>Mese corrente e mese precedente, per categoria ed esito. Sotto soglia k-anonimato il confronto non è disponibile e la variazione mostra «—».</dd>
+    <dt>Lacune</dt><dd>Le richieste rimaste senza risposta, conteggiate nello stesso modo di tutto il resto: nessun contenuto testuale.</dd>
+    <dt>Approfondimenti</dt><dd>La chat con l’assistente del monitoraggio: risponde solo dai dati aggregati della rete e dichiara la fonte.</dd>
+  </dl>
+  <h3>La sessione</h3>
+  <p>L’accesso dura 12 ore e vale per il soggetto scelto nel modulo. Con «Esci» la sessione si chiude subito.</p>
+</section>
+
+<footer class="piede">
+  <p>Trasi · monitoraggio PA. Dati aggregati e anonimi: nessuna conversazione individuale è accessibile da qui; la piattaforma non conserva dati personali dei cittadini.</p>
+</footer>
+
+<script src="pa.js?v=2"></script>
+</body>
+</html>
