@@ -1,16 +1,16 @@
-/* shell.js — il guscio: sessione, sidebar, pannello, uscita.
+/* shell.js — il guscio: sessione, testata, coda delle proposte, uscita.
  *
- * È il SOLO contratto di codice fra i bot (`CONTRATTO-shell.md` §4). Chi ha bisogno di una
+ * È il SOLO contratto di codice fra le pagine (`CONTRATTO-shell.md` §4). Chi ha bisogno di una
  * funzione la chiede qui invece di scriverne una seconda copia.
  *
  * Cosa fa, e nient'altro:
  *   1. chiede `GET /api/shim/me`: se risponde, la pagina è "dentro"; se dà 401, si torna all'accesso;
- *   2. riempie la testata della sidebar (Casa e zona) e segna la voce corrente con `aria-current`;
- *   3. governa la sidebar sotto 62 rem (bottone «Menu», `Esc`, click fuori);
- *   4. espone `window.Trasi` con `api()`, `montaPannello()`, `casa`;
- *   5. gestisce «Esci».
+ *   2. riempie la testata (Casa e zona) e segna la voce corrente con `aria-current`;
+ *   3. espone `window.Trasi` con `api()`, `rigaCoda()`, `casa`, `nomeCasa()`, `pronto`;
+ *   4. gestisce «Esci».
  *
- * NON contiene: la chat, lo storico, la mappa, l'account. Quelli sono dei rispettivi moduli.
+ * NON contiene: la mappa, l'account, la Home. Quelli sono dei rispettivi moduli. Non contiene una
+ * chat: la conversazione con l'assistente della rete vive su Onyx, non in queste pagine.
  *
  * Perché tutte le chiamate passano da `/api/shim/…`: Caddy aggiunge la `X-Trasi-Key` lato server
  * (`deployment/caddy/Caddyfile`), il browser non vede mai un segreto.
@@ -52,8 +52,6 @@
 
   /* ---------------------------------------------------------------- accesso */
 
-  var VOCI = { "home.html": null, "osservatorio.html": null, "account.html": null, "aiuto.html": null };
-
   function paginaCorrente() {
     var p = location.pathname.split("/").pop() || "index.html";
     return p === "" ? "index.html" : p;
@@ -81,50 +79,63 @@
     }
   }
 
-  /* ---------------------------------------------------------------- sidebar */
+  /* ---------------------------------------------------------------- riga di presenza della coda */
 
-  function governaSidebar() {
-    var sidebar = document.getElementById("sidebar");
-    var bottone = document.getElementById("shell-menu");
-    if (!sidebar || !bottone) return;
-
-    var stretto = function () { return window.matchMedia("(max-width: 62rem)").matches; };
-
-    function chiudi() {
-      if (!stretto()) return;
-      sidebar.hidden = true;
-      bottone.setAttribute("aria-expanded", "false");
+  /* Due fatti distinti, e la differenza è il punto del gate G-05:
+   *   - `decidibile > 0`  → «N proposte aspettano una decisione a <Casa>»  → pulsanti attivi in #proposte
+   *   - `nonDecidibile>0` → «N proposte riguardano la Casa e la decisione è di <chi>»
+   * Con TUTTE le proposte non decidibili NON si dice «nessuna proposta in attesa»: sarebbe falso, ed
+   * è il difetto che questo blocco esiste per evitare (una coda che sembra vuota mentre c'è dentro
+   * una decisione che aspetta qualcun altro). La riga sta in Home e in Account con lo stesso testo:
+   * per questo vive qui e non in una delle due pagine. */
+  function testoCoda(proposte, nomeCasa) {
+    if (!proposte || !proposte.length) {
+      return { testo: "Nessuna proposta in attesa a " + nomeCasa + ".", stato: "filetto--spento" };
     }
-    function apri() {
-      sidebar.hidden = false;
-      bottone.setAttribute("aria-expanded", "true");
+    var decidibili = proposte.filter(function (p) { return p.decidibile; });
+    var altrui = proposte.filter(function (p) { return !p.decidibile; });
+    var piuVecchia = proposte.reduce(function (a, p) {
+      return (a === null || (p.eta_giorni || 0) > (a.eta_giorni || 0)) ? p : a;
+    }, null);
+
+    var testo;
+    if (decidibili.length) {
+      testo = decidibili.length + (decidibili.length === 1 ? " proposta aspetta" : " proposte aspettano") +
+              " una decisione a " + nomeCasa;
+      if (piuVecchia && piuVecchia.eta_giorni > 0) {
+        testo += " · la più vecchia da " + piuVecchia.eta_giorni +
+                 (piuVecchia.eta_giorni === 1 ? " giorno" : " giorni");
+      }
+    } else {
+      // La decisione è di altri: si dichiara chi, senza chiedere niente a chi legge.
+      var chi = altrui[0].chi_decide === "at" ? "AT" : altrui[0].chi_decide;
+      testo = altrui.length + (altrui.length === 1 ? " proposta riguarda" : " proposte riguardano") +
+              " la Casa e la decisione è di " + chi;
     }
-    function sincronizza() { if (stretto()) chiudi(); else sidebar.hidden = false; }
-
-    bottone.addEventListener("click", function () {
-      if (sidebar.hidden) { apri(); var p = sidebar.querySelector("a, button"); if (p) p.focus(); }
-      else chiudi();
-    });
-
-    // Esc chiude e riporta il focus al bottone: chi naviga da tastiera non resta intrappolato.
-    document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape" && stretto() && !sidebar.hidden) { chiudi(); bottone.focus(); }
-    });
-    // Click fuori dal pannello: chiude (solo quando è a scomparsa).
-    document.addEventListener("click", function (ev) {
-      if (!stretto() || sidebar.hidden) return;
-      if (!sidebar.contains(ev.target) && ev.target !== bottone) chiudi();
-    });
-
-    window.addEventListener("resize", sincronizza);
-    sincronizza();
+    return { testo: testo, stato: decidibili.length ? "filetto--coda" : "filetto--attenzione" };
   }
 
-  /* ---------------------------------------------------------------- pannello */
-
-  function montaPannello(html) {
-    var p = document.getElementById("shell-pannello");
-    if (p) p.innerHTML = html;
+  /* Riempie `contenitore` (che ha già le sue classi di pagina) con la riga della coda: aggiunge
+   * `filetto` e lo stato, scrive il testo, lo mostra. Se la lettura fallisce, la riga **sparisce**
+   * invece di dire «nessuna proposta»: non sapendo quante ne aspettano, affermare che non ce ne
+   * sono sarebbe un'informazione falsa. Restituisce la promessa con le proposte, per chi ne ha
+   * bisogno oltre alla riga (la Home mostra anche il collegamento alla sezione). */
+  function rigaCoda(contenitore) {
+    if (!contenitore) return Promise.resolve(null);
+    var base = contenitore.className.split(/\s+/).filter(function (c) {
+      return c && c !== "filetto" && c.indexOf("filetto--") !== 0;
+    }).join(" ");
+    return api("/op/proposte").then(function (dati) {
+      var proposte = (dati && dati.proposte) || [];
+      var r = testoCoda(proposte, Trasi.nomeCasa());
+      contenitore.className = base + " filetto " + r.stato;
+      contenitore.textContent = r.testo;
+      contenitore.hidden = false;
+      return proposte;
+    }).catch(function () {
+      contenitore.hidden = true;
+      return null;
+    });
   }
 
   /* ---------------------------------------------------------------- esci */
@@ -143,7 +154,7 @@
   var Trasi = {
     casa: null,
     api: api,
-    montaPannello: montaPannello,
+    rigaCoda: rigaCoda,
     voceCorrente: paginaCorrente(),
     /* La Casa come la mostra la testata: serve a chi scrive i testi («Oggi a …», «… a San Bao»). */
     nomeCasa: function () { return Trasi.casa ? (Trasi.casa.nome || Trasi.casa.casa) : ""; }
@@ -151,7 +162,6 @@
   window.Trasi = Trasi;
 
   segnaVoce();
-  governaSidebar();
   governaEsci();
 
   /* `GET /me` dice chi è entrato: `{casa, casa_id, ruolo}`. La zona e i «dati provvisori»

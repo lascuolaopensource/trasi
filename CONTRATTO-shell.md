@@ -1,7 +1,7 @@
 # CONTRATTO DELLA SHELL — congelato prima che i bot partano
 
-**Perché questo file esiste.** Quattro bot toccano quattro pagine che condividono la stessa testata, la stessa
-sidebar e gli stessi token. Senza un contratto congelato, tre bot riscrivono la stessa intestazione in tre modi e
+**Perché questo file esiste.** Quattro bot toccano quattro pagine che condividono la stessa testata, la stessa navigazione
+e gli stessi token. Senza un contratto congelato, tre bot riscrivono la stessa intestazione in tre modi e
 l'integrazione costa più della scrittura. Questo file è **il contratto**: chi costruisce le pagine lo usa e **non
 lo modifica**; solo il proprietario della shell può cambiarlo, e in quel momento avvisa gli altri.
 
@@ -14,17 +14,16 @@ o lo **caricano**, non lo modificano.
 
 | File | Proprietario | Cosa contiene |
 |---|---|---|
-| `_shell.html` | BOT-1 | il guscio: testata, sidebar, pannello, main, piede. **Contiene segnaposto**, non contenuti |
+| `_shell.html` | BOT-1 | il guscio: testata con navigazione, main, piede. **Contiene segnaposto**, non contenuti |
 | `assets/struttura.css` | BOT-1 | layout, griglia, classi del contratto. **Nessuna scelta di veste** |
 | `assets/veste.css` | BOT-1 | ciò che X sostituisce. Importa i token di `design/tokens/` |
-| `assets/shell.js` | BOT-1 | sessione (`GET /me`), apertura/chiusura sidebar, «Menu», «Esci», popolamento del pannello |
+| `assets/shell.js` | BOT-1 | sessione (`GET /me`), testata, «Esci», riga della coda (`Trasi.rigaCoda`) |
 | `index.html` | BOT-1 | **Accesso** (se non c'è sessione) **e** Home: due viste dello stesso file |
-| `home.html` | BOT-2 | la chat: stato vuoto, suggerimenti, turni, compositore |
-| `assets/chat.js` | BOT-2 | la macchina a stati della chat (§4.1 del piano) |
-| `assets/storico.js` | BOT-2 | il pannello storico nella sidebar |
+| `home.html` | BOT-2 | la Home: oggi, cosa aspetta una decisione, le destinazioni, il rimando a Onyx |
+| `assets/home.js` | BOT-2 | le tre letture della Home (eventi di oggi, coda, prestiti) |
 | `osservatorio.html` | BOT-3 | mappa, elenco, scheda (tre viste dello stesso file) |
 | `assets/mappa.js` | BOT-3 | Leaflet, pin, legenda, sincronizzazione con l'elenco |
-| `account.html` | BOT-4 | la **pagina singola**: carica le 8 sezioni e ne mostra una |
+| `account.html` | BOT-4 | la **pagina singola**: carica le 7 sezioni e ne mostra una |
 | `assets/account.js` | BOT-4 | sotto-navigazione, caricamento delle sezioni via `fetch` |
 | `account/la-casa.html` | BOT-4 | sezione 1 (frammento, **solo markup**) |
 | `account/proposte.html` | BOT-4 | sezione 3 |
@@ -32,8 +31,7 @@ o lo **caricano**, non lo modificano.
 | `account/registra.html` | BOT-5 | sezione 4 |
 | `account/attrezzoteca.html` | BOT-5 | sezione 5 |
 | `account/messaggi.html` | BOT-5 | sezione 6 |
-| `account/conversazioni.html` | BOT-5 | sezione 7 |
-| `account/impostazioni.html` | BOT-5 | sezione 8 |
+| `account/impostazioni.html` | BOT-5 | sezione 7 |
 | `aiuto.html` | BOT-6 | l'Aiuto riscritto per le tre pagine |
 | `stati/*.html` | BOT-6 | le condizioni forzate, per pagina |
 
@@ -42,89 +40,81 @@ o lo **caricano**, non lo modificano.
 `_shell.html` è un **frammento** (non un documento completo): inizia con `<a class="salta">` e finisce con il
 piede. Ogni pagina lo include copiandolo **una volta**, alla prima scrittura, e da lì in poi se lo tiene.
 
+È una **testata**, non una sidebar: Casa a sinistra, le tre destinazioni in riga, Aiuto ed Esci a destra. Sotto
+40 rem la riga va a capo da sola. Non c'è un «Menu» e non c'è un pannello contestuale: la conversazione con
+l'assistente della rete vive su Onyx, non in queste pagine.
+
 ```html
 <a class="salta" href="#contenuto">Salta al contenuto</a>
 
-<div class="guscio">
-  <aside class="sidebar" id="sidebar" aria-label="Navigazione e pannello">
-    <div class="sidebar-testata">
-      <p class="marchio">TRASI</p>
-      <p class="casa-nome" id="shell-casa">accesso in corso…</p>
-      <p class="casa-zona" id="shell-zona"></p>
-    </div>
-
-    <nav class="nav" aria-label="Destinazioni">
-      <a class="nav-voce" href="index.html">Home</a>
-      <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
-      <a class="nav-voce" href="account.html">Account</a>
-    </nav>
-
-    <!-- PANNELLO CONTESTUALE: vuoto qui. Lo popola shell.js + il modulo della pagina. -->
-    <div class="pannello" id="shell-pannello"></div>
-
-    <div class="sidebar-piede">
-      <a class="azione" href="aiuto.html">Aiuto</a>
-      <button class="azione" type="button" id="shell-esci">Esci</button>
-      <p class="privacy">Non conserva dati personali.</p>
-    </div>
-  </aside>
-
-  <div class="area">
-    <button class="menu-bottone" type="button" id="shell-menu" aria-expanded="false" aria-controls="sidebar">Menu</button>
-    <main class="contenuto" id="contenuto"><!-- CONTENUTO DELLA PAGINA --></main>
+<header class="testata">
+  <div class="testata-casa">
+    <p class="marchio">TRASI</p>
+    <p class="casa-nome" id="shell-casa">accesso in corso…</p>
+    <p class="casa-zona" id="shell-zona"></p>
   </div>
-</div>
+
+  <nav class="nav" aria-label="Destinazioni">
+    <a class="nav-voce" href="home.html">Home</a>
+    <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
+    <a class="nav-voce" href="account.html">Account</a>
+  </nav>
+
+  <div class="testata-azioni">
+    <a class="azione" href="aiuto.html">Aiuto</a>
+    <button class="azione" type="button" id="shell-esci">Esci</button>
+  </div>
+</header>
+
+<main class="contenuto" id="contenuto"><!-- CONTENUTO DELLA PAGINA --></main>
+
+<footer class="piede">
+  <p class="privacy">Non conserva dati personali.</p>
+</footer>
 ```
 
 **La voce corrente si dichiara con `aria-current="page"`** — la pagina, al caricamento, la mette sulla propria voce
-(una riga in `shell.js` con una mappa `pagina → voce`).
+(una riga in `shell.js` che confronta l'`href` con il nome del file).
 
 ## 3. Le classi del contratto (in `struttura.css`)
 
 Queste esistono e **non si inventano altre** per le stesse cose. Ogni bot può aggiungere classi **proprie** con
-prefisso della pagina (`chat-`, `mappa-`, `acc-`, `storico-`) nel proprio file CSS, se serve: quelle non sono
+prefisso della pagina (`home-`, `mappa-`, `acc-`) nel proprio file CSS, se serve: quelle non sono
 condivise e non si toccano fra bot.
 
 | Area | Classi | Note |
 |---|---|---|
-| Guscio | `.guscio`, `.sidebar`, `.area`, `.contenuto`, `.salta` | griglia a due colonne, `minmax(0,1fr)` |
-| Testata sidebar | `.sidebar-testata`, `.marchio`, `.casa-nome`, `.casa-zona` | |
+| Guscio | `.testata`, `.contenuto`, `.piede`, `.salta` | colonna unica; `.contenuto` largo al più 62 rem |
+| Testata | `.testata-casa`, `.marchio`, `.casa-nome`, `.casa-zona`, `.testata-azioni` | |
 | Navigazione | `.nav`, `.nav-voce`, `.nav-voce[aria-current="page"]` | |
-| Pannello | `.pannello`, `.pannello-testa`, `.pannello-corpo` | il contenuto lo decide la pagina |
-| Piede | `.sidebar-piede`, `.azione`, `.privacy` | |
-| Menu mobile | `.menu-bottone` | visibile solo < 62 rem |
+| Piede | `.azione`, `.privacy` | |
 | Contenuto | `.titolo-pagina`, `.blocco`, `.blocco-testa`, `.riga`, `.elenco`, `.vuoto` | |
 | Stati | `.filetto` + `.filetto--oggi` `.filetto--coda` `.filetto--attenzione` `.filetto--spento` | il segno di stato, 4 px |
 | Etichette | `.etichetta`, `.etichetta--provenienza`, `.etichetta--esterna` | `--esterna` ha il bordo tratteggiato |
 | Bottoni | `.bottone`, `.bottone--principale`, `.bottone--quieto` | bersaglio ≥ 44 px |
-| Chat | `.turno`, `.turno--operatore`, `.turno--assistente`, `.turno-chi`, `.turno-testo`, `.compositore` | di BOT-2, dichiarate qui per l'elenco completo |
 | Tabella | `.tabella` | con `<caption>` e `<th scope="col">` |
 
-## 4. Il pannello contestuale — chi scrive cosa
-
-`shell.js` mette nel pannello un contenitore vuoto con l'id giusto; **è la pagina** a riempirlo:
-
-| Pagina | Cosa deve esserci in `#shell-pannello` | Chi lo scrive |
-|---|---|---|
-| `index.html` / `home.html` | `.pannello-testa` con `<button>` «Nuova conversazione» + `<div id="storico-lista">` | `storico.js` (BOT-2) |
-| `osservatorio.html`, `account.html` | `.pannello-testa` con `<a href="home.html?c=<id>">Apri nella Home</a>` + `<div id="chat-compatta">` | `shell.js` chiama `home-api.js` (BOT-2) |
+## 4. Il contratto di codice — `window.Trasi`
 
 `shell.js` espone un solo aggancio, e nient'altro:
 
 ```js
 // shell.js
 window.Trasi = {
-  casa: null,          // {casa, casa_id, ruolo} da GET /me, o null se non c'è sessione
+  casa: null,          // {casa, casa_id, ruolo, nome, zona, …} da GET /me + GET /op/casa, o null
   api(percorso, opzioni) { … },   // fetch verso /api/shim, gestisce 401 → ritorno all'accesso
-  montaPannello(html) { … },      // scrive in #shell-pannello
-  voceCorrente: null               // slug della pagina, per aria-current
+  rigaCoda(contenitore) { … },    // la riga «N proposte aspettano una decisione a <Casa>» (Home e Account)
+  nomeCasa() { … },               // il nome della Casa come lo mostra la testata
+  pronto: Promise,                 // risolta con `casa` quando la sessione è nota
+  voceCorrente: "home.html"        // il file della pagina, per aria-current
 };
 ```
 
-**Questo è l'unico contratto di codice fra i bot.** Chi ha bisogno di una funzione lo chiede a BOT-1 invece di
-scrivere una seconda copia.
+**Questo è l'unico contratto di codice fra le pagine.** Chi ha bisogno di una funzione lo chiede a BOT-1 invece di
+scrivere una seconda copia: `rigaCoda` è nata così, perché Home e Account mostrano la stessa riga e due copie del
+testo sarebbero divergute alla prima correzione.
 
-## 5. `account.html` — pagina singola, otto viste
+## 5. `account.html` — pagina singola, sette viste
 
 `account.html` **non contiene** le sezioni: le carica. La struttura è:
 
@@ -134,7 +124,7 @@ scrivere una seconda copia.
   <nav class="acc-sottonav" aria-label="Sezioni dell'account">
     <a href="#la-casa">La Casa</a> <a href="#numeri">Numeri</a> <a href="#proposte">Proposte</a>
     <a href="#registra">Registra</a> <a href="#attrezzoteca">Attrezzoteca</a>
-    <a href="#messaggi">Messaggi</a> <a href="#conversazioni">Conversazioni</a> <a href="#impostazioni">Impostazioni</a>
+    <a href="#messaggi">Messaggi</a> <a href="#impostazioni">Impostazioni</a>
   </nav>
   <div id="acc-vista" aria-live="polite"><!-- qui entra UNA sezione --></div>
 </main>
@@ -151,23 +141,22 @@ scrivere una seconda copia.
    serve. Chi scrive una sezione lo sa e non mette script nel frammento.
 5. Se il `fetch` fallisce, la vista mostra lo stato «Dati non disponibili» — non un errore grezzo.
 
-## 6. Comportamento della sidebar (un posto solo)
+## 6. Comportamento della testata (un posto solo)
 
 | Larghezza | Comportamento | Proprietà |
 |---|---|---|
-| ≥ 62 rem | sidebar fissa 18 rem | `.guscio` griglia |
-| 40–62 rem | chiusa; «Menu» la apre (`aria-expanded`, `aria-controls`); chiusa = `hidden` | `shell.js` |
-| < 40 rem | a scomparsa; si chiude con `Esc` e cliccando fuori; il focus torna al bottone | `shell.js` |
+| ≥ 40 rem | una riga: Casa · destinazioni · azioni | `.testata` (`flex-wrap`) |
+| < 40 rem | la riga va a capo: Casa, poi destinazioni, poi azioni | idem, nessun JavaScript |
 
-Criteri di done (dalla regola di §1.3 del piano): a 1280 px la sidebar è 288 px e «Menu» non c'è; a 900 px «Menu»
-c'è e `aria-expanded` cambia; a 380 px `document.documentElement.scrollWidth === 380`.
+Criteri di done: a 1280 px la testata sta su una riga e non c'è nessun «Menu»; a 380 px
+`document.documentElement.scrollWidth === 380`.
 
 ## 7. Testi già esistenti — si riusano **alla lettera**
 
 Non si riscrivono, non si parafrasano: |Testo|Dove| |---|---| |«Dati non disponibili: la memoria della rete non
 risponde in questo momento»|stato di ogni pagina| |«È un'informazione, non un guasto»|idem| |«Servizio non ancora
 attivo»|ciò che non è pronto| |«Nessuna proposta in attesa a <Casa>.»|coda vuota| |«Non conserva dati
-personali.»|piede della sidebar| |Le etichette `[KB · …]` e `[Esterna · …]`|**verbatim dallo shim**, mai
+personali.»|piede della pagina| |Le etichette `[KB · …]` e `[Esterna · …]`|**verbatim dallo shim**, mai
 ricomposte| |«orari non disponibili»|luogo senza orari|
 
 **Divieti di contenuto** (verificati automaticamente in `T-DASH-03`): nessun imperativo, nessun «tu»/«noi», nessun

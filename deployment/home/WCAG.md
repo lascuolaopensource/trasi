@@ -5,6 +5,12 @@ Pagina verificata: **Trasi Home** (`deployment/home/`, servita da Caddy all'indi
 WCAG 2.1 A/AA), misure dirette sul DOM in Chrome 150 (contrasti, dimensioni di carattere, ordine di
 tabulazione, bersagli, reflow).
 
+> **Nota del 2026-09-17.** La Home è cambiata dopo queste misure: non ha più la chat (la conversazione
+> con l'assistente vive su Onyx) e la sidebar è diventata una testata su una riga, senza «Menu».
+> Verificato in questa occasione: nessun errore di script, `scrollWidth === 380` a 380 px, ordine di
+> tabulazione salto → testata → contenuto. Le misure di contrasto e axe sotto restano quelle della
+> pagina precedente e vanno rifatte sulla pagina attuale.
+
 **Questa scheda è stata rifatta** dopo la revisione della veste (design system, `design/`): la
 gerarchia delle destinazioni è cambiata, la riga «Oggi» e la coda delle proposte sono salite in una
 fascia di stato in testa, ed è entrato il primo elemento non testuale della pagina — il logo della

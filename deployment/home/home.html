@@ -5,119 +5,127 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <title>Trasi — Home</title>
-<meta name="description" content="Trasi: la chat con l'assistente della rete delle Case di Quartiere di Brindisi.">
-<link rel="stylesheet" href="assets/struttura.css?v=3">
-<link rel="stylesheet" href="assets/veste.css?v=3">
-<!-- `chat.css` è della Home: contiene `.turno`, `.compositore` e le classi `chat-`/`storico-`
-     che il contratto (§3 di CONTRATTO-shell.md) dichiara di questa pagina. Non è una veste:
-     è il comportamento della chat — righe del compositore, aggancio in fondo, misure dei turni. -->
-<link rel="stylesheet" href="assets/chat.css?v=3">
+<meta name="description" content="Trasi: cosa c'è oggi alla Casa di Quartiere, cosa aspetta una decisione e da dove si parte.">
+<link rel="stylesheet" href="assets/struttura.css?v=4">
+<link rel="stylesheet" href="assets/veste.css?v=4">
+<!-- `home.css` è della Home: le classi `home-` (la griglia delle destinazioni, la riga di oggi).
+     Non è una veste: i colori vengono dai token di `veste.css`. -->
+<link rel="stylesheet" href="assets/home.css?v=4">
 </head>
 <body>
 
 <!-- ============================================================ IL GUSCIO =====================
-     Copiato **una volta** da `_shell.html` (CONTRATTO-shell.md §2: «ogni pagina lo include
-     copiandolo una volta, alla prima scrittura, e da lì in poi se lo tiene»). Da qui in poi
-     questo file è mio e non si rilegge da quello: la shell è congelata, non un import.
-     I tre segnaposto (`#shell-casa`, `#shell-zona`, `#shell-pannello`) li riempie `shell.js`. -->
+     Copiato **una volta** da `_shell.html` (CONTRATTO-shell.md §2). I due segnaposto
+     (`#shell-casa`, `#shell-zona`) li riempie `shell.js`. -->
 <a class="salta" href="#contenuto">Salta al contenuto</a>
 
-<div class="guscio">
-  <aside class="sidebar" id="sidebar" aria-label="Navigazione e pannello">
-    <div class="sidebar-testata">
-      <p class="marchio">TRASI</p>
-      <p class="casa-nome" id="shell-casa">accesso in corso…</p>
-      <p class="casa-zona" id="shell-zona"></p>
+<header class="testata">
+  <div class="testata-casa">
+    <p class="marchio">TRASI</p>
+    <p class="casa-nome" id="shell-casa">accesso in corso…</p>
+    <p class="casa-zona" id="shell-zona"></p>
+  </div>
+
+  <nav class="nav" aria-label="Destinazioni">
+    <a class="nav-voce" href="home.html">Home</a>
+    <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
+    <a class="nav-voce" href="account.html">Account</a>
+  </nav>
+
+  <div class="testata-azioni">
+    <a class="azione" href="aiuto.html">Aiuto</a>
+    <button class="azione" type="button" id="shell-esci">Esci</button>
+  </div>
+</header>
+
+<main class="contenuto" id="contenuto">
+
+  <!-- ============================================================ HOME — la porta della Casa ====
+       Tre cose, nell'ordine in cui servono allo sportello: cosa c'è **oggi** alla Casa, cosa
+       **aspetta una decisione** umana (proposte e prestiti: V4, il sistema propone e una persona
+       decide), e **da dove si parte** per il resto (le destinazioni). In fondo, dove vive
+       l'assistente: su Onyx, non qui. Nessuna chat in questa pagina, e nessun pannello. -->
+
+  <div class="home">
+
+    <div class="blocco-testa home-testa">
+      <h1 class="titolo-pagina">Oggi a <span id="home-casa">…</span></h1>
+      <p class="home-data" id="home-data"></p>
     </div>
 
-    <nav class="nav" aria-label="Destinazioni">
-      <a class="nav-voce" href="home.html">Chiedi</a>
-      <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
-      <a class="nav-voce" href="account.html">Account</a>
+    <!-- OGGI — gli eventi del giorno alla Casa (`GET /op/eventi?dal=oggi&al=oggi&casa_id`). Il
+         badge di provenienza è **verbatim** dallo shim (V3). Senza risposta: «Dati non
+         disponibili», la frase del contratto, e le destinazioni restano usabili. -->
+    <section class="blocco filetto filetto--oggi" aria-labelledby="home-oggi-titolo" id="home-oggi" aria-busy="true">
+      <div class="blocco-testa">
+        <h2 class="home-titolo" id="home-oggi-titolo">Eventi di oggi</h2>
+      </div>
+      <div id="home-eventi"><p class="vuoto">Lettura in corso…</p></div>
+      <p class="home-rimando"><a href="osservatorio.html">I luoghi e gli eventi della rete nell'Osservatorio</a></p>
+    </section>
+
+    <!-- IN ATTESA DI UNA DECISIONE — la riga della coda la compone `shell.js` (`Trasi.rigaCoda`),
+         con lo stesso testo dell'Account. I prestiti da confermare vengono da
+         `GET /op/movimenti_da_confermare`. Filetto terracotta, mai rosso; nessuna scadenza. -->
+    <section class="blocco" aria-labelledby="home-decisioni-titolo">
+      <div class="blocco-testa">
+        <h2 class="home-titolo" id="home-decisioni-titolo">In attesa di una decisione</h2>
+      </div>
+      <div class="home-riga" id="home-coda" role="status" aria-live="polite" hidden></div>
+      <p class="home-rimando" id="home-coda-rimando" hidden><a href="account.html#proposte">Le proposte, nell'Account</a></p>
+      <div class="home-riga" id="home-prestiti" role="status" aria-live="polite" hidden></div>
+      <p class="home-rimando" id="home-prestiti-rimando" hidden><a href="account.html#attrezzoteca">I prestiti, nell'Attrezzoteca</a></p>
+    </section>
+
+    <!-- LE DESTINAZIONI — collegamenti, non icone: ognuno porta a una pagina o a una sezione
+         precisa dell'Account, e la riga sotto il nome dice cosa ci si fa. -->
+    <nav class="home-destinazioni" aria-label="Le funzioni della Casa">
+      <a class="blocco home-destinazione" href="osservatorio.html">
+        <span class="home-destinazione-nome">Osservatorio</span>
+        <span class="home-destinazione-testo">I luoghi e le Case della rete, sulla mappa e in elenco, con la scheda di ogni luogo.</span>
+      </a>
+      <a class="blocco home-destinazione" href="account.html#registra">
+        <span class="home-destinazione-nome">Registra</span>
+        <span class="home-destinazione-testo">La richiesta del colloquio, un evento della Casa, una modifica a servizi e orari — come proposta.</span>
+      </a>
+      <a class="blocco home-destinazione" href="account.html#attrezzoteca">
+        <span class="home-destinazione-nome">Attrezzoteca</span>
+        <span class="home-destinazione-testo">L'inventario condiviso, le prenotazioni e i prestiti fra le Case.</span>
+      </a>
+      <a class="blocco home-destinazione" href="account.html#messaggi">
+        <span class="home-destinazione-nome">Messaggi</span>
+        <span class="home-destinazione-testo">La bacheca interna fra le Case della rete.</span>
+      </a>
+      <a class="blocco home-destinazione" href="account.html#numeri">
+        <span class="home-destinazione-nome">Numeri</span>
+        <span class="home-destinazione-testo">Le statistiche mensili della Casa; i conteggi piccoli si leggono come «&lt;5».</span>
+      </a>
+      <a class="blocco home-destinazione" href="account.html#la-casa">
+        <span class="home-destinazione-nome">La Casa</span>
+        <span class="home-destinazione-testo">Dati, orari e contatti della Casa, con la loro provenienza.</span>
+      </a>
     </nav>
 
-    <!-- PANNELLO CONTESTUALE — vuoto qui: in Home lo riempie `storico.js` con «Nuova
-         conversazione» e l'elenco per data (CONTRATTO-shell.md §4). -->
-    <div class="pannello" id="shell-pannello" aria-label="Pannello contestuale"></div>
-
-    <div class="sidebar-piede">
-      <a class="azione" href="aiuto.html">Aiuto</a>
-      <button class="azione" type="button" id="shell-esci">Esci</button>
-      <p class="privacy">Non conserva dati personali.</p>
-    </div>
-  </aside>
-
-  <div class="area">
-    <button class="menu-bottone" type="button" id="shell-menu" aria-expanded="false" aria-controls="sidebar">Menu</button>
-
-    <main class="contenuto" id="contenuto">
-
-      <!-- ======================================================== HOME — la chat ==============
-           Gli stati sono cinque e vivono in `chat.js` (§4.1.1 del piano). Il markup qui è la
-           forma di **tutti** gli stati: chi li accende e li spegne è il modulo, con una classe
-           sul contenitore. Lo stato di partenza è `chat-vuota` (S0): compositore centrato,
-           suggerimenti visibili, nessun turno. -->
-
-      <div class="chat" id="chat" data-stato="vuota">
-
-        <!-- Righe di stato: `aria-live` perché compaiono senza che nessuno abbia mosso il focus.
-             Vuote all'avvio e `hidden`: una regione live vuota non si annuncia, ed è quello che
-             si vuole — la Home appena aperta non deve dire niente. -->
-        <p class="chat-avviso" id="chat-avviso" role="status" aria-live="polite" hidden></p>
-
-        <!-- Testa della conversazione riaperta (S5): la data del **primo** turno («Conversazione
-             del 15/09/2026, 11:42 · Santa Spazio Culturale»). Compare solo con `?c=<id>`. -->
-        <p class="chat-aperta" id="chat-aperta" hidden></p>
-
-        <!-- S0 — titolo e sottotitolo dello stato vuoto. -->
-        <div class="chat-testa" id="chat-testa">
-          <h1 class="titolo-pagina">La domanda della persona allo sportello</h1>
-          <p class="chat-sotto">Senza nomi e senza dati personali: servono solo il bisogno e la zona.</p>
-        </div>
-
-        <!-- I turni. `aria-live="polite"` sulla colonna: il turno dell'assistente arriva senza che
-             l'operatore abbia toccato niente, e chi usa un lettore di schermo deve sentirlo. -->
-        <div class="chat-turni" id="chat-turni" aria-live="polite" aria-label="Conversazione"></div>
-
-        <!-- S0 — i suggerimenti. Sono `<button>` e non collegamenti: riempiono il compositore e
-             inviano, non portano altrove. Sei, dalle user stories; due portano il nome della Casa
-             della sessione e lo ricevono da `chat.js` (`{casa}` è il segnaposto). -->
-        <div class="chat-suggerimenti" id="chat-suggerimenti" aria-label="Domande di esempio">
-          <p class="chat-suggerimenti-testa">Esempi di domanda</p>
-          <div class="chat-suggerimenti-elenco">
-            <button class="suggerimento" type="button" data-domanda="Dove si fa l'ISEE vicino a La Rosa?">Dove si fa l'ISEE vicino a La Rosa?</button>
-            <button class="suggerimento" type="button" data-domanda="Bar vicino a {casa} aperti adesso?">Bar vicino a {casa} aperti adesso?</button>
-            <button class="suggerimento" type="button" data-domanda="Una persona sola cerca qualcuno con cui parlare: dove?">Una persona sola cerca qualcuno con cui parlare: dove?</button>
-            <button class="suggerimento" type="button" data-domanda="Farmacia di turno vicino a Tuturano">Farmacia di turno vicino a Tuturano</button>
-            <button class="suggerimento" type="button" data-domanda="Eventi oggi a {casa}">Eventi oggi a {casa}</button>
-            <button class="suggerimento" type="button" data-domanda="Laboratori per bambini questa settimana?">Laboratori per bambini questa settimana?</button>
-          </div>
-        </div>
-
-        <!-- Il compositore: uguale nei cinque stati, cambia **dove sta** — centrato in S0,
-             agganciato in fondo da S1 in poi. La classe sta sul contenitore `.chat`, non qui:
-             è lo stato della pagina, non una proprietà del campo. -->
-        <form class="compositore" id="chat-compositore" novalidate>
-          <label class="chat-etichetta" for="chat-testo">La domanda della persona</label>
-          <textarea class="chat-campo" id="chat-testo" name="messaggio" rows="3" maxlength="2000"
-                    aria-describedby="chat-aiuto"></textarea>
-          <p class="chat-aiuto" id="chat-aiuto">Si può scrivere il bisogno e la zona. Nomi, telefoni, email e codici fiscali non sono ammessi.</p>
-          <div class="riga chat-azioni">
-            <button class="bottone bottone--principale" type="submit" id="chat-chiedi">Chiedi</button>
-            <p class="chat-contatore" id="chat-contatore" aria-live="off">0/2000</p>
-          </div>
-        </form>
-
+    <!-- L'ASSISTENTE — vive su Onyx. Qui solo il rimando: Trasi non ha una chat propria. -->
+    <section class="blocco filetto filetto--spento" aria-labelledby="home-assistente-titolo">
+      <div class="blocco-testa">
+        <h2 class="home-titolo" id="home-assistente-titolo">L'assistente della rete</h2>
       </div>
+      <p class="home-testo">La conversazione con l'assistente vive su Onyx, con le credenziali della rete. Risponde con luogo, orari e fonte, dalla stessa memoria che queste pagine mostrano. Nella conversazione non entrano dati personali.</p>
+      <p class="riga"><a class="azione" href="https://onyx.lascuolaopensource.org/" rel="noopener">Onyx, l'assistente della rete</a></p>
+    </section>
 
-    </main>
   </div>
-</div>
 
-<!-- `shell.js` **prima**: espone `window.Trasi` (sessione, `api()`, pannello), e senza quello né
-     `chat.js` né `storico.js` possono funzionare. L'ordine è contratto, non preferenza. -->
-<script src="assets/shell.js?v=3"></script>
-<script src="assets/chat.js?v=3"></script>
-<script src="assets/storico.js?v=3"></script>
+</main>
+
+<footer class="piede">
+  <p class="privacy">Non conserva dati personali.</p>
+</footer>
+
+<!-- `shell.js` **prima**: espone `window.Trasi` (sessione, `api()`, `rigaCoda()`), e senza quello
+     `home.js` non può funzionare. L'ordine è contratto, non preferenza. -->
+<script src="assets/shell.js?v=4"></script>
+<script src="assets/home.js?v=4"></script>
 </body>
 </html>

@@ -6,8 +6,8 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — Account della Casa</title>
 <meta name="description" content="Trasi: i numeri, la coda delle proposte, il registro e le funzioni della Casa di Quartiere.">
-<link rel="stylesheet" href="assets/struttura.css?v=3">
-<link rel="stylesheet" href="assets/veste.css?v=3">
+<link rel="stylesheet" href="assets/struttura.css?v=4">
+<link rel="stylesheet" href="assets/veste.css?v=4">
 <style>
   /* Veste locale della pagina Account (prefisso `acc-`): non è shell, quindi sta qui e non in
      `struttura.css`. Struttura dello scheletro: la sotto-navigazione è una fascia di parole, e la
@@ -22,12 +22,12 @@
 </head>
 <body>
 <!-- ============================================================================
-     ACCOUNT DELLA CASA — pagina SINGOLA, otto viste (D7).
+     ACCOUNT DELLA CASA — pagina SINGOLA, sette viste (D7).
 
      La pagina è una; le sezioni sono frammenti caricati in `#acc-vista` una alla volta, secondo
-     `CONTRATTO-shell.md` §5. Perché una sola pagina e non otto file: la sotto-navigazione, la riga
-     di presenza della coda e il pannello contestuale della sidebar sono gli stessi in tutte le
-     sezioni; con otto documenti sarebbero otto copie della stessa testata.
+     `CONTRATTO-shell.md` §5. Perché una sola pagina e non sette file: la sotto-navigazione e la
+     riga di presenza della coda sono le stesse in tutte le sezioni; con sette documenti sarebbero
+     sette copie della stessa testata.
 
      Gli id delle sezioni sono prefissati `acc-<nome>-…`, così due sezioni scritte da persone
      diverse non possono collidere. I frammenti sono **solo markup**: `<script>` dentro `innerHTML`
@@ -35,75 +35,67 @@
      ============================================================================ -->
 <a class="salta" href="#contenuto">Salta al contenuto</a>
 
-<div class="guscio">
-  <aside class="sidebar" id="sidebar" aria-label="Navigazione e pannello">
-    <div class="sidebar-testata">
-      <p class="marchio">TRASI</p>
-      <p class="casa-nome" id="shell-casa">accesso in corso…</p>
-      <p class="casa-zona" id="shell-zona"></p>
-    </div>
-
-    <nav class="nav" aria-label="Destinazioni">
-      <a class="nav-voce" href="home.html">Chiedi</a>
-      <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
-      <a class="nav-voce" href="account.html">Account</a>
-    </nav>
-
-    <!-- Pannello contestuale: in Account è la chat compatta (D6), popolata da `TrasiChat.renderCompatta`. -->
-    <div class="pannello" id="shell-pannello" aria-label="Pannello contestuale"></div>
-
-    <div class="sidebar-piede">
-      <a class="azione" href="aiuto.html">Aiuto</a>
-      <button class="azione" type="button" id="shell-esci">Esci</button>
-      <p class="privacy">Non conserva dati personali.</p>
-    </div>
-  </aside>
-
-  <div class="area">
-    <button class="menu-bottone" type="button" id="shell-menu" aria-expanded="false" aria-controls="sidebar">Menu</button>
-
-    <main class="contenuto" id="contenuto">
-      <h1 class="titolo-pagina">Account · <span id="acc-casa">…</span></h1>
-
-      <!-- Le otto sezioni di D7, in parole. Non sono icone e non sono schede: sono collegamenti,
-           così l'indirizzo porta a una sezione precisa (`account.html#proposte`) e si può
-           condividerlo. `aria-current` dichiara quale è aperta. -->
-      <nav class="acc-sottonav" aria-label="Sezioni dell'account">
-        <a href="#la-casa">La Casa</a>
-        <a href="#numeri">Numeri</a>
-        <a href="#proposte">Proposte</a>
-        <a href="#registra">Registra</a>
-        <a href="#attrezzoteca">Attrezzoteca</a>
-        <a href="#messaggi">Messaggi</a>
-        <a href="#conversazioni">Conversazioni</a>
-        <a href="#impostazioni">Impostazioni</a>
-      </nav>
-
-      <!-- RIGA DI PRESENZA DELLA CODA (AvvisoCoda): è l'unica cosa che cambia da sola in questa
-           pagina, quindi sta in testa e si legge prima di scegliere una sezione. Filetto terracotta,
-           mai rosso, nessun imperativo, nessuna scadenza. Distingue DUE fatti diversi, e la
-           distinzione è il punto (gate G-05): le proposte che questa Casa può decidere, e quelle che
-           la riguardano ma la cui decisione è di altri (l'AT). -->
-      <div class="acc-coda filetto" id="acc-coda" role="status" aria-live="polite" hidden></div>
-
-      <div class="acc-vista" id="acc-vista">
-        <p class="acc-attesa">Lettura in corso…</p>
-      </div>
-    </main>
+<header class="testata">
+  <div class="testata-casa">
+    <p class="marchio">TRASI</p>
+    <p class="casa-nome" id="shell-casa">accesso in corso…</p>
+    <p class="casa-zona" id="shell-zona"></p>
   </div>
-</div>
 
-<script src="assets/shell.js?v=3"></script>
-<script src="assets/account.js?v=3"></script>
+  <nav class="nav" aria-label="Destinazioni">
+    <a class="nav-voce" href="home.html">Home</a>
+    <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
+    <a class="nav-voce" href="account.html">Account</a>
+  </nav>
+
+  <div class="testata-azioni">
+    <a class="azione" href="aiuto.html">Aiuto</a>
+    <button class="azione" type="button" id="shell-esci">Esci</button>
+  </div>
+</header>
+
+<main class="contenuto" id="contenuto">
+  <h1 class="titolo-pagina">Account · <span id="acc-casa">…</span></h1>
+
+  <!-- Le sette sezioni di D7, in parole. Non sono icone e non sono schede: sono collegamenti,
+       così l'indirizzo porta a una sezione precisa (`account.html#proposte`) e si può
+       condividerlo. `aria-current` dichiara quale è aperta. -->
+  <nav class="acc-sottonav" aria-label="Sezioni dell'account">
+    <a href="#la-casa">La Casa</a>
+    <a href="#numeri">Numeri</a>
+    <a href="#proposte">Proposte</a>
+    <a href="#registra">Registra</a>
+    <a href="#attrezzoteca">Attrezzoteca</a>
+    <a href="#messaggi">Messaggi</a>
+    <a href="#impostazioni">Impostazioni</a>
+  </nav>
+
+  <!-- RIGA DI PRESENZA DELLA CODA (AvvisoCoda): è l'unica cosa che cambia da sola in questa
+       pagina, quindi sta in testa e si legge prima di scegliere una sezione. Filetto terracotta,
+       mai rosso, nessun imperativo, nessuna scadenza. Distingue DUE fatti diversi, e la
+       distinzione è il punto (gate G-05): le proposte che questa Casa può decidere, e quelle che
+       la riguardano ma la cui decisione è di altri (l'AT). Il testo lo compone `shell.js`. -->
+  <div class="acc-coda" id="acc-coda" role="status" aria-live="polite" hidden></div>
+
+  <div class="acc-vista" id="acc-vista">
+    <p class="acc-attesa">Lettura in corso…</p>
+  </div>
+</main>
+
+<footer class="piede">
+  <p class="privacy">Non conserva dati personali.</p>
+</footer>
+
+<script src="assets/shell.js?v=4"></script>
+<script src="assets/account.js?v=4"></script>
 <!-- Moduli delle sezioni. Si caricano da qui e **non** dai frammenti: `<script>` dentro `innerHTML`
      non viene eseguito, quindi una sezione non può portarsi dietro il proprio codice. Ognuno
      registra il proprio avvio in `window.TrasiAccount.avvii["<sezione>"]` e crea il registro se
      manca: l'ordine rispetto ad `account.js` è indifferente. -->
-<script src="assets/grafici.js?v=3"></script>
-<script src="assets/registra.js?v=3"></script>
-<script src="assets/attrezzoteca-op.js?v=3"></script>
-<script src="assets/messaggi-op.js?v=3"></script>
-<script src="assets/conversazioni-op.js?v=3"></script>
-<script src="assets/impostazioni-op.js?v=3"></script>
+<script src="assets/grafici.js?v=4"></script>
+<script src="assets/registra.js?v=4"></script>
+<script src="assets/attrezzoteca-op.js?v=4"></script>
+<script src="assets/messaggi-op.js?v=4"></script>
+<script src="assets/impostazioni-op.js?v=4"></script>
 </body>
 </html>

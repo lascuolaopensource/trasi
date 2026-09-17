@@ -188,22 +188,13 @@ def crea_app() -> FastAPI:
 
     applicazione.include_router(auth.router, include_in_schema=False)
 
-    # La chat (proxy server-to-server verso Onyx) è montata con lo stesso criterio degli altri;
-    # se il modulo non è ancora presente, il resto dell'area operatore continua a funzionare.
-    try:
-        from . import chat
-
-        chat.monta(applicazione)
-    except ImportError:  # pragma: no cover — il modulo nasce con la scheda !NEW 6
-        logger.warning("chat non montata: shim/app/chat.py assente")
-
     applicazione.include_router(attrezzoteca.router, prefix="/op", include_in_schema=False)
     applicazione.include_router(messaggi.router, prefix="/op", include_in_schema=False)
 
     # --- Router dell'area operatore nati col cantiere UX (schede Home / Osservatorio / Account) -----
     #
     # Ogni modulo espone un `router` **e** una funzione `monta(applicazione)` che dichiara il proprio
-    # prefisso: è la convenzione già usata da `chat.py` e `testi.py`, e serve a una cosa sola —
+    # prefisso: è la convenzione già usata da `testi.py`, e serve a una cosa sola —
     # chi possiede il modulo possiede anche il modo in cui si monta, quindi chi aggiunge una rotta non
     # deve toccare questo file. `main.py` non conosce i path: conosce i moduli.
     #
@@ -212,7 +203,7 @@ def crea_app() -> FastAPI:
     # scritto impedirebbe l'avvio dell'intero shim — cioè il lavoro degli altri si fermerebbe per il
     # ritardo di uno. Il rischio opposto (un modulo che *dovrebbe* esserci e non c'è) è coperto dal
     # `warning`: chi guarda i log lo vede, e non fallisce in silenzio.
-    for _nome in ("conversazioni_op", "mappa_op", "poi_op", "eventi_op", "servizi_op",
+    for _nome in ("mappa_op", "poi_op", "eventi_op", "servizi_op",
                   "biglietto_op", "proposte_op", "casa_op", "decisione_op",
                   "statistiche_op", "proponi_op", "eventi_scrittura", "oggi_op"):
         try:
@@ -231,7 +222,7 @@ def crea_app() -> FastAPI:
         # errore vero, e deve restare visibile.
         #
         # **Due convenzioni accettate, e nessuna delle due è un ripiego.** `monta(applicazione)` è la
-        # forma di `chat.py` e `testi.py`: il modulo dichiara il proprio prefisso. `router` nudo è la
+        # forma di `testi.py`: il modulo dichiara il proprio prefisso. `router` nudo è la
         # forma di `attrezzoteca.py` e `messaggi.py`, che `main.py` include con `prefix="/op"`.
         # Entrambe esistono già in questo repository, e i moduli di questo cantiere sono nati con
         # l'una o con l'altra a seconda di chi li ha scritti: rifiutarne una significherebbe che metà

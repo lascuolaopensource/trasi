@@ -248,7 +248,7 @@
 
     if (!proposte.length) {
       /* Coda vuota: il testo è quello di `AvvisoCoda.prompt.md`, riusato alla lettera. Il nome della
-       * Casa arriva da `Trasi.nomeCasa()`, che è la stessa fonte della testata della sidebar: due
+       * Casa arriva da `Trasi.nomeCasa()`, che è la stessa fonte della testata della pagina: due
        * nomi diversi nella stessa pagina sarebbero un difetto visibile. */
       if (vuoto) {
         vuoto.textContent = "Nessuna proposta in attesa a " + (window.Trasi.nomeCasa() || "questa Casa") + ".";

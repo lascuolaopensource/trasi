@@ -2,8 +2,8 @@
  *
  * Perché un file separato invece che dentro `account.html`: quella pagina è di Main, e la regola del
  * cantiere è «un file, un proprietario». `CONTRATTO-shell.md` §3 prevede esattamente questo caso —
- * «ogni bot può aggiungere classi **proprie** con prefisso della pagina (`chat-`, `mappa-`, `acc-`,
- * `storico-`) nel proprio file CSS». I prefissi qui sono `acc-casa-` e `acc-proposte-`, cioè
+ * «ogni bot può aggiungere classi **proprie** con prefisso della pagina (`home-`, `mappa-`, `acc-`)
+ * nel proprio file CSS». I prefissi qui sono `acc-casa-` e `acc-proposte-`, cioè
  * `acc-<sezione>-`, la stessa forma degli id: due sezioni scritte da persone diverse non possono
  * collidere, né sugli id né sulle classi.
  *

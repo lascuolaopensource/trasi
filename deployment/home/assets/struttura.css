@@ -7,7 +7,7 @@
  *
  * Contratto: le classi qui elencate sono quelle di `CONTRATTO-shell.md` §3. Chi costruisce
  * una pagina le usa; chi ha bisogno di classi proprie le prefissa con il nome della pagina
- * (`chat-`, `mappa-`, `acc-`, `storico-`) e le mette in un file suo.
+ * (`home-`, `mappa-`, `acc-`) e le mette in un file suo.
  */
 
 /* ============================================================ base */
@@ -18,36 +18,38 @@ body { margin: 0; }
 
 /* Bersagli tattili e misure di lettura */
 :root {
-  --shell-sidebar: 18rem;
   --shell-bersaglio: 44px;
   --shell-passo: 4px;
   --shell-colonna: 62rem;
   --shell-testo: 36rem;
 }
 
-/* ============================================================ guscio */
-.guscio {
-  display: grid;
-  grid-template-columns: var(--shell-sidebar) minmax(0, 1fr);
-  min-height: 100vh;
-}
+/* ============================================================ guscio: testata, contenuto, piede */
+body { min-height: 100vh; display: flex; flex-direction: column; }
 
-.sidebar {
+/* La testata è una riga: Casa a sinistra, destinazioni al centro, azioni a destra. Sotto
+   40 rem va a capo da sola (flex-wrap): niente «Menu», niente stato aperto/chiuso. */
+.testata {
   display: flex;
-  flex-direction: column;
-  gap: var(--shell-passo);
-  padding: calc(var(--shell-passo) * 5);
-  border-right-width: var(--filetto, 1px);
-  border-right-style: solid;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--shell-passo) * 3) calc(var(--shell-passo) * 6);
+  padding: calc(var(--shell-passo) * 3) calc(var(--shell-passo) * 6);
+  border-bottom-width: var(--filetto, 1px);
+  border-bottom-style: solid;
 }
-
-.area { min-width: 0; }              /* senza questo la griglia non scende sotto il contenuto */
+.testata-casa { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 calc(var(--shell-passo) * 3); min-width: 0; }
+.testata-azioni { display: flex; align-items: center; gap: calc(var(--shell-passo) * 2); margin-left: auto; }
 
 .contenuto {
+  flex: 1;
+  width: 100%;
   max-width: var(--shell-colonna);
   padding: calc(var(--shell-passo) * 6);
   margin: 0 auto;
 }
+
+.piede { padding: calc(var(--shell-passo) * 3) calc(var(--shell-passo) * 6); border-top-width: var(--filetto, 1px); border-top-style: solid; }
 
 /* Salta al contenuto: primo elemento focalizzabile, visibile col focus */
 .salta {
@@ -58,14 +60,13 @@ body { margin: 0; }
 }
 .salta:focus { left: 0; top: 0; }
 
-/* ============================================================ testata sidebar */
-.sidebar-testata { display: flex; flex-direction: column; gap: var(--shell-passo); }
+/* ============================================================ testata: marchio e Casa */
 .marchio { margin: 0; letter-spacing: 0.12em; }
 .casa-nome { margin: 0; }
-.casa-zona { margin: 0; }
+.casa-zona { margin: 0; flex-basis: 100%; }
 
 /* ============================================================ navigazione */
-.nav { display: flex; flex-direction: column; gap: calc(var(--shell-passo) / 2); margin: calc(var(--shell-passo) * 3) 0; }
+.nav { display: flex; flex-wrap: wrap; gap: calc(var(--shell-passo) / 2); }
 .nav-voce {
   display: flex;
   align-items: center;
@@ -75,14 +76,8 @@ body { margin: 0; }
 }
 .nav-voce[aria-current="page"] { font-weight: 700; }
 
-/* ============================================================ pannello contestuale */
-.pannello { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: calc(var(--shell-passo) * 3); }
-.pannello-testa { display: flex; flex-direction: column; gap: var(--shell-passo); }
-.pannello-corpo { flex: 1; min-height: 0; overflow-y: auto; }
-
-/* ============================================================ piede sidebar */
-.sidebar-piede { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--shell-passo) * 3); margin-top: calc(var(--shell-passo) * 4); }
-.privacy { flex-basis: 100%; margin: 0; }
+/* ============================================================ piede */
+.privacy { margin: 0; }
 
 /* ============================================================ bottoni e azioni */
 .azione, .bottone {
@@ -99,8 +94,6 @@ body { margin: 0; }
 }
 .bottone--quieto { border-color: transparent; }
 
-/* Menu: esiste solo sotto 62 rem */
-.menu-bottone { display: none; }
 
 /* ============================================================ contenuto */
 .titolo-pagina { margin-top: 0; }
@@ -129,17 +122,11 @@ body { margin: 0; }
 .tabella th, .tabella td { text-align: left; padding: calc(var(--shell-passo) * 2); border-bottom-width: 1px; border-bottom-style: solid; }
 
 /* ============================================================ breakpoint */
-@media (max-width: 62rem) {
-  .guscio { grid-template-columns: minmax(0, 1fr); }
-  .sidebar { position: fixed; inset: 0 auto 0 0; width: var(--shell-sidebar); max-width: 85vw; z-index: 5; overflow-y: auto; }
-  .sidebar[hidden] { display: none; }
-  .menu-bottone { display: inline-flex; align-items: center; min-height: var(--shell-bersaglio); margin: calc(var(--shell-passo) * 4) 0 0 calc(var(--shell-passo) * 6); }
-  .contenuto { padding-top: calc(var(--shell-passo) * 4); }
-}
-
 @media (max-width: 40rem) {
-  .contenuto { padding-left: calc(var(--shell-passo) * 4); padding-right: calc(var(--shell-passo) * 4); }
-  .menu-bottone { margin-left: calc(var(--shell-passo) * 4); }
+  .testata { padding-left: calc(var(--shell-passo) * 4); padding-right: calc(var(--shell-passo) * 4); }
+  .testata-azioni { margin-left: 0; }
+  .contenuto { padding: calc(var(--shell-passo) * 4); }
+  .piede { padding-left: calc(var(--shell-passo) * 4); padding-right: calc(var(--shell-passo) * 4); }
 }
 
 /* ============================================================ movimento */

@@ -219,10 +219,8 @@ body {
 :focus-visible { outline-offset: 2px; }
 
 /* ------------------------------------------------------------ guscio */
-.sidebar {
-  background: var(--superficie);
-  border-right-color: var(--bordo-tenue);
-}
+.testata { background: var(--superficie); border-bottom-color: var(--bordo-tenue); }
+.piede { background: var(--superficie); border-top-color: var(--bordo-tenue); }
 .marchio { font-weight: 700; color: var(--testo); }
 .casa-nome { font-size: var(--t-corpo-grande, 1.0625rem); font-weight: 600; }
 .casa-zona { font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
@@ -275,10 +273,3 @@ body {
 .tabella { font-size: var(--t-corpo, 1rem); }
 .tabella th { color: var(--testo-tenue); font-size: var(--t-minuto, 0.9375rem); border-bottom-color: var(--bordo-tenue); }
 .tabella td { border-bottom-color: var(--bordo-tenue); }
-
-/* ------------------------------------------------------------ menu mobile */
-.menu-bottone {
-  background: var(--superficie); color: var(--azione);
-  border: var(--contorno, 2px) solid var(--bordo); border-radius: var(--raggio, 10px);
-  padding: 0 calc(var(--s-4, 16px)); font: inherit; cursor: pointer;
-}

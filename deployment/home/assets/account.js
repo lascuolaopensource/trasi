@@ -15,7 +15,7 @@
   "use strict";
 
   var SEZIONI = ["la-casa", "numeri", "proposte", "registra", "attrezzoteca",
-                 "messaggi", "conversazioni", "impostazioni"];
+                 "messaggi", "impostazioni"];
   var PREDEFINITA = "la-casa";
 
   var vista = document.getElementById("acc-vista");
@@ -124,62 +124,10 @@
   var AVVII = {};
   window.TrasiAccount = { avvii: AVVII, ricarica: function () { carica(sezioneRichiesta(), true); } };
 
-  /* ---------------------------------------------------------------- riga di presenza della coda */
-
-  /* Due fatti distinti, e la differenza è il punto del gate G-05:
-   *   - `decidibile > 0`  → «N proposte aspettano una decisione a <Casa>»  → pulsanti attivi in #proposte
-   *   - `nonDecidibile>0` → «N proposte riguardano la Casa e la decisione è di <chi>»
-   * Con TUTTE le proposte non decidibili NON si dice «nessuna proposta in attesa»: sarebbe falso, ed
-   * è il difetto che questo blocco esiste per evitare (una coda che sembra vuota mentre c'è dentro
-   * una decisione che aspetta qualcun altro). */
-  function rigaCoda(proposte, nomeCasa) {
-    var contenitore = document.getElementById("acc-coda");
-    if (!contenitore) return;
-    if (!proposte || !proposte.length) {
-      contenitore.className = "acc-coda filetto filetto--spento";
-      contenitore.textContent = "Nessuna proposta in attesa a " + nomeCasa + ".";
-      contenitore.hidden = false;
-      return;
-    }
-    var decidibili = proposte.filter(function (p) { return p.decidibile; });
-    var altrui = proposte.filter(function (p) { return !p.decidibile; });
-    var piuVecchia = proposte.reduce(function (a, p) {
-      return (a === null || (p.eta_giorni || 0) > (a.eta_giorni || 0)) ? p : a;
-    }, null);
-
-    var testo;
-    if (decidibili.length) {
-      testo = decidibili.length + (decidibili.length === 1 ? " proposta aspetta" : " proposte aspettano") +
-              " una decisione a " + nomeCasa;
-      if (piuVecchia && piuVecchia.eta_giorni > 0) {
-        testo += " · la più vecchia da " + piuVecchia.eta_giorni +
-                 (piuVecchia.eta_giorni === 1 ? " giorno" : " giorni");
-      }
-    } else {
-      // La decisione è di altri: si dichiara chi, senza chiedere niente a chi legge.
-      var chi = altrui[0].chi_decide === "at" ? "AT" : altrui[0].chi_decide;
-      testo = altrui.length + (altrui.length === 1 ? " proposta riguarda" : " proposte riguardano") +
-              " la Casa e la decisione è di " + chi;
-    }
-
-    contenitore.className = "acc-coda filetto " + (decidibili.length ? "filetto--coda" : "filetto--attenzione");
-    contenitore.textContent = testo;
-    contenitore.hidden = false;
-  }
-
-  /* ---------------------------------------------------------------- avvio */
-
-  function caricaCoda(nomeCasa) {
+  /* La riga di presenza della coda è di `shell.js` (`Trasi.rigaCoda`): stesso testo in Home e qui. */
+  function caricaCoda() {
     if (!window.Trasi) return;
-    window.Trasi.api("/op/proposte").then(function (dati) {
-      rigaCoda((dati && dati.proposte) || [], nomeCasa);
-    }).catch(function () {
-      /* Se la lettura fallisce, la riga **sparisce** invece di dire «nessuna proposta»: non sapendo
-       * quante ne aspettano, affermare che non ce ne sono sarebbe un'informazione falsa — ed è la
-       * stessa scelta già fatta dalla Home attuale (`deployment/home/WCAG.md` § 3.3.1). */
-      var c = document.getElementById("acc-coda");
-      if (c) c.hidden = true;
-    });
+    window.Trasi.rigaCoda(document.getElementById("acc-coda"));
   }
 
   nav.addEventListener("click", function (ev) {
@@ -200,7 +148,7 @@
       var nome = window.Trasi.nomeCasa();
       var etichetta = document.getElementById("acc-casa");
       if (etichetta) etichetta.textContent = nome;
-      caricaCoda(nome);
+      caricaCoda();
     });
   }
 })();

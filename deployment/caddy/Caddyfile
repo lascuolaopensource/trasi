@@ -92,9 +92,14 @@ http://{$TRASI_DOMAIN} {
 		}
 	}
 
-  # La vecchia interfaccia non è più pubblicata: i segnalibri ricevono 410, non una pagina diversa.
-  @legacy path /operatore.html /operatore.js /home.js /style.css /assets/operatore.js
-  respond @legacy 410
+  # La vecchia interfaccia e la chat non sono più pubblicate: i segnalibri ricevono 410, non una
+  # pagina diversa. Dentro un `handle`, non un `respond` nudo: le direttive `handle` si valutano
+  # per specificità del percorso, quindi questo vince sul `handle` generico della Home; un
+  # `respond` da solo verrebbe dopo `file_server`, che risponde 404 prima (misurato).
+  @legacy path /operatore.html /operatore.js /home.js /style.css /assets/operatore.js /assets/chat.js /assets/chat.css /assets/storico.js /assets/conversazioni-op.js /account/conversazioni.html
+  handle @legacy {
+    respond 410
+  }
 
   # Trasi Home: sito statico servito da ./home (popolato dal blocco B6/UX).
   # `no-cache` non vieta di conservare: obbliga a **rivalidare** (l'ETag di file_server

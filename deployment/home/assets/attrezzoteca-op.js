@@ -28,8 +28,7 @@
  * (US-5.1) — è **chiedere** in prestito, e la richiesta si fa parlando con la Casa che li ha: qui si
  * dichiara chi è, invece di mostrare un pulsante che risponde「non puoi」.
  *
- * «Tu» di `operatore.js` diventa «OPERATORE»: la prima persona non è ammessa nei testi, e il nome del
- * ruolo è già quello che il turno della chat usa (`design/components/chat/MessaggioChat`).
+ * «Tu» di `operatore.js` diventa «OPERATORE»: la prima persona non è ammessa nei testi.
  */
 (function () {
   "use strict";

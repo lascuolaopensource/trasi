@@ -220,7 +220,7 @@ async def op_mappa(sess: SessioneOperatore = Depends(sessione_corrente)) -> dict
 
 
 def monta(applicazione: FastAPI) -> None:
-    """Monta il router sotto `/op`, **fuori** dal documento OpenAPI (come `chat.py`, `testi.py`, `attrezzoteca.py`).
+    """Monta il router sotto `/op`, **fuori** dal documento OpenAPI (come `testi.py`, `attrezzoteca.py`).
 
     Il prefisso è quello che il browser chiama (`/api/shim/op/mappa`, con Caddy che toglie `/api/shim`), e
     `include_in_schema=False` non è una formalità: lo schema che FastAPI genera è il contratto congelato con Onyx, e il

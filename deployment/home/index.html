@@ -6,11 +6,11 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — accesso della Casa</title>
 <meta name="description" content="Trasi: accesso dell'operatore con le credenziali della Casa di Quartiere.">
-<link rel="stylesheet" href="assets/struttura.css?v=3">
-<link rel="stylesheet" href="assets/veste.css?v=3">
+<link rel="stylesheet" href="assets/struttura.css?v=4">
+<link rel="stylesheet" href="assets/veste.css?v=4">
 <style>
   /* Veste locale della sola schermata di accesso: non è shell (qui non c'è ancora una sessione,
-     quindi non c'è sidebar). Tre regole, e stanno qui perché non servono a nessun'altra pagina. */
+     quindi non c'è testata). Tre regole, e stanno qui perché non servono a nessun'altra pagina. */
   .accesso { max-width: 32rem; margin: 0 auto; padding: calc(var(--shell-passo) * 12) calc(var(--shell-passo) * 6); }
   .accesso .blocco { gap: calc(var(--shell-passo) * 4); }
   .accesso label { display: block; }
@@ -32,10 +32,9 @@
      ACCESSO DELLA CASA (D4: un account per Casa, US-6.1)
 
      Questa è l'unica pagina senza shell: prima del login non c'è né Casa né sessione, quindi
-     non c'è sidebar da mostrare. Se la sessione è già aperta, la pagina manda alla Home.
+     non c'è testata da mostrare. Se la sessione è già aperta, la pagina manda alla Home.
 
-     `401` da qualunque chiamata porta qui; il testo digitato nel compositore della chat vive in
-     memoria (mai `localStorage`, V5) e viene ritrovato al ritorno — vedi `assets/chat.js`.
+     `401` da qualunque chiamata porta qui.
      ============================================================================ -->
 <main class="accesso">
 

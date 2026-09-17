@@ -319,14 +319,13 @@
 
   /* ------------------------------------------------------------------ apri / chiudi */
 
-  /* `Esc` chiude **solo** se la scheda è aperta: la stessa chiave è usata da `shell.js` per la
-   * sidebar a scomparsa, e disattivarla qui lascerebbe un `Esc` che non fa nulla su una pagina in
-   * cui la sidebar non è aperta. */
+  /* `Esc` chiude **solo** se la scheda è aperta: su una pagina senza scheda aperta il tasto non
+   * deve fare nulla, e non si intercetta. */
   function alTasto(evento) {
     if (evento.key !== "Escape") { return; }
     if (!pannello || pannello.hidden) { return; }
     /* Se il focus è dentro la scheda — o non è in nessun punto preciso — `Esc` chiude la scheda.
-     * Se invece è nella sidebar, `shell.js` ha già fatto il suo lavoro e non si interferisce. */
+     * Se è in un altro controllo della pagina, quel controllo tiene il suo `Esc`. */
     var dentro = pannello.contains(document.activeElement);
     var fuori = !document.activeElement || document.activeElement === document.body;
     if (dentro || fuori) {

@@ -5,40 +5,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <title>Trasi — Aiuto</title>
-<meta name="description" content="Come funziona Trasi, come si leggono le fonti e cosa non entra nella chat.">
-<link rel="stylesheet" href="assets/struttura.css?v=3">
-<link rel="stylesheet" href="assets/veste.css?v=3">
-<link rel="stylesheet" href="assets/aiuto.css?v=3">
+<meta name="description" content="Come funziona Trasi, come si leggono le fonti e dove vive l'assistente della rete.">
+<link rel="stylesheet" href="assets/struttura.css?v=4">
+<link rel="stylesheet" href="assets/veste.css?v=4">
+<link rel="stylesheet" href="assets/aiuto.css?v=4">
 </head>
 <body>
 <a class="salta" href="#contenuto">Salta al contenuto</a>
 
-<div class="guscio">
-  <aside class="sidebar" id="sidebar" aria-label="Navigazione e pannello">
-    <div class="sidebar-testata">
-      <p class="marchio">TRASI</p>
-      <p class="casa-nome" id="shell-casa">accesso in corso…</p>
-      <p class="casa-zona" id="shell-zona"></p>
-    </div>
+<header class="testata">
+  <div class="testata-casa">
+    <p class="marchio">TRASI</p>
+    <p class="casa-nome" id="shell-casa">accesso in corso…</p>
+    <p class="casa-zona" id="shell-zona"></p>
+  </div>
 
-    <nav class="nav" aria-label="Destinazioni">
-      <a class="nav-voce" href="home.html">Chiedi</a>
-      <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
-      <a class="nav-voce" href="account.html">Account</a>
-    </nav>
+  <nav class="nav" aria-label="Destinazioni">
+    <a class="nav-voce" href="home.html">Home</a>
+    <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
+    <a class="nav-voce" href="account.html">Account</a>
+  </nav>
 
-    <div class="pannello" id="shell-pannello" aria-label="Pannello contestuale"></div>
+  <div class="testata-azioni">
+    <a class="azione" href="aiuto.html" aria-current="page">Aiuto</a>
+    <button class="azione" type="button" id="shell-esci">Esci</button>
+  </div>
+</header>
 
-    <div class="sidebar-piede">
-      <a class="azione" href="aiuto.html" aria-current="page">Aiuto</a>
-      <button class="azione" type="button" id="shell-esci">Esci</button>
-      <p class="privacy">Non conserva dati personali.</p>
-    </div>
-  </aside>
-
-  <div class="area">
-    <button class="menu-bottone" type="button" id="shell-menu" aria-expanded="false" aria-controls="sidebar">Menu</button>
-    <main class="contenuto" id="contenuto">
+<main class="contenuto" id="contenuto">
       <article class="blocco aiuto-lettura">
         <div class="blocco-testa">
           <h1 class="titolo-pagina">Aiuto</h1>
@@ -47,7 +41,13 @@
 
         <section class="aiuto-sezione" aria-labelledby="aiuto-cosa">
           <h2 id="aiuto-cosa">Cosa fa Trasi</h2>
-          <p>Trasi è uno strumento per il lavoro allo sportello delle Case di Quartiere. La chat raccoglie una domanda sul bisogno e sulla zona, poi cerca una risposta nella memoria della rete. L'Osservatorio mostra i luoghi e le Case, con un elenco equivalente alla mappa. L'Account raccoglie i dati della Casa, le proposte e le altre funzioni della rete.</p>
+          <p>Trasi è uno strumento per il lavoro allo sportello delle Case di Quartiere. La Home dice cosa c'è oggi alla Casa e cosa aspetta una decisione. L'Osservatorio mostra i luoghi e le Case, con un elenco equivalente alla mappa. L'Account raccoglie i dati della Casa, le proposte, il registro, l'attrezzoteca e i messaggi fra le Case.</p>
+        </section>
+
+        <section class="aiuto-sezione" aria-labelledby="aiuto-assistente">
+          <h2 id="aiuto-assistente">L'assistente della rete</h2>
+          <p>La conversazione con l'assistente vive su <a href="https://onyx.lascuolaopensource.org/">Onyx</a>, con le credenziali della rete: da lì si chiede dove si fa una cosa, quali sono gli orari, cosa c'è oggi. Trasi non ha una chat propria. Le informazioni che l'assistente dà arrivano dalla stessa memoria della rete che queste pagine mostrano, con la stessa etichetta di provenienza.</p>
+          <p>Nella conversazione non entrano dati personali: nomi di persone, numeri di telefono, indirizzi email o codici fiscali. Restano sufficienti il bisogno, il servizio cercato e la zona.</p>
         </section>
 
         <section class="aiuto-sezione" aria-labelledby="aiuto-proposta">
@@ -65,15 +65,13 @@
           <p>La frase «Dati non disponibili: la memoria della rete non risponde in questo momento» significa che la lettura non ha ricevuto una risposta. Non significa che il dato non esista. La pagina mantiene le informazioni già leggibili e dichiara ciò che non può mostrare. È un'informazione, non un guasto.</p>
         </section>
 
-        <section class="aiuto-sezione" aria-labelledby="aiuto-chat">
-          <h2 id="aiuto-chat">Cosa non entra nella chat</h2>
-          <p>La chat non conserva dati personali. Non entrano nomi di persone, numeri di telefono, indirizzi email o codici fiscali. Restano sufficienti il bisogno, il servizio cercato e la zona. Quando una domanda contiene uno di questi dati, il sistema lo segnala e non la invia.</p>
-        </section>
       </article>
-    </main>
-  </div>
-</div>
+</main>
 
-<script src="assets/shell.js?v=3"></script>
+<footer class="piede">
+  <p class="privacy">Non conserva dati personali.</p>
+</footer>
+
+<script src="assets/shell.js?v=4"></script>
 </body>
 </html>

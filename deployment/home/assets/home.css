@@ -1,0 +1,35 @@
+/* home.css — le classi della Home (prefisso `home-`): la colonna dei blocchi, la griglia delle
+ * destinazioni, la riga di un evento. I colori vengono dai token di `veste.css` (`var(--…)`), mai
+ * scritti a mano: se X cambia la veste, questa pagina la segue senza essere toccata.
+ */
+
+.home { display: flex; flex-direction: column; gap: calc(var(--shell-passo) * 5); }
+
+.home-testa { margin-bottom: calc(var(--shell-passo) * 2); }
+.home-data { margin: 0; color: var(--testo-tenue); }
+
+.home-titolo { margin: 0; font-size: var(--t-corpo-grande, 1.0625rem); }
+.home-testo { margin: 0; max-width: var(--shell-testo); }
+
+/* Le righe di stato (coda, prestiti): filetto a sinistra, testo su una riga sola quando ci sta. */
+.home-riga { margin: 0; padding-top: var(--shell-passo); padding-bottom: var(--shell-passo); }
+
+.home-rimando { margin: 0; }
+.home-rimando a { color: var(--azione); }
+
+/* Gli eventi di oggi: ora tabellare, titolo, luogo sotto, badge su riga propria. */
+.home-evento { display: flex; flex-direction: column; gap: var(--shell-passo); }
+.home-evento-ora { font-variant-numeric: tabular-nums; color: var(--testo-tenue); min-width: 6ch; }
+.home-evento-titolo { font-weight: 600; }
+
+/* Le destinazioni: schede-collegamento in griglia fluida, tre per riga a 62 rem, una sotto 40 rem.
+ * Sono `<a class="blocco">`: la scheda intera è il bersaglio, e il nome è il testo del collegamento. */
+.home-destinazioni {
+  display: grid;
+  gap: calc(var(--shell-passo) * 3);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+}
+.home-destinazione { text-decoration: none; color: var(--testo); gap: var(--shell-passo); }
+.home-destinazione:hover { background: var(--azione-sfondo-hover); border-color: var(--bordo-forte); }
+.home-destinazione-nome { font-weight: 700; color: var(--azione); letter-spacing: var(--spaziatura-destinazione, 0.06em); }
+.home-destinazione-testo { color: var(--testo-tenue); font-size: var(--t-minuto, 0.9375rem); }

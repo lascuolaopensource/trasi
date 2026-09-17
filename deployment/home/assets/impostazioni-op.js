@@ -95,7 +95,7 @@
       contenitore.appendChild(voce("Casa", casa.nome));
 
       /* «dati provvisori» sta **nel testo** della zona, mai in un colore: è la regola del progetto
-         per ogni stato, e la testata della sidebar fa lo stesso. */
+         per ogni stato, e la testata della pagina fa lo stesso. */
       var zona = casa.zona || "—";
       if (casa.orari_provvisori) zona += " · orari in via di definizione";
       if (casa.da_validare) zona += " · dati da validare";

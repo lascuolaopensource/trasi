@@ -113,24 +113,6 @@ services:
       OVERPASS_TIMEOUT_S: "5"
       SHIM_TIMEOUT_S: "3"
       TZ: ${TZ}
-      # Chat dello sportello (`POST /op/chat`): il proxy server-to-server verso Onyx ha bisogno del
-      # token, e senza di esso risponde 503 «chat non configurata» invece di rispondere.
-      #
-      # `ONYX_CHAT_TOKEN` era nel `.env` ma **non era passato qui**: misurato su uno shim avviato senza
-      # questa riga, `POST /op/chat` → 503 con la sessione invece valida. Il difetto non si vedeva negli
-      # altri test perché la chat è l'unico endpoint che parla con Onyx — tutto il resto funziona senza
-      # token, quindi lo stack sembrava completo.
-      #
-      # **L'indirizzo di Onyx per lo shim è `ONYX_CHAT_API_URL`, e non `ONYX_API_URL`.** Quest'ultimo, nel
-      # `.env`, è l'indirizzo per le automazioni e l'export KB (`http://nginx/api`, default di
-      # `docker-compose.automazioni.yml`) — container che stanno anche su `onyx_default`, dove l'alias
-      # `nginx` risolve. Lo shim sta solo su `trasi_net`, dove non risolve (verificato:
-      # `socket.gethostbyname('nginx')` → `Name or service not known`), quindi il suo default è
-      # `http://onyx-api_server-1:8080` (200 su `/health` da questa rete). Se serve cambiarlo, si passa
-      # `ONYX_CHAT_API_URL`: un nome per rete, così copiare `ONYX_API_URL` dal `.env.example` non può
-      # rompere la chat.
-      ONYX_CHAT_TOKEN: ${ONYX_CHAT_TOKEN}
-      ONYX_CHAT_API_URL: ${ONYX_CHAT_API_URL:-}
     ports:
       - "127.0.0.1:${HOST_PORT_SHIM}:8000"
     healthcheck:

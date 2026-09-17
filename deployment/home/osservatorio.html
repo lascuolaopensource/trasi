@@ -6,53 +6,44 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — Osservatorio</title>
 <meta name="description" content="Trasi: la mappa dei luoghi della rete delle Case di Quartiere di Brindisi, con l'elenco equivalente e la scheda del luogo.">
-<link rel="stylesheet" href="assets/struttura.css?v=3">
-<link rel="stylesheet" href="assets/veste.css?v=3">
+<link rel="stylesheet" href="assets/struttura.css?v=4">
+<link rel="stylesheet" href="assets/veste.css?v=4">
 <!-- `mappa.css` è dell'Osservatorio: griglia a due colonne, altezza della tela Leaflet, segni dei
      tre livelli di pin, evidenza della voce scelta. Classi proprie, prefisso `mappa-` (§3 del
      contratto): non è veste, è il comportamento di questa pagina. -->
-<link rel="stylesheet" href="assets/mappa.css?v=3">
+<link rel="stylesheet" href="assets/mappa.css?v=4">
 <!-- `leaflet.css` dal **vendor** (BSD-2, `vendor/leaflet/LICENSE`): zero CDN. Le immagini dei
      marcatori le raggiunge con percorsi relativi (`images/marker-icon.png`), quindi il foglio va
      servito dalla sua cartella — è la ragione per cui il vendor ha una struttura sua. -->
-<link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=3">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=4">
 </head>
 <body>
 
 <!-- ============================================================ IL GUSCIO =====================
-     Copiato **una volta** da `_shell.html` (CONTRATTO-shell.md §2). I tre segnaposto li riempie
-     `shell.js`: `#shell-casa`, `#shell-zona`, `#shell-pannello`. Il pannello contestuale
-     dell'Osservatorio è la **chat compatta**: `shell.js` lo popola con «Apri nella Home» e
-     `#chat-compatta`. -->
+     Copiato **una volta** da `_shell.html` (CONTRATTO-shell.md §2). I due segnaposto li riempie
+     `shell.js`: `#shell-casa`, `#shell-zona`. -->
 <a class="salta" href="#contenuto">Salta al contenuto</a>
 
-<div class="guscio">
-  <aside class="sidebar" id="sidebar" aria-label="Navigazione e pannello">
-    <div class="sidebar-testata">
-      <p class="marchio">TRASI</p>
-      <p class="casa-nome" id="shell-casa">accesso in corso…</p>
-      <p class="casa-zona" id="shell-zona"></p>
-    </div>
+<header class="testata">
+  <div class="testata-casa">
+    <p class="marchio">TRASI</p>
+    <p class="casa-nome" id="shell-casa">accesso in corso…</p>
+    <p class="casa-zona" id="shell-zona"></p>
+  </div>
 
-    <nav class="nav" aria-label="Destinazioni">
-      <a class="nav-voce" href="home.html">Chiedi</a>
-      <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
-      <a class="nav-voce" href="account.html">Account</a>
-    </nav>
+  <nav class="nav" aria-label="Destinazioni">
+    <a class="nav-voce" href="home.html">Home</a>
+    <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
+    <a class="nav-voce" href="account.html">Account</a>
+  </nav>
 
-    <div class="pannello" id="shell-pannello" aria-label="Pannello contestuale"></div>
+  <div class="testata-azioni">
+    <a class="azione" href="aiuto.html">Aiuto</a>
+    <button class="azione" type="button" id="shell-esci">Esci</button>
+  </div>
+</header>
 
-    <div class="sidebar-piede">
-      <a class="azione" href="aiuto.html">Aiuto</a>
-      <button class="azione" type="button" id="shell-esci">Esci</button>
-      <p class="privacy">Non conserva dati personali.</p>
-    </div>
-  </aside>
-
-  <div class="area">
-    <button class="menu-bottone" type="button" id="shell-menu" aria-expanded="false" aria-controls="sidebar">Menu</button>
-
-    <main class="contenuto" id="contenuto">
+<main class="contenuto" id="contenuto">
 
       <!-- ==================================================== OSSERVATORIO — tre viste =========
            Mappa, elenco e scheda vivono nello **stesso file** (§4.2). Elenco e scheda si alternano
@@ -166,18 +157,20 @@
         </div>
       </div>
 
-    </main>
-  </div>
-</div>
+</main>
 
-<!-- `shell.js` **prima**: espone `window.Trasi` (sessione, `api()`, pannello). Senza, nessuno
+<footer class="piede">
+  <p class="privacy">Non conserva dati personali.</p>
+</footer>
+
+<!-- `shell.js` **prima**: espone `window.Trasi` (sessione, `api()`). Senza, nessuno
      degli altri moduli può parlare con lo shim. `leaflet.js` dal vendor, poi i tre moduli della
      pagina, nell'ordine in cui si usano: `mappa.js` disegna e seleziona, `elenco.js` costruisce
-     le voci, `scheda.js` compone il pannello. -->
-<script src="assets/shell.js?v=3"></script>
-<script src="vendor/leaflet/leaflet.js?v=3"></script>
-<script src="assets/mappa.js?v=3"></script>
-<script src="assets/elenco.js?v=3"></script>
-<script src="assets/scheda.js?v=3"></script>
+     le voci, `scheda.js` compone la scheda del luogo. -->
+<script src="assets/shell.js?v=4"></script>
+<script src="vendor/leaflet/leaflet.js?v=4"></script>
+<script src="assets/mappa.js?v=4"></script>
+<script src="assets/elenco.js?v=4"></script>
+<script src="assets/scheda.js?v=4"></script>
 </body>
 </html>
