@@ -253,7 +253,8 @@ services:
     - trasi_net
   # ---------------------------------------------------------------- Home statica (B6, override Coolify) ----
   # Su Coolify l'ingresso è Traefik: la Home statica è servita da nginx con lo
-  # stesso contenuto di ./home che Caddy serviva su onice.
+  # stesso contenuto di ./home che Caddy serviva su onice. Il dominio arriva da
+  # docker_compose_domains (label Traefik generate da Coolify).
   home:
     image: nginx:1.25.5-alpine
     restart: unless-stopped
