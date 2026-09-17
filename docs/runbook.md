@@ -867,9 +867,9 @@ La verifica comportamentale usa una sessione di anteprima e controlla:
 - **Le proposte non cambiano la memoria da sole**: la decisione appartiene alla Casa o al ruolo competente e
   l'applicazione segue il flusso previsto.
 - **La coda delle proposte è una riga nell'Account**, non un allarme e non una scadenza.
-- **La cache usa una sola versione `v=2`** per link e script delle pagine pubblicate. Caddy mantiene la
+- **La cache usa una sola versione `v=3`** per link e script delle pagine pubblicate. Caddy mantiene la
   rivalidazione con `Cache-Control: no-cache`.
-- **Il font Commissioner è locale** e usa `font-display: swap`; non ci sono font remoti o CDN.
+- **La tipografia usa lo stack di sistema**; non ci sono font remoti, CDN o file di font nella web root.
 
 ### 10.7 · Verifica di accessibilità
 
