@@ -415,6 +415,68 @@ sessione parallela (categoria b, non toccato).
 
 ---
 
+## FALLA DI SICUREZZA (S1) — registrazione aperta su Onyx, raggiungibile da internet
+
+**Trovata il 2026-09-17**, cercando come creare le 16 identità di BUG-03. Non è un difetto del codice
+Trasi: è **configurazione di Onyx**. La registro qui perché è la cosa più grave emersa da questa
+sessione, e va decisa dal TI, non da un agente.
+
+### Cosa succede
+
+`POST /api/auth/register` su Onyx accetta registrazioni **senza invito**, e Onyx è raggiungibile da
+internet. Provato in modo controllato (utente creato e **rimosso subito**, due volte):
+
+```
+$ curl -s -X POST -H 'Content-Type: application/json' \
+    -d '{"email":"verifica-falla@lascuolaopensource.org","password":"…"}' \
+    https://onyx.lascuolaopensource.org/api/auth/register
+{"id":"bacaaa03-…","email":"verifica-falla@lascuolaopensource.org","is_active":true,
+ "is_superuser":false,"is_verified":false,"account_type":"STANDARD"}
+
+$ # in database:
+  email                        | is_active | role   | effective_permissions
+ verifica-falla@…              | t         | (null) | ["basic"]         ← creato
+```
+
+### Perché è grave
+
+Chiunque conosca l'URL può crearsi un account sul workspace Onyx che ospita **gli assistenti delle
+Case di Quartiere**. L'account nasce con `effective_permissions = ["basic"]` — cioè **operativo**, non
+inerte: `AUTH_TYPE=basic`, quindi è un accesso valido a un sistema che contiene la memoria della rete
+e le chat degli operatori. Con 10 Case che stanno per iniziare a usarlo, la superficie è quella di
+tutti gli operatori reali.
+
+### Causa e rimedio (verificati nel sorgente di Onyx 4.7.2)
+
+Onyx ha un interruttore, `invite_only_enabled`, **spento**:
+
+```
+$ docker exec onyx-cache-1 redis-cli get "public:onyx_kv_store:onyx_settings"
+{… "invite_only_enabled": false, "anonymous_user_enabled": false …}
+```
+
+`onyx/auth/users.py:300 workspace_invite_only_enabled()` lo legge, e `verify_email_is_invited()`
+(linea 311) rifiuta chi non è in whitelist **quando è acceso**. La funzione esiste ed è la difesa
+prevista: è semplicemente **non attiva**.
+
+Il valore non è una variabile d'ambiente ma un'impostazione persistita (Redis, chiave
+`onyx_kv_store:onyx_settings`), scrivibile dall'API amministrativa
+(`PATCH /api/admin/settings`, `onyx/server/settings/api.py:64`, richiede
+`FULL_ADMIN_PANEL_ACCESS`) — che è la via corretta, con le credenziali in
+`/root/.onyx_admin_creds`. Il valore si può anche scrivere direttamente in Redis, ma **non l'ho
+fatto**: attivare `invite_only_enabled` è una decisione operativa che cambia chi può entrare nel
+sistema, e va presa dal TI con il gruppo Processi. Un agente che la prende da solo, per «riparare»,
+sarebbe il tipo di azione che questa sessione esiste per non fare.
+
+**Nota sull'ordine**: chiuderla *prima* che le 10 Case entrino in esercizio è un'ora di lavoro; dopo,
+significa controllare a mano chi si è registrato, quando e da dove.
+
+**Cosa ho fatto io**: segnalato qui, rimosso ogni utente di prova
+(`SELECT count(*) … LIKE 'verifica-falla%'` → **0**), nessuna modifica alla configurazione di Onyx.
+Il conteggio finale degli utenti è quello di partenza: 25 (22 Trasi + admin + puria + anonymous).
+
+---
+
 ## Nota di metodo
 
 I cinque difetti hanno una cosa in comune con i tre storici: **nessuno si vedeva dalle suite**, che
