@@ -43,6 +43,7 @@ per Casa ci saranno, l'identità viaggia già nel punto giusto.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -254,6 +255,74 @@ async def email_onyx_della_casa(casa_id: int | None) -> str | None:
     return email or None
 
 
+def _sintesi_da_tool_calls(tool_calls: Any) -> str | None:
+    """Una risposta in linguaggio naturale dai risultati dei tool di un turno interrotto.
+
+    Onyx v4.7.2, con `stream=false` e un modello agentico: se l'LLM termina il giro su un tool call
+    senza comporre il testo finale, `answer` porta la riga tecnica `[Tool Call] name=… args=…` — e
+    mandarla all'operatore è inaccettabile (è ciò che l'utente ha segnalato). I risultati veri ci sono
+    già in `tool_calls[].tool_result`: questa funzione li riassume in frasi, senza aggiungere nulla.
+
+    Il JSON del risultato è una busta `{"tool_name", "response_type", "tool_result"}`: dentro, per
+    `attrezzoteca`, `items` (inventario); per `cerca_luogo`/`eventi_oggi` `items` analoghi; per
+    `statistiche` `ambiti`. Ciò che non sappiamo interpretare lo diciamo come «controllato», non lo
+    inventiamo.
+    """
+    if not isinstance(tool_calls, list) or not tool_calls:
+        return None
+    righe: list[str] = []
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            continue
+        nome = str(call.get("tool_name") or "strumento")
+        busta = call.get("tool_result")
+        try:
+            payload = json.loads(busta) if isinstance(busta, str) else busta
+        except (TypeError, ValueError):
+            payload = None
+        interno = (payload or {}).get("tool_result") if isinstance(payload, dict) else None
+        if isinstance(interno, dict) and interno.get("detail"):
+            # L'errore parlante dello strumento è per il LLM, non per l'operatore: lo traduco in
+            # linguaggio piano senza la formula tecnica (es. «q: Field required»).
+            dettaglio = str(interno["detail"])
+            if "q: Field required" in dettaglio or "Field required" in dettaglio:
+                righe.append(f"• {nome}: la ricerca è partita senza il termine da cercare — riprova.")
+            else:
+                righe.append(f"• {nome}: lo strumento ha risposto «{dettaglio}».")
+            continue
+        items = (interno or {}).get("items") if isinstance(interno, dict) else None
+        if isinstance(items, list) and items:
+            voci = []
+            for it in items[:5]:
+                if not isinstance(it, dict):
+                    continue
+                titolo = it.get("nome") or it.get("titolo") or it.get("titolo") or it.get("semantic_id")
+                dove = it.get("casa") or it.get("casa_slug") or ""
+                qt = it.get("quantita_disponibile")
+                cond = it.get("condizione")
+                dettaglio = " — ".join(
+                    str(x) for x in (titolo, f"presso {dove}" if dove else None,
+                                     f"{qt} disponibili" if isinstance(qt, int) else None,
+                                     f"condizione: {cond}" if cond else None) if x
+                )
+                voci.append(f"• {dettaglio}" if dettaglio else f"• {titolo}")
+            if voci:
+                righe.append(f"Risultato da {nome}:\n" + "\n".join(voci))
+            else:
+                righe.append(f"• {nome}: nessun risultato.")
+        elif isinstance(items, list):
+            righe.append(f"• {nome}: nessun risultato.")
+    if not righe:
+        return None
+    # Le righe identiche (il modello riprova lo stesso strumento) compaiono una volta sola.
+    viste: list[str] = []
+    for r in righe:
+        if r not in viste:
+            viste.append(r)
+    return ("Ho interrogato gli strumenti della rete; il turno della chat si è chiuso prima che il "
+            "modello compusesse la risposta finale. Ecco i risultati già ricevuti:\n" + "\n".join(viste))
+
+
 def _testo_della_risposta(corpo: Any) -> str | None:
     """Il testo della risposta di Onyx, o `None` se non c'è niente di leggibile.
 
@@ -270,7 +339,19 @@ def _testo_della_risposta(corpo: Any) -> str | None:
     for chiave in ("answer", "message"):
         valore = corpo.get(chiave)
         if isinstance(valore, str) and valore.strip():
-            return valore.strip()
+            testo = valore.strip()
+            # Onyx v4.7.2, turno non-streaming: se il modello termina il giro su un tool call
+            # (senza comporre il testo finale), `answer` porta la call grezza in questo formato.
+            # All'operatore va linguaggio naturale, mai la riga tecnica: componiamo dai risultati
+            # dei tool che Onyx ha già eseguito (`tool_calls[].tool_result`), che sono il lavoro
+            # vero del turno. Nessuna invenzione: solo ciò che i tool hanno risposto.
+            if testo.startswith("[Tool Call]"):
+                sintesi = _sintesi_da_tool_calls(corpo.get("tool_calls"))
+                if sintesi:
+                    return sintesi
+                return ("Non sono riuscito a completare la ricerca in questo turno: riprova, "
+                        "o riformula la domanda con qualche parola in più.")
+            return testo
     return None
 
 
