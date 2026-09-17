@@ -80,27 +80,50 @@ paths:
       operationId: eventi_oggi
       tags:
       - kb
-      summary: Elenca gli eventi di una Casa di Quartiere in una data (oggi se non indicata). Usalo quando l'operatore chiede
-        che cosa succede oggi, o in un giorno preciso, in una Casa.
+      summary: Elenca gli eventi del calendario condiviso della rete, in una data o in un intervallo. Senza `casa`
+        copre TUTTE le Case (ogni item dichiara la sua in `casa_slug`/`casa_nome`); con `casa`, solo quella. Con
+        `al` copre l'intervallo `data..al` — «questo weekend» o «questa settimana» in una sola chiamata; `q` filtra
+        per parola chiave (es. «bambini»). Usalo quando l'operatore chiede che cosa succede, oggi o in un periodo,
+        alla Casa o in tutta la rete. È anche lo strumento per «è gratuito?», «serve prenotare?», «per chi è?» e
+        «ogni quanto si ripete?» — ogni item porta `costo`/`gratuito`, `prenotazione`/`prenotazione_nota`,
+        `fascia_eta`, `tag` e `ricorrenza`. Rispondi con quei campi; se sono `null`, dì che il dato non è
+        dichiarato invece di cercarlo altrove.
       parameters:
       - name: casa
         in: query
         required: false
-        description: Slug della Casa di Quartiere. Se omesso, si usa la Casa dell'operatore autenticato (dall'identità); è
-          obbligatorio solo per i ruoli senza Casa (es. rete).
+        description: Slug o nome della Casa di Quartiere. Se omesso, la risposta copre gli eventi di TUTTE le Case
+          della rete (il calendario è condiviso) e ogni item dichiara la sua Casa in `casa_slug`/`casa_nome`; se
+          indicato, solo quella Casa (un nome non-slug si prova a risolvere; se non è una Casa riconoscibile, 404).
         schema:
           type: string
           minLength: 1
       - name: data
         in: query
         required: false
-        description: Data in formato ISO `AAAA-MM-GG`; se omessa si intende oggi (fuso Europe/Rome).
+        description: Giorno singolo o inizio dell'intervallo, ISO `AAAA-MM-GG`; se omessa si intende oggi (Europe/Rome).
         schema:
           type: string
           format: date
+      - name: al
+        in: query
+        required: false
+        description: Fine dell'intervallo (inclusa). Con `al` la risposta copre gli eventi da `data` (o oggi) fino
+          ad `al` — «questo weekend» o «questa settimana» in una sola chiamata. Per un solo giorno, ometterla.
+        schema:
+          type: string
+          format: date
+      - name: q
+        in: query
+        required: false
+        description: Parola chiave facoltativa (min 2 caratteri) per filtrare gli eventi su titolo e descrizione,
+          es. «bambini» o «laboratorio».
+        schema:
+          type: string
+          minLength: 2
       responses:
         '200':
-          description: Eventi della Casa nella data richiesta.
+          description: Eventi nella data o nell'intervallo richiesto, di una Casa o di tutte le Case della rete.
           content:
             application/json:
               schema:
@@ -445,6 +468,57 @@ paths:
                   type: string
                   format: uri
                   description: URL di riferimento (locandina, pagina social), facoltativo.
+                costo:
+                  type: number
+                  minimum: 0
+                  nullable: true
+                  description: 'Costo in euro: `0` = gratuito, `null` = non noto (due cose diverse). Chiedilo all''operatore
+                    se non lo dice: è la risposta a «è gratuito?».'
+                fascia_eta:
+                  type: string
+                  nullable: true
+                  enum:
+                  - 0-13
+                  - 14-17
+                  - 18-29
+                  - 30-44
+                  - 45-59
+                  - 60-74
+                  - 75+
+                  - tutte
+                  description: Fascia d'età a cui l'evento si rivolge (es. «0-13» per un laboratorio per bambini); `null`
+                    se non dichiarata.
+                tag:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                  description: Etichette dell'evento (es. «laboratorio», «musica»), facoltative.
+                ricorrenza:
+                  type: string
+                  nullable: true
+                  enum:
+                  - settimanale
+                  - bisettimanale
+                  - mensile
+                  - annuale
+                  description: 'Ogni quanto l''evento si ripete; `null` = evento singolo. Le occorrenze si calcolano
+                    da `inizio`, non si creano più righe: un evento settimanale è UNA riga con la sua regola.'
+                ricorrenza_fine:
+                  type: string
+                  format: date
+                  nullable: true
+                  description: Ultimo giorno in cui la ricorrenza produce occorrenze (es. «ogni lunedì di maggio» → 31/05);
+                    facoltativa, richiede `ricorrenza`.
+                prenotazione:
+                  type: boolean
+                  nullable: true
+                  description: 'Serve prenotare? `true` = sì, `false` = no, `null` = non noto. Chiedilo all''operatore:
+                    è la risposta a «serve prenotare?».'
+                prenotazione_nota:
+                  type: string
+                  nullable: true
+                  description: Come prenotare (es. «posti limitati, in biglietteria»); testo di servizio, senza dati personali.
       responses:
         '201':
           description: Evento creato nella memoria della rete.
@@ -1063,6 +1137,8 @@ components:
       - provenienza
       - titolo
       - dove
+      - casa_slug
+      - casa_nome
       - data
       - ora_inizio
       - ora_fine
@@ -1084,10 +1160,17 @@ components:
         dove:
           type: string
           description: Luogo o Casa in cui si svolge.
+        casa_slug:
+          type: string
+          description: Slug della Casa che tiene l'evento. Viaggia con l'item perché, senza filtro per Casa, la
+            risposta copre tutta la rete e la provenienza non si deduce dal contesto.
+        casa_nome:
+          type: string
+          description: Nome della Casa che tiene l'evento, da riportare all'operatore così com'è.
         data:
           type: string
           format: date
-          description: Data dell'evento.
+          description: Data dell'occorrenza (per un evento ricorrente, il giorno della ripetizione).
         ora_inizio:
           type: string
           nullable: true
@@ -1100,6 +1183,40 @@ components:
           type: string
           nullable: true
           description: Nota quando l'orario è provvisorio o non disponibile.
+        descrizione:
+          type: string
+          nullable: true
+          description: Descrizione dell'evento, se nota.
+        costo:
+          type: number
+          nullable: true
+          description: 'Costo in euro; `0` significa gratuito, `null` «non noto» (diverso da «gratuito»).'
+        gratuito:
+          type: boolean
+          nullable: true
+          description: '`true` quando il costo è 0; `null` quando il costo non è dichiarato. Risponde a «è gratuito?».'
+        fascia_eta:
+          type: string
+          nullable: true
+          description: Fascia d'età dell'evento (es. «0-13»); `null` se non dichiarata.
+        tag:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Etichette dell'evento (es. «laboratorio»); `null` se non dichiarate.
+        ricorrenza:
+          type: string
+          nullable: true
+          description: Regola di ricorrenza (settimanale/bisettimanale/mensile/annuale); `null` = evento singolo.
+        prenotazione:
+          type: boolean
+          nullable: true
+          description: 'Serve prenotare? `true` = sì, `false` = no, `null` = non noto. Risponde a «serve prenotare?».'
+        prenotazione_nota:
+          type: string
+          nullable: true
+          description: Come prenotare (es. «posti limitati, in biglietteria»); `null` se non dichiarato.
         fonte:
           type: string
           description: Fonte del dato (es. calendario della Casa).
@@ -1302,15 +1419,21 @@ components:
       - casa
       - data
       - eventi
-      description: Eventi di una Casa in una data.
+      description: Eventi in una data o nell'intervallo `data..al`; senza il parametro `casa`, di tutte le Case della rete.
       properties:
         casa:
           type: string
-          description: Slug della Casa interrogata.
+          nullable: true
+          description: Slug della Casa interrogata; `null` se la risposta copre tutte le Case della rete.
         data:
           type: string
           format: date
-          description: Data effettivamente interrogata.
+          description: Giorno interrogato, o inizio dell'intervallo.
+        al:
+          type: string
+          format: date
+          nullable: true
+          description: Fine dell'intervallo (inclusa) quando è stato richiesto un intervallo; `null` per un solo giorno.
         eventi:
           type: array
           description: Eventi in programma quel giorno.
@@ -1353,12 +1476,16 @@ components:
       additionalProperties: false
       required:
       - richiesta_id
+      - testo
       description: Conferma di registrazione; nessun dato personale viene restituito.
       properties:
         richiesta_id:
           type: integer
           minimum: 1
           description: Identificativo della richiesta registrata.
+        testo:
+          type: string
+          description: Conferma leggibile da riportare all'operatore (categoria ed esito in italiano), così com'è.
     RispostaCreaEvento:
       type: object
       additionalProperties: false

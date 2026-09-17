@@ -387,67 +387,297 @@ def test_eventi_oggi_riconosce_la_casa_dal_nome(client, db_vivo, casa):
     assert risposta.json()["casa"] == atteso, f"«{casa}» deve risolversi in {atteso}, non nella Casa dell'operatore"
 
 
-# --- mappa_case (fuori contratto: la mappa delle dieci Case della Home) -------------------------------------
+def test_eventi_oggi_al_prima_di_data_risponde_422(client, sessione_finta):
+    """`al` precedente a `data` è un intervallo vuoto scritto male: 422, non una lista vuota silenziosa."""
+    sessione_finta()
+    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?data=2026-09-20&al=2026-09-19")
+
+    assert risposta.status_code == 422
+    assert "al" in risposta.json()["detail"]
+
+
+def test_eventi_oggi_intervallo_troppo_ampio_risponde_422(client, sessione_finta):
+    """Un intervallo oltre il tetto non è una consultazione di calendario ma un dump: 422 dichiarato."""
+    sessione_finta()
+    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?data=2026-01-01&al=2026-12-31")
+
+    assert risposta.status_code == 422
+    assert "intervallo" in risposta.json()["detail"]
+
+
+def test_eventi_oggi_q_troppo_corta_risponde_422(client, sessione_finta):
+    """Una parola chiave di un carattere non filtra nulla di utile: 422, come per `cerca_luogo`."""
+    sessione_finta()
+    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?q=a")
+
+    assert risposta.status_code == 422
+    assert "q" in risposta.json()["detail"]
+
+
+def _inserisci_eventi(righe: list[tuple]) -> list[int]:
+    """Crea eventi come `postgres` e restituisce gli id, per i test che devono osservare la lettura di rete.
+
+    Ogni riga è `(slug, titolo, inizio, fine)`; `fine` può essere `None`. Lo stato è ripristinato dal chiamante.
+    """
+    import asyncpg
+
+    async def _fai() -> list[int]:
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            ids: list[int] = []
+            for slug, titolo, inizio, fine in righe:
+                ids.append(
+                    await conn.fetchval(
+                        """
+                        INSERT INTO trasi.evento (casa_id, titolo, inizio, fine, luogo_testo, affidabilita)
+                        SELECT c.id, $1, $2, $3, 'Sala test', 3 FROM trasi.casa c WHERE c.slug = $4
+                        RETURNING id
+                        """,
+                        titolo,
+                        inizio,
+                        fine,
+                        slug,
+                    )
+                )
+            return ids
+        finally:
+            await conn.close()
+
+    return asyncio.run(_fai())
+
+
+def _rimuovi_eventi(ids: list[int]) -> None:
+    import asyncpg
+
+    async def _fai() -> None:
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            await conn.execute("DELETE FROM trasi.evento WHERE id = ANY($1::int[])", ids)
+        finally:
+            await conn.close()
+
+    asyncio.run(_fai())
 
 
 @pytest.mark.live
-def test_mappa_case_dieci_voci_con_coordinate_e_badge_kb(client, db_vivo):
-    """Le dieci Case della rete, con lat/lon numerici e il badge KB (V3) composto dallo shim; nessuna evidenziata senza `casa`."""
+def test_eventi_oggi_senza_casa_copre_la_rete_su_un_intervallo(client, db_vivo):
+    """Un operatore che non nomina una Casa riceve il calendario di TUTTA la rete, su un intervallo, in una chiamata.
+
+    È il difetto grave del 2026-09-17: `eventi_oggi` senza `casa` ripiegava sulla Casa dell'operatore, così chi
+    lavora a una Casa non vedeva gli eventi delle altre e l'assistente rispondeva «non ce ne sono» su un calendario
+    di rete pieno. Qui si inseriscono eventi in **altre** Case (Buscicchio, Bozzano) e in un intervallo di due
+    giorni, e li si legge come operatore di San Bao **senza** passare `casa`: devono comparire tutti, con la loro
+    Casa in `casa_slug`, e `casa` di risposta `null` (la ricerca è sulla rete).
+    """
     if not db_vivo:
         pytest.skip("database non raggiungibile")
 
-    risposta = client.get(f"{URL.format(email=EMAIL_RETE)}/mappa_case")
+    sabato = date.today() + timedelta(days=200 + (5 - date.today().weekday()) % 7)  # un sabato futuro
+    domenica = sabato + timedelta(days=1)
+    righe = [
+        ("buscicchio", "Laboratorio per bambini TEST rete", datetime.combine(sabato, time(10, 0), tzinfo=FUSO_LOCALE), None),
+        ("bozzano", "Serata anziani TEST rete", datetime.combine(domenica, time(18, 0), tzinfo=FUSO_LOCALE), None),
+    ]
+    ids = _inserisci_eventi(righe)
+    try:
+        risposta = client.get(
+            f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?data={sabato.isoformat()}&al={domenica.isoformat()}"
+        )
+        filtro = client.get(
+            f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi"
+            f"?data={sabato.isoformat()}&al={domenica.isoformat()}&q=bambini"
+        )
+    finally:
+        _rimuovi_eventi(ids)
 
     assert risposta.status_code == 200
     corpo = risposta.json()
-    assert corpo["casa_evidenziata"] is None
-    assert len(corpo["case"]) == 10
-    assert len({c["slug"] for c in corpo["case"]}) == 10
-    for casa in corpo["case"]:
-        assert isinstance(casa["lat"], float) and isinstance(casa["lon"], float)
-        assert 40.0 < casa["lat"] < 41.0 and 17.0 < casa["lon"] < 18.5, casa["slug"]
-        assert casa["badge"].startswith("[KB · "), casa["badge"]
-        assert casa["evidenziata"] is False
+    assert corpo["casa"] is None, "senza `casa` la risposta è della rete: `casa` deve essere null"
+    assert corpo["al"] == domenica.isoformat()
+    titoli = {e["titolo"] for e in corpo["eventi"]}
+    assert {"Laboratorio per bambini TEST rete", "Serata anziani TEST rete"} <= titoli, (
+        f"gli eventi delle altre Case devono comparire, trovati: {titoli}"
+    )
+    per_titolo = {e["titolo"]: e for e in corpo["eventi"]}
+    assert per_titolo["Laboratorio per bambini TEST rete"]["casa_slug"] == "buscicchio"
+    assert per_titolo["Serata anziani TEST rete"]["casa_slug"] == "bozzano"
+
+    assert filtro.status_code == 200
+    titoli_filtro = {e["titolo"] for e in filtro.json()["eventi"]}
+    assert "Laboratorio per bambini TEST rete" in titoli_filtro
+    assert "Serata anziani TEST rete" not in titoli_filtro, "`q=bambini` non deve restituire la serata anziani"
 
 
 @pytest.mark.live
-def test_mappa_case_evidenzia_la_casa_richiesta_per_slug(client, db_vivo):
-    """`casa=tuturano` → esattamente una voce evidenziata, con la qualità della geometria dichiarata («stimata»)."""
+def test_eventi_oggi_intervallo_include_evento_di_piu_giorni(client, db_vivo):
+    """Un evento di più giorni compare in ogni giornata che attraversa (overlap), non solo in quella d'inizio.
+
+    È la «durata nel tempo» degli eventi: una festa che va da sabato a lunedì deve risultare anche chiedendo la
+    sola domenica. Il filtro è `inizio <= al AND COALESCE(fine, inizio) >= dal`, non `inizio = giorno`.
+    """
     if not db_vivo:
         pytest.skip("database non raggiungibile")
 
-    risposta = client.get(f"{URL.format(email=EMAIL_RETE)}/mappa_case?casa=tuturano")
+    sabato = date.today() + timedelta(days=210 + (5 - date.today().weekday()) % 7)
+    domenica = sabato + timedelta(days=1)
+    lunedi = sabato + timedelta(days=2)
+    ids = _inserisci_eventi(
+        [
+            (
+                "san-bao",
+                "Festa lunga TEST multigiorno",
+                datetime.combine(sabato, time(20, 0), tzinfo=FUSO_LOCALE),
+                datetime.combine(lunedi, time(2, 0), tzinfo=FUSO_LOCALE),
+            )
+        ]
+    )
+    try:
+        solo_domenica = client.get(
+            f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi"
+            f"?casa=san-bao&data={domenica.isoformat()}&al={domenica.isoformat()}"
+        )
+    finally:
+        _rimuovi_eventi(ids)
 
-    assert risposta.status_code == 200
-    corpo = risposta.json()
-    assert corpo["casa_evidenziata"] == "tuturano"
-    evidenziate = [c for c in corpo["case"] if c["evidenziata"]]
-    assert [c["slug"] for c in evidenziate] == ["tuturano"]
-    assert evidenziate[0]["geom_qualita"] == "stimata"
+    assert solo_domenica.status_code == 200
+    titoli = {e["titolo"] for e in solo_domenica.json()["eventi"]}
+    assert "Festa lunga TEST multigiorno" in titoli, (
+        "un evento sab→lun deve comparire anche chiedendo la sola domenica (overlap)"
+    )
+
+
+# --- ricorrenza: il calcolo delle occorrenze (db/025 `ricorrenza`, db/030 `ricorrenza_fine`) -----------------
+
+
+def _occorrenze_giorni(base: str, regola: str, dal: str, al: str, fine_ric: str | None = None):
+    """I giorni prodotti da `_giorni_occorrenza` per date ISO, senza toccare il database."""
+    from app.routes_lettura import _giorni_occorrenza
+
+    return _giorni_occorrenza(
+        date.fromisoformat(base),
+        regola,
+        date.fromisoformat(dal),
+        date.fromisoformat(al),
+        date.fromisoformat(fine_ric) if fine_ric else None,
+    )
+
+
+def test_ricorrenza_settimanale_produce_una_occorrenza_ogni_sette_giorni():
+    """«Ogni lunedì» è una occorrenza a settimana, anche chiedendo un mese intero: è la periodicità di base."""
+    giorni = _occorrenze_giorni("2026-01-05", "settimanale", "2026-01-01", "2026-01-31")
+
+    assert giorni == [date(2026, 1, 5), date(2026, 1, 12), date(2026, 1, 19), date(2026, 1, 26)]
+
+
+def test_ricorrenza_bisettimanale_salta_una_settimana():
+    """«Ogni due settimane» non è «ogni settimana»: il passo è di 14 giorni, non 7."""
+    giorni = _occorrenze_giorni("2026-01-05", "bisettimanale", "2026-01-01", "2026-02-15")
+
+    assert giorni == [date(2026, 1, 5), date(2026, 1, 19), date(2026, 2, 2)]
+
+
+def test_ricorrenza_mensile_avanza_sul_calendario_non_di_trenta_giorni():
+    """Il 31 diventa il 28 a febbraio e torna il 31 a marzo: un passo di 30 giorni slitterebbe e mentirebbe.
+
+    È il caso limite del calendario: chi fissa «il 31 di ogni mese» non vuole che l'evento
+    diventi quello del 2 marzo per effetto di uno scivolamento.
+    """
+    giorni = _occorrenze_giorni("2026-01-31", "mensile", "2026-01-01", "2026-04-30")
+
+    assert giorni == [
+        date(2026, 1, 31),
+        date(2026, 2, 28),
+        date(2026, 3, 31),
+        date(2026, 4, 30),
+    ]
+
+
+def test_ricorrenza_annuale_ripete_nello_stesso_giorno_dell_anno():
+    """«Ogni anno» avanza di dodici mesi, non di 365 giorni: il 29 febbraio non deve scivolare al 1 marzo."""
+    giorni = _occorrenze_giorni("2028-02-29", "annuale", "2028-01-01", "2030-12-31")
+
+    assert giorni == [date(2028, 2, 29), date(2029, 2, 28), date(2030, 2, 28)]
+
+
+def test_ricorrenza_si_ferma_al_termine_dichiarato():
+    """`ricorrenza_fine` è il limite: «ogni lunedì di maggio» non produce il primo lunedì di giugno."""
+    giorni = _occorrenze_giorni("2026-05-04", "settimanale", "2026-05-01", "2026-06-30", "2026-05-31")
+
+    assert giorni == [date(2026, 5, 4), date(2026, 5, 11), date(2026, 5, 18), date(2026, 5, 25)]
+
+
+def test_ricorrenza_in_un_intervallo_stretto_non_perde_occorrenze():
+    """Chiedendo un solo giorno di una serie lunga, l'occorrenza di quel giorno c'è: il calcolo non «parte tardi».
+
+    È il difetto che il salto a un multiplo vicino a `dal` potrebbe introdurre: se il punto di partenza sbagliasse
+    di uno, un evento settimanale attivo da mesi sparirebbe proprio nella settimana chiesta.
+    """
+    giorni = _occorrenze_giorni("2020-01-06", "settimanale", "2026-05-11", "2026-05-11")
+
+    assert giorni == [date(2026, 5, 11)]
 
 
 @pytest.mark.live
-def test_mappa_case_riconosce_la_casa_dal_nome(client, db_vivo):
-    """`casa=Parco Buscicchio` (il nome, come lo scrive la Home nel testo) → evidenziata `buscicchio`."""
+def test_evento_ricorrente_compare_in_ogni_occorrenza_e_porta_i_dettagli(client, db_vivo):
+    """Un evento creato con ricorrenza+costo+prenotazione si legge in ogni occorrenza, con i dettagli.
+
+    È la user story «c'è un laboratorio per bambini questa settimana?» e la domanda «è gratuito? serve prenotare?»:
+    la ricorrenza produce le occorrenze, e costo/fascia d'età/tag/prenotazione viaggiano con l'item — sono il dato
+    che l'assistente non aveva e che cercava a vuoto. La Casa è quella dell'operatore; la riga è rimossa alla fine.
+    """
     if not db_vivo:
         pytest.skip("database non raggiungibile")
 
-    risposta = client.get(f"{URL.format(email=EMAIL_RETE)}/mappa_case?casa=Parco%20Buscicchio")
+    base = date.today() + timedelta(days=200)
+    titolo = "Laboratorio ricorrente TEST (rimosso dal test)"
+    ids = _inserisci_eventi(
+        [
+            (
+                "san-bao",
+                titolo,
+                datetime.combine(base, time(18, 30), tzinfo=FUSO_LOCALE),
+                datetime.combine(base, time(20, 0), tzinfo=FUSO_LOCALE),
+            )
+        ]
+    )
+    import asyncpg
+
+    async def _arricchisci() -> None:
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            await conn.execute(
+                """
+                UPDATE trasi.evento
+                   SET ricorrenza = 'settimanale', ricorrenza_fine = $2,
+                       costo = 0, fascia_eta = '0-13', tag = ARRAY['laboratorio'],
+                       prenotazione = true, prenotazione_nota = 'posti limitati'
+                 WHERE id = ANY($1::int[])
+                """,
+                ids,
+                base + timedelta(days=21),
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_arricchisci())
+    try:
+        risposta = client.get(
+            f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi"
+            f"?casa=san-bao&data={base.isoformat()}&al={(base + timedelta(days=21)).isoformat()}&q=Laboratorio ricorrente TEST"
+        )
+    finally:
+        _rimuovi_eventi(ids)
 
     assert risposta.status_code == 200
-    assert risposta.json()["casa_evidenziata"] == "buscicchio"
-
-
-def test_mappa_case_con_casa_inesistente_risponde_404(client, sessione_finta):
-    """Una Casa che non esiste è 404 (vocabolario chiuso), non una mappa senza evidenza."""
-    sessione_finta(righe=[], valore=None)
-    risposta = client.get(f"{URL.format(email=EMAIL_RETE)}/mappa_case?casa=casa-che-non-esiste")
-
-    assert risposta.status_code == 404
-    assert "casa non trovata" in risposta.json()["detail"]
-
-
-def test_mappa_case_e_fuori_dal_contratto_congelato(client):
-    """La rotta non compare nello schema OpenAPI generato: le operazioni esposte restano quelle congelate (V-09)."""
-    percorsi = client.get("/openapi.json").json()["paths"]
-    assert not any(p.endswith("/mappa_case") for p in percorsi)
+    assert [e["data"] for e in risposta.json()["eventi"]] == [
+        (base + timedelta(days=7 * k)).isoformat() for k in range(4)
+    ], "un evento settimanale con termine deve produrre le 4 occorrenze della serie, non una sola riga"
+    for evento in risposta.json()["eventi"]:
+        assert evento["ora_inizio"] == "18:30"
+        assert evento["ora_fine"] == "20:00", "la durata resta la stessa a ogni occorrenza"
+        assert evento["ricorrenza"] == "settimanale"
+        assert evento["gratuito"] is True, "costo 0 è «gratuito»: senza il campo l'assistente non può rispondere"
+        assert evento["fascia_eta"] == "0-13"
+        assert evento["tag"] == ["laboratorio"]
+        assert evento["prenotazione"] is True
+        assert evento["prenotazione_nota"] == "posti limitati"

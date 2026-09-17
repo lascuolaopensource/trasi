@@ -36,6 +36,7 @@ dell'operatore», ed è esattamente quello che viene calcolato.
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Literal
 
 from asyncpg.exceptions import (
@@ -280,6 +281,27 @@ def _rifiuta_violazione(exc: Exception) -> None:
 
 # --- `registra_richiesta` -------------------------------------------------------------------------------------
 
+#: Etichette leggibili per la conferma all'operatore: il registro parla il vocabolario del database
+#: (`risolta`, `eventi_attivita`), la conferma parla italiano. Nessun dato del cittadino, solo la classe.
+ESITO_RICHIESTA_LEGGIBILE = {
+    "risolta": "risolta",
+    "inviata_altrove": "inviata a un altro servizio",
+    "non_trovata": "senza destinazione trovata",
+    "rinviata": "rinviata",
+}
+CATEGORIA_RICHIESTA_LEGGIBILE = {
+    "orientamento": "orientamento",
+    "servizi_sociali": "servizi sociali",
+    "fiscale_isee": "fiscale / ISEE",
+    "lavoro": "lavoro",
+    "abitare": "abitare",
+    "salute": "salute",
+    "interculturale": "interculturale",
+    "ascolto_solitudine": "ascolto e solitudine",
+    "eventi_attivita": "eventi e attività",
+    "altro": "altro",
+}
+
 
 @router.post(
     **_argomenti("registra_richiesta"),
@@ -287,7 +309,7 @@ def _rifiuta_violazione(exc: Exception) -> None:
 )
 async def registra_richiesta(
     corpo: RichiestaIn, sess: Sessione = Depends(sessione)
-) -> dict[str, int]:
+) -> dict[str, Any]:
     """Registra la richiesta di orientamento: il registro operativo e le fasce del foglio 4.4.
 
     `casa_id` viene **dall'identità** (`identita_onyx` → `SET LOCAL ROLE` → `trasi.casa_corrente()`), mai dal corpo:
@@ -324,7 +346,15 @@ async def registra_richiesta(
     except Exception as exc:  # noqa: BLE001 — la traduzione è il compito di `_rifiuta_violazione`
         _rifiuta_violazione(exc)
 
-    return {"richiesta_id": richiesta_id}
+    # Una conferma leggibile per l'operatore (e per l'assistente, che così ha una frase da riportare invece di
+    # ricomporre l'esito dai campi grezzi): è la differenza fra «richiesta registrata» e un id nudo che il modello
+    # non sa presentare. Nessun dato del cittadino — solo categoria ed esito, che sono classi a vocabolario chiuso.
+    categoria_leggibile = CATEGORIA_RICHIESTA_LEGGIBILE.get(corpo.categoria, corpo.categoria.replace("_", " "))
+    esito_leggibile = ESITO_RICHIESTA_LEGGIBILE.get(corpo.esito, corpo.esito)
+    testo = f"Richiesta registrata: {categoria_leggibile}, esito {esito_leggibile}."
+    if corpo.destinazione_nota:
+        testo += f" Indirizzata a: {corpo.destinazione_nota}."
+    return {"richiesta_id": richiesta_id, "testo": testo}
 
 
 # --- `crea_evento` --------------------------------------------------------------------------------------------
@@ -335,6 +365,11 @@ class CreaEventoIn(BaseModel):
 
     `casa_id` viene **dall'identità** (come in `registra_richiesta`): la policy `evento_ins_casa` del database
     verifica comunque `casa_id = casa_corrente()` — la seconda barriera, non la prima.
+
+    Oltre a titolo/quando/dove, il corpo accetta i campi del foglio Processi 2.1 che erano già colonne di
+    `trasi.evento` (db/025, db/030) ma che la chat non poteva scrivere — ed è la loro assenza a far rispondere
+    l'assistente «non lo so» (o peggio, a cercare a vuoto) alle domande «è gratuito?», «serve prenotare?», «ogni
+    quanto si ripete?». Il dato si chiede a chi crea l'evento, non si indovina dopo.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -345,12 +380,30 @@ class CreaEventoIn(BaseModel):
     fine: datetime | None = None
     luogo_testo: str | None = None
     url: str | None = None
+    # `costo` in euro: 0 = gratuito, None = non noto (due cose diverse, come dichiara db/025). `>= 0`: un evento
+    # pubblico non ha un prezzo negativo, e il CHECK del database lo rifiuterebbe con un 500.
+    costo: Decimal | None = Field(default=None, ge=0)
+    fascia_eta: Literal["0-13", "14-17", "18-29", "30-44", "45-59", "60-74", "75+", "tutte"] | None = None
+    tag: list[str] | None = None
+    ricorrenza: Literal["settimanale", "bisettimanale", "mensile", "annuale"] | None = None
+    ricorrenza_fine: date | None = None
+    prenotazione: bool | None = None
+    prenotazione_nota: str | None = None
 
     @model_validator(mode="after")
-    def _fine_dopo_inizio(self) -> "CreaEventoIn":
-        """Il CHECK `evento_fine_dopo_inizio` lo rifiuterebbe con un 500; il contratto lo dichiara 422."""
+    def _coerenza(self) -> "CreaEventoIn":
+        """I CHECK del database sarebbero dei 500; il contratto li dichiara 422, in italiano, prima del DB."""
         if self.fine is not None and self.fine < self.inizio:
             raise ValueError("fine deve essere uguale o successiva a inizio")
+        # `evento_ricorrenza_fine_check` (db/030): una fine di ricorrenza senza ricorrenza è un termine senza regola.
+        if self.ricorrenza_fine is not None and self.ricorrenza is None:
+            raise ValueError("ricorrenza_fine richiede ricorrenza")
+        # Un intervallo di ricorrenza che finisce prima di iniziare non produce alcuna occorrenza.
+        if self.ricorrenza_fine is not None and self.ricorrenza_fine < self.inizio.date():
+            raise ValueError("ricorrenza_fine deve essere uguale o successiva alla data di inizio")
+        # Una nota di prenotazione mentre si dichiara che non serve prenotare è una contraddizione, non un dettaglio.
+        if self.prenotazione is False and self.prenotazione_nota:
+            raise ValueError("prenotazione_nota non ha senso con prenotazione = false")
         return self
 
 
@@ -376,8 +429,11 @@ async def crea_evento(
     try:
         evento_id = await sess.fetchval(
             """
-            INSERT INTO trasi.evento (casa_id, titolo, descrizione, inizio, fine, luogo_testo, url, affidabilita)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, 3)
+            INSERT INTO trasi.evento
+              (casa_id, titolo, descrizione, inizio, fine, luogo_testo, url, affidabilita,
+               costo, fascia_eta, tag, ricorrenza, ricorrenza_fine, prenotazione, prenotazione_nota)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 3,
+                    $8, $9, $10, $11, $12, $13, $14)
             RETURNING id
             """,
             sess.casa_id,
@@ -387,6 +443,13 @@ async def crea_evento(
             corpo.fine,
             corpo.luogo_testo,
             corpo.url,
+            corpo.costo,
+            corpo.fascia_eta,
+            corpo.tag if corpo.tag is not None else [],
+            corpo.ricorrenza,
+            corpo.ricorrenza_fine,
+            corpo.prenotazione,
+            corpo.prenotazione_nota,
         )
     except Exception as exc:  # noqa: BLE001 — la traduzione è il compito di `_rifiuta_violazione`
         _rifiuta_violazione(exc)

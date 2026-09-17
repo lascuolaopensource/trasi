@@ -112,7 +112,7 @@ def test_registra_richiesta_salva_la_casa_dell_identita_non_del_corpo(app_client
     )
 
     assert risposta.status_code == 201
-    assert risposta.json() == {"richiesta_id": 777}
+    assert risposta.json()["richiesta_id"] == 777
     insert = [chiamata for chiamata in sessione_finta.eseguite if "INSERT INTO trasi.richiesta" in chiamata[0]]
     assert insert, "nessuna INSERT eseguita"
     assert insert[0][1][0] == 5, "la Casa deve venire dall'identità (5), non dal corpo"
