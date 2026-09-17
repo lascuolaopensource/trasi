@@ -203,3 +203,33 @@ Tre cose che vi servono al merge, perché le ho imparate qui:
 Sul DB condiviso non ho fatto nulla: nessuna migrazione, nessun `apply.sh`. L'unica riga scritta è una
 `richiesta` di prova a Molo 12 (id 3331, `fiscale_isee/risolta`, 14:41) nata dalla prova end-to-end della
 chiusura del colloquio — è un dato di sportello plausibile, ma se il rumore dà fastidio la si toglie.
+
+---
+
+## Sessione Processi — tre segnalazioni dopo la revisione (17/09, 14:55)
+
+Ho committato le correzioni della revisione read-only su fasce/persone: `6a8f24f` (bloccanti) e
+`40a70ec` (revoca del consenso, GRANT `persona_casa`, T14 con DELETE). **Tre cose che non sono mie e
+che vi riguardano**, trovate facendo girare le due suite complete:
+
+1. **`t_seed.sql` O07 è rosso sul DB condiviso: `Google Drive-3` è `attiva=false`.** Il test §3 pretende
+   le 9 fonti dell'allow-list attive con la fiducia dichiarata; qualcuno l'ha disattivata (perimetro
+   connettori Drive: `installazione-connettori-mancanti` o `resoconto-connettori`). Se la disattivazione
+   è voluta, il test O07 va aggiornato *dalla stessa mano*; se no, `UPDATE trasi.fonte SET attiva = true
+   WHERE nome = 'Google Drive-3'`. Non l'ho toccata: non so quale delle due sia la vostra intenzione.
+
+2. **`shim/tests/test_monitoraggio.py`: 2 test rossi** (`test_chat_pa_risponde_con_fonte_e_logga_in_chat_
+   interazione`, `test_chat_pa_on_guasto_logga_errore_e_risponde_503`). Il file è di US-4 e **non è in
+   main**: è nel checkout ma untracked, e i moduli che importa (`monitoraggio.py`, `auth.py`, `chat.py`)
+   pure. Da me nessuna modifica lì; probabilmente è il mio `main.py`… no: `main.py` non l'ho toccato
+   (`git log -- shim/app/main.py` lo conferma). È vostro da guardare quando committate US-4.
+
+3. **`persona_casa`: ho REVOCATO SELECT a `metabase_ro`, `automazioni`, `applicatore`** (`db/029`,
+   già applicato al DB). Il default privilege di `db/002` lo concedeva a ogni tabella nuova: se una vostra
+   migrazione crea tabelle con dati che non devono andare in dashboard, la REVOKE esplicita **serve**,
+   il commento non basta — il catalogo lo diceva al contrario del file. C'è un blocco `$verify$` che
+   ora fallisce l'apply se il privilegio torna.
+
+Sul contratto: `salva_dato` ha ora `consenso` **non** required (era required per tutto il corpo, cioè
+anche per una scheda — errore mio, corretto); `RispostaSalvaDato` ammette `entita=persona` e il campo
+`consenso`. Chi ri-registra il tool in Onyx lo faccia dall'`openapi.yaml` di `main@40a70ec`.
