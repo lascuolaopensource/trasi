@@ -121,8 +121,20 @@ REVOKE ALL ON trasi.flusso_run FROM PUBLIC;
 -- tolto `metabase_ro` dai `GRANT`, i privilegi della versione precedente erano ancora attivi.
 -- `db/apply.sh` è dichiarato idempotente e convergente: questa è la condizione perché lo sia davvero.
 REVOKE ALL ON trasi.flusso_run FROM PUBLIC, metabase_ro;
-REVOKE ALL ON trasi.v_flusso_alert_proposte, trasi.v_flusso_destinatari,
-              trasi.v_flusso_coerenza_fonti FROM PUBLIC, metabase_ro;
+-- Le viste sono create più avanti in questo file (163, 254, 324): su un database NUOVO il
+-- REVOKE qui sopra le incontrerebbe inesistenti e abortirebbe il file (misurato su fresco
+-- install: «relation trasi.v_flusso_alert_proposte does not exist»). La revoca va condizionata
+-- all'esistenza: l'effetto è identico sui database che già le hanno, e su quelli nuovi la
+-- `CREATE OR REPLACE VIEW` di sotto le crea senza privilegi extra da revocare.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'trasi' AND c.relname IN ('v_flusso_alert_proposte',
+                     'v_flusso_destinatari', 'v_flusso_coerenza_fonti')) THEN
+    REVOKE ALL ON trasi.v_flusso_alert_proposte, trasi.v_flusso_destinatari,
+                  trasi.v_flusso_coerenza_fonti FROM PUBLIC, metabase_ro;
+  END IF;
+END $$;
 
 GRANT INSERT, SELECT ON trasi.flusso_run TO automazioni;
 -- `metabase_ro` **fuori** di proposito: `dettaglio` porta i recapiti degli alert (indirizzi di

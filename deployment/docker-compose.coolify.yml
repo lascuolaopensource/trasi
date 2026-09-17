@@ -1,0 +1,37 @@
+# Trasi — override per il deploy su Coolify (giorgio / broolify.lascuolaopensource.org).
+#
+# Perché esiste
+#   Il compose principale è scritto per due modi d'uso; su Coolify valgono le differenze:
+#   - nessuna porta host pubblicata: l'ingresso è coolify-proxy (Traefik), e porte host
+#     pubblicate su 127.0.0.1 collidono tra produzione e anteprime PR sullo stesso host;
+#   - la rete `onyx_default` non esiste su giorgio: non va dichiarata;
+#   - la Home statica è servita da Traefik → servizio `home` (profilo coolify);
+#   - Caddy non parte (profilo onice): è il proxy di onice;
+#   - `automazioni` (include) non parte: su giorgio non c'è Onyx e i flussi notturni
+#     dipendono da `http://nginx/api` (l'alias di onyx-nginx).
+#
+# Uso (Coolify lo fa da solo con docker_compose_custom_start_command):
+#   docker compose -f docker-compose.yml -f docker-compose.coolify.yml --profile coolify up -d
+
+services:
+  # Porte host: nessuna. Su onice sono nel file docker-compose.onice.yml.
+  db_trasi:
+    ports: !reset []
+  shim:
+    ports: !reset []
+  nocodb:
+    ports: !reset []
+  metabase:
+    ports: !reset []
+  activepieces:
+    ports: !reset []
+
+  # Caddy è solo di onice: qui non esiste proprio, non "definito ma spento".
+  caddy: !reset null
+
+networks:
+  # Solo trasi_net: nessuna rete esterna richiesta. Stessa firma del compose principale,
+  # così l'unione resta deterministica.
+  trasi_net:
+    name: trasi_net
+    driver: bridge
