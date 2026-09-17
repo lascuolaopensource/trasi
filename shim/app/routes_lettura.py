@@ -15,6 +15,7 @@ Due scelte che vale la pena dichiarare:
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query
@@ -23,7 +24,15 @@ from .badge import badge_kb, nome_fonte
 from .contratto import meta
 from .db import Sessione, dipendenza_sessione, parametri, slug_casa_da_identita
 from .errori import errore
-from .schemi import ItemEvento, ItemLuogo, RispostaCercaLuogo, RispostaEventiOggi, WhoAmI
+from .schemi import (
+    ItemEvento,
+    ItemLuogo,
+    ItemStatisticheAmbito,
+    RispostaCercaLuogo,
+    RispostaEventiOggi,
+    RispostaStatistiche,
+    WhoAmI,
+)
 from .settings import get_settings
 from .vicinanza import CHIAVI_PARAMETRI, FUSO, oggi_locale
 
@@ -224,6 +233,129 @@ def _item_evento(riga) -> ItemEvento:
         url=riga["url"],
         fiducia=riga["affidabilita"],
         badge=badge_kb(fonte, inizio.date(), riga["affidabilita"]),
+    )
+
+SQL_STATISTICHE = """
+SELECT casa_slug, mese, categoria, esito, n, n_label
+  FROM trasi.v_report_mensile
+ WHERE casa_slug = $1
+   AND mese = $2
+   AND (trasi.casa_corrente() IS NULL OR casa_id = trasi.casa_corrente())
+ ORDER BY categoria, esito
+"""
+
+
+SQL_NOME_CASA = "SELECT nome FROM trasi.casa WHERE slug = $1"
+
+# Le etichette leggibili degli esiti, per il `testo`: la vista dà il vocabolario del database
+# (`risolta`, `inviata_altrove`), l'operatore parla italiano.
+ETICHETTA_ESITO = {
+    "risolta": "richieste risolte",
+    "inviata_altrove": "inviate ad altro servizio",
+    "non_trovata": "senza destinazione trovata",
+    "rinviata": "rinviate",
+}
+
+
+@router.get("/statistiche", response_model=RispostaStatistiche, **meta("statistiche"))
+async def statistiche(
+    casa: str | None = Query(
+        default=None,
+        description="Slug della Casa di Quartiere. Se omesso si usa la Casa dell'operatore autenticato.",
+    ),
+    mese: str | None = Query(default=None, description="Mese `AAAA-MM`; se omesso, quello corrente."),
+    sess: Sessione = Depends(dipendenza_sessione),
+) -> RispostaStatistiche:
+    """Le statistiche mensili delle richieste della Casa, dalla vista `v_report_mensile`.
+
+    I conteggi arrivano **già mascherati** dalla vista (`k_anon`): lo shim non vede mai il numero grezzo, quindi non
+    può rivelarlo nemmeno per errore — la stessa proprietà che protegge Metabase protegge la chat. `n` è `null` sotto
+    la soglia di k-anonimato e `n_label` è la forma da mostrare («<5», «—» a zero): la chat riporta `n_label`, e il
+    `testo` composto qui usa solo quello.
+
+    La vista è `security_invoker=false`: il filtro «solo la propria Casa» sta nella query con `trasi.casa_corrente()`,
+    come per `oggi` — la decisione resta del database.
+    """
+    slug = (casa or "").strip() or await slug_casa_da_identita(sess)
+    if not slug:
+        raise errore(422, "parametri non ammessi — casa: obbligatoria per un ruolo senza Casa (es. rete)")
+
+    # Un mese fuori forma non arriva al database: la vista accetterebbe anche `'2026-13-01'::date`, e un errore di
+    # battitura («2026-02-») diventerebbe un 500 invece di un 422 di chi chiama. La validazione qui è la dichiarazione
+    # del formato del contratto, non una seconda regola.
+    if mese is not None and not re.fullmatch(r"\d{4}-\d{2}", mese.strip()):
+        raise errore(422, "parametri non ammessi — mese: attendesi il formato AAAA-MM")
+
+    riferimento = (mese or "").strip() or None
+    if riferimento is None:
+        # Il mese corrente si calcola nel fuso italiano, come `oggi_locale` fa per il giorno: un mese chiesto alle
+        # 00:30 di Roma il primo del mese non deve rispondere con il mese di UTC.
+        riferimento = oggi_locale().strftime("%Y-%m")
+
+    # Uno slug inesistente non è un errore se l'operatore ha una Casa propria (v. `eventi_oggi`): il modello tende a
+    # riempire `casa` con il nome invece dello slug, e il 404 dichiarerebbe un guasto che non esiste.
+    if await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
+        slug_identita = await slug_casa_da_identita(sess)
+        if slug_identita:
+            slug = slug_identita
+
+    # Prima di interrogare il report si verifica che il mese richiesto sia una data: `AAAA-13` passerebbe il pattern,
+    # e `'2026-13-01'::date` è un `DataError` a runtime. La conversione fallita è un 422, non un 500.
+    try:
+        primo_mese = date.fromisoformat(riferimento + "-01")
+    except ValueError:
+        raise errore(422, "parametri non ammessi — mese: non è un mese valido (es. 2026-09)") from None
+
+    righe = await sess.fetch(SQL_STATISTICHE, slug, primo_mese)
+
+    # Il 404 copre solo la Casa inesistente (vocabolario chiuso, come `eventi_oggi`): un mese senza richieste è 200
+    # con `ambiti: []`, che all'assistente dice «mese senza attività» e non «endpoint sbagliato».
+    if not righe and await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
+        raise errore(404, f"casa non trovata: nessuna Casa di Quartiere con slug «{slug}»")
+
+    # Il `testo` è composto qui e una volta sola: le righe arrivano già mascherate, quindi anche il riepilogo può
+    # dire solo ciò che la rete dichiara — nessun numero ricostruito in Python.
+    nome = await sess.fetchval(SQL_NOME_CASA, slug)
+    nome = nome or slug
+    if not righe:
+        testo = f"{nome} · {riferimento}: nessuna richiesta registrata"
+    else:
+        pezzi = [
+            f"{r['n_label']} {ETICHETTA_ESITO.get(r['esito'], r['esito'])}"
+            + (f" in {r['categoria'].replace('_', ' ')}" if len(righe) > 1 else "")
+            for r in righe
+        ]
+        testo = f"{nome} · {riferimento}: " + ", ".join(pezzi)
+
+    return RispostaStatistiche(
+        casa=slug,
+        mese=riferimento,
+        ambiti=[
+            ItemStatisticheAmbito(
+                categoria=r["categoria"], esito=r["esito"], n=r["n"], n_label=r["n_label"]
+            )
+            for r in righe
+        ],
+        testo=testo,
+    )
+
+
+def _item_luogo(riga) -> ItemLuogo:
+    """Una riga di `trasi.luogo` → `ItemLuogo` del contratto, con il badge già composto (V3)."""
+    fonte = nome_fonte(riga["fonte_autorita"], riga["fonte_nome"])
+    return ItemLuogo(
+        provenienza="kb",
+        nome=riga["nome"],
+        tipo=riga["tipo"],
+        indirizzo=riga["indirizzo"],
+        lat=float(riga["lat"]),
+        lon=float(riga["lon"]),
+        orari_testo=riga["orari_testo"],
+        fonte=fonte,
+        url=riga["url"],
+        data_aggiornamento=riga["data_aggiornamento"],
+        fiducia=riga["affidabilita"],
+        badge=badge_kb(fonte, riga["data_aggiornamento"], riga["affidabilita"]),
     )
 
 

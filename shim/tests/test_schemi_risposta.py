@@ -21,6 +21,8 @@ MODELLI = {
     "RispostaCercaLuogo": "app.schemi:RispostaCercaLuogo",
     "RispostaEventiOggi": "app.schemi:RispostaEventiOggi",
     "RispostaVicinoA": "app.schemi:RispostaVicinoA",
+    "ItemStatisticheAmbito": "app.schemi:ItemStatisticheAmbito",
+    "RispostaStatistiche": "app.schemi:RispostaStatistiche",
 }
 
 

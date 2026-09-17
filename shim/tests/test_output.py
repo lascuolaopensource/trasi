@@ -59,12 +59,16 @@ class SessioneFinta:
         evento: dict[str, Any] | None = None,
         fonti_web: list[dict[str, Any]] | None = None,
         parametri_valori: dict[str, Any] | None = None,
+        righe_statistiche: list[dict[str, Any]] | None = None,
+        casa_esiste: bool | None = None,
     ) -> None:
         self.casa_id = casa_id
         self.ruolo = ruolo
         self.email = ambiente.EMAIL_SANBAO
         self.eseguite: list[tuple[str, tuple[Any, ...]]] = []
         self.riga_oggi = riga_oggi
+        self.righe_statistiche = righe_statistiche
+        self.casa_esiste = casa_esiste
         self.luogo = luogo
         self.evento = evento
         self.fonti_web = fonti_web if fonti_web is not None else [
@@ -87,6 +91,8 @@ class SessioneFinta:
                 for chiave in chiavi
                 if chiave in self.parametri_valori
             ]
+        if "FROM trasi.v_report_mensile" in sql:
+            return self.righe_statistiche or []
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
@@ -108,6 +114,13 @@ class SessioneFinta:
 
     async def fetchval(self, sql: str, *args: Any) -> Any:
         self.eseguita(sql, args)
+        # `statistiche` verifica l'esistenza della Casa con `SELECT id FROM trasi.casa WHERE slug = $1`
+        # e il nome con `SELECT nome FROM trasi.casa …`: il doppio risponde con lo stato che il test ha
+        # preparato (default: la Casa esiste, come nel seed).
+        if "FROM trasi.casa" in sql and "slug = $1" in sql:
+            if self.casa_esiste is False:
+                return None
+            return self.casa_id if "SELECT id" in sql else "San Bao"
         return None
 
     def eseguita(self, sql: str, args: tuple[Any, ...]) -> None:
@@ -278,6 +291,147 @@ def test_oggi_filtra_sulla_casa_corrente_nella_query(app_cliente):
     query = [q for q, _ in sessione_finta.eseguite if "v_oggi_casa" in q]
     assert query, "nessuna lettura di v_oggi_casa"
     assert "casa_corrente" in query[0]
+
+
+# --- `statistiche` --------------------------------------------------------------------------------------------
+
+
+RIGHE_SANBAO_SETTEMBRE = [
+    {"casa_slug": "san-bao", "mese": "2026-09-01", "categoria": "fiscale_isee", "esito": "inviata_altrove", "n": None, "n_label": "<5"},
+    {"casa_slug": "san-bao", "mese": "2026-09-01", "categoria": "orientamento", "esito": "risolta", "n": 375, "n_label": "375"},
+]
+
+
+def test_statistiche_riporta_le_righe_e_il_testo_della_vista(app_cliente):
+    """`statistiche` restituisce le righe della vista e il `testo` composto su `n_label`: i due non possono divergere."""
+    client = app_cliente(SessioneFinta(righe_statistiche=RIGHE_SANBAO_SETTEMBRE))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/statistiche",
+        headers=_intestazioni(),
+        params={"casa": "san-bao", "mese": "2026-09"},
+    )
+
+    assert risposta.status_code == 200
+    corpo = risposta.json()
+    assert corpo["casa"] == "san-bao"
+    assert corpo["mese"] == "2026-09"
+    assert [(a["categoria"], a["esito"], a["n"], a["n_label"]) for a in corpo["ambiti"]] == [
+        ("fiscale_isee", "inviata_altrove", None, "<5"),
+        ("orientamento", "risolta", 375, "375"),
+    ]
+    # Il testo dice ciò che la vista dichiara: «375» al netto, «<5» dove il k-anonimato maschera.
+    assert "375 richieste risolte" in corpo["testo"]
+    assert "<5" in corpo["testo"]
+
+
+def test_statistiche_mese_default_e_quello_corrente(app_cliente):
+    """Senza `mese` la risposta riguarda il mese corrente, calcolato nel fuso italiano."""
+    client = app_cliente(SessioneFinta(righe_statistiche=RIGHE_SANBAO_SETTEMBRE))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/statistiche", headers=_intestazioni(), params={"casa": "san-bao"}
+    )
+
+    assert risposta.status_code == 200
+    from datetime import date
+
+    assert risposta.json()["mese"] == date.today().strftime("%Y-%m")
+
+
+def test_statistiche_mese_senza_richieste_200_con_lista_vuota(app_cliente):
+    """Un mese senza richieste è 200 con `ambiti: []`: è «mese senza attività», non un errore."""
+    client = app_cliente(SessioneFinta(righe_statistiche=[]))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/statistiche",
+        headers=_intestazioni(),
+        params={"casa": "san-bao", "mese": "2026-02"},
+    )
+
+    assert risposta.status_code == 200
+    corpo = risposta.json()
+    assert corpo["ambiti"] == []
+    assert "nessuna richiesta" in corpo["testo"]
+
+
+def test_statistiche_mese_fuori_formato_422(app_cliente):
+    """`mese=2026-2` non è `AAAA-MM`: 422, senza arrivare al database."""
+    client = app_cliente(SessioneFinta(righe_statistiche=RIGHE_SANBAO_SETTEMBRE))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/statistiche",
+        headers=_intestazioni(),
+        params={"casa": "san-bao", "mese": "2026-2"},
+    )
+
+    assert risposta.status_code == 422
+    assert "mese" in risposta.json()["detail"]
+
+
+def test_statistiche_mese_impossibile_422(app_cliente):
+    """`2026-13` passa il pattern ma non è un mese: 422, non un 500 dal `::date`."""
+    client = app_cliente(SessioneFinta(righe_statistiche=RIGHE_SANBAO_SETTEMBRE))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/statistiche",
+        headers=_intestazioni(),
+        params={"casa": "san-bao", "mese": "2026-13"},
+    )
+
+    assert risposta.status_code == 422
+
+
+def test_statistiche_di_un_altra_casa_non_esiste_per_il_ruolo(app_cliente):
+    """Casa inesistente (e operatore senza fallback) → 404, come `eventi_oggi`: vocabolario chiuso."""
+    client = app_cliente(SessioneFinta(righe_statistiche=[], casa_esiste=False))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/statistiche",
+        headers=_intestazioni(),
+        params={"casa": "casa-che-non-c'e"},
+    )
+
+    assert risposta.status_code == 404
+
+
+def test_statistiche_filtra_sulla_casa_corrente_nella_query(app_cliente):
+    """La vista è `security_invoker=false`: il filtro sulla Casa corrente deve stare nella query (§11)."""
+    sessione_finta = SessioneFinta(righe_statistiche=RIGHE_SANBAO_SETTEMBRE)
+    client = app_cliente(sessione_finta)
+
+    client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/statistiche", headers=_intestazioni(), params={"casa": "san-bao"}
+    )
+
+    query = [q for q, _ in sessione_finta.eseguite if "v_report_mensile" in q]
+    assert query, "nessuna lettura di v_report_mensile"
+    assert "casa_corrente" in query[0]
+
+
+def test_statistiche_risposta_conforme_al_contratto(app_cliente):
+    """La risposta valida contro lo schema `RispostaStatistiche` del contratto congelato (jsonschema)."""
+    pytest.importorskip("jsonschema")
+    import yaml
+    from jsonschema import Draft7Validator
+
+    contratto = yaml.safe_load(
+        (Path(__file__).resolve().parent.parent / "openapi.yaml").read_text(encoding="utf-8")
+    )
+
+    # L'helper del modulo (sotto, usato anche da `test_oggi_*`) traduce `nullable` per draft7: senza,
+    # `n: null` sarebbe respinto anche se il contratto lo dichiara.
+    validatore = Draft7Validator(_schema_risolto(contratto, "RispostaStatistiche"))
+    client = app_cliente(SessioneFinta(righe_statistiche=RIGHE_SANBAO_SETTEMBRE))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/statistiche",
+        headers=_intestazioni(),
+        params={"casa": "san-bao", "mese": "2026-09"},
+    )
+
+    errori = sorted(validatore.iter_errors(risposta.json()), key=str)
+    assert errori == [], errori
 
 
 # --- `biglietto` ----------------------------------------------------------------------------------------------

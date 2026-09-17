@@ -129,6 +129,33 @@ class RispostaVicinoA(BaseModel):
     fonti_esterne: list[FonteEsterna]
 
 
+class ItemStatisticheAmbito(BaseModel):
+    """`statistiche`: una riga del report mensile — categoria, esito, conteggio già mascherato.
+
+    `n` è `None` (mai omesso) sotto la soglia di k-anonimato: la vista non espone il numero grezzo, e questo
+    modello lo dichiara nullable perché la risposta non venga rifiutata a runtime proprio nei casi in cui la
+    mascheratura lavora.
+    """
+
+    model_config = TIPO_STRETTO
+
+    categoria: str
+    esito: str
+    n: int | None = Field(ge=1)
+    n_label: str
+
+
+class RispostaStatistiche(BaseModel):
+    """Statistiche mensili delle richieste della Casa: `ambiti: []` è un mese senza attività, non un 404."""
+
+    model_config = TIPO_STRETTO
+
+    casa: str
+    mese: str
+    ambiti: list[ItemStatisticheAmbito]
+    testo: str
+
+
 class WhoAmI(BaseModel):
     """Risposta del `_whoami` di debug (fuori dal contratto: esiste solo con `SHIM_DEBUG=1`)."""
 

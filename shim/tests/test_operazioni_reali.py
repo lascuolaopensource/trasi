@@ -37,6 +37,7 @@ PARAMETRI: dict[str, str] = {
     "vicino_a": "casa=san-bao&tipo=bar",
     "biglietto": "luogo_id=1",
     "oggi": "casa=san-bao",
+    "statistiche": "casa=san-bao",
     "cerca_web": "q=isee",
 }
 CORPI: dict[str, dict] = {
