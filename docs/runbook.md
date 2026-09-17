@@ -718,6 +718,7 @@ l'invocazione).
 | «Metabase è lento o riavvia» | `docker stats --no-stream trasi-metabase-1` · §1.3 |
 | **«sto misurando il codice giusto?»** | `ops/provenienza_stack.sh` — dice **quale worktree** ha costruito l'istanza viva (§11) |
 | «un utente non riesce a entrare in Onyx» | `ops/provisiona_utenti_onyx.sh --dry-run` — dice chi manca, senza creare (§11) |
+| «ho aggiunto un evento in chat ma non c'è» — l'assistente ha detto «non ho un calendario» o «memorizzato nelle note» | la chat era con l'assistente **predefinito** di Onyx (persona 0), non con Trasi Casa: `SELECT persona_id FROM chat_session ORDER BY time_created DESC LIMIT 5` sul DB di Onyx · `docker logs trasi-shim-1 \| grep crea_evento` (nessuna riga = nessuna scrittura) · `ops/allinea_assistente_predefinito.py` dà a persona 0 lo strumento `trasi_shim` e le istruzioni |
 
 ---
 
