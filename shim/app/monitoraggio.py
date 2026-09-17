@@ -270,7 +270,7 @@ async def _log_chat(
     """La traccia della conversazione in `chat_interazione_log`, senza il testo (V5). Mai far fallire la risposta.
 
     **L'INSERT passa dalla connessione della sessione** (ruolo `pa` già assunto), per la stessa ragione dello
-    sportello: la policy `chatlog_ins_pa` (db/026) ammette il ruolo `pa`, mentre una connessione presa dal pool
+    sportello: la policy `chatlog_ins_pa` (db/031) ammette il ruolo `pa`, mentre una connessione presa dal pool
     avrebbe il ruolo `shim_rw`, che non ha policy INSERT — la riga non entrava mai (misurato il 17/09).
     Il log resta **best-effort**: se il database non accetta la riga, la conversazione risponde lo stesso e il
     guasto resta nel log dello shim. `pool` è il parametro che i test passano per intercettare l'INSERT.

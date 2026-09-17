@@ -335,7 +335,7 @@ def persisti_report(primo: date, digest: list[dict], csv_testo: str, run: Run | 
     corregge: è la regola di Processi). `DO NOTHING` risolverebbe la selezione nel database, ma
     renderebbe invisibile al flusso *quale* report esisteva già: la SELECT preventiva per
     (casa, mese, ambito) è il modo in cui il run sa dichiararlo. Le due chiavi UNIQUE parziali di
-    db/026 restano la guardia dal lato del database — un INSERT in corsa con un parallelo fallisce
+    db/031 restano la guardia dal lato del database — un INSERT in corsa con un parallelo fallisce
     invece di duplicare.
 
     **Contenuti dell'ambito `casa`.** Le viste di B1 rilasciano solo celle k-anonime: qui si
@@ -403,7 +403,7 @@ def persisti_report(primo: date, digest: list[dict], csv_testo: str, run: Run | 
 def _persisti_osservatorio(primo: date, csv_testo: str, run: "Run | None") -> dict:
     """La riga unica `ambito='osservatorio'` del mese, con l'aggregato di rete e il CSV in colonna.
 
-    `casa_id` è NULL per vincolo (db/026: `(ambito='osservatorio') = (casa_id IS NULL)`): la
+    `casa_id` è NULL per vincolo (db/031: `(ambito='osservatorio') = (casa_id IS NULL)`): la
     precondizione va cercata per ambito e mese, non per casa.
     """
     mese = primo.isoformat()

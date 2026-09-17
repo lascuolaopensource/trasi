@@ -25,6 +25,14 @@ OPERAZIONI_ATTESE: tuple[tuple[str, str, str], ...] = (
     # che la chat non aveva — l'assistente non poteva rispondere a «quante richieste quest'anno?».
     ("statistiche", "get", "/statistiche"),
     ("cerca_web", "get", "/cerca_web"),
+    # La scheda !NEW 5 (attrezzoteca) entra nel contratto: ricerca inventario, prenotazione anticipata
+    # (con conflitti dichiarati in ritorno, V6), spostamento con conferma della ricevente, statistiche
+    # d'uso. La scheda !NEW 5 dei dialoghi di servizio, 2026-09-17.
+    ("attrezzoteca", "get", "/attrezzoteca"),
+    ("prenota_oggetto", "post", "/prenota"),
+    ("registra_movimento", "post", "/movimento"),
+    ("conferma_movimento", "post", "/movimento/{movimento_id}/conferma"),
+    ("uso_oggetti", "get", "/uso_oggetti"),
 )
 
 # L'unico URL ammesso in `servers`, con il segnaposto che Onyx sostituisce lato server.

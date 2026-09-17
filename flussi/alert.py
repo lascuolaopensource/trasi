@@ -431,7 +431,7 @@ def messaggi_eventi_dati_mancanti() -> list[Messaggio]:
 
 
 def _report_da_notificare() -> list[dict]:
-    """I report osservatorio approvati non ancora segnalati alla PA (vista del contract db/026)."""
+    """I report osservatorio approvati non ancora segnalati alla PA (vista del contract db/031)."""
     return leggi(
         "SELECT id, mese, approvato_ts FROM trasi.v_report_da_notificare ORDER BY mese"
     )
@@ -700,7 +700,7 @@ def esegui(*, dry_run: bool, giorni: int | None = None, come_json: bool = False)
                 recapito["errore"] = str(errore)
             else:
                 pa_dettaglio["notificati"] += 1
-                # Invio riuscito: la marcatura chiude il ciclo. Se la funzione SQL mancasse (db/026
+                # Invio riuscito: la marcatura chiude il ciclo. Se la funzione SQL mancasse (db/031
                 # non ancora applicato) l'errore ferma il run: un report *notificato ma non marcato*
                 # ripartirebbe a ogni esecuzione, e questo è un guasto da vedere, non da tacere.
                 if messaggio.report_id is not None:

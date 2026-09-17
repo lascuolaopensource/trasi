@@ -1,0 +1,114 @@
+# Trasi — anteprima del cantiere UX (worktree `UX-UI`), su porte separate.
+#
+# PERCHÉ ESISTE QUESTO FILE
+# Il compose del progetto monta `./home` da **quel** progetto
+# (`/root/orca/projects/onice/deployment/home -> /srv/home`) e lo shim gira da un'immagine
+# **costruita** (`shim/Dockerfile`: `COPY app ./app`, nessun `--reload`). Lavorando nel
+# worktree `UX-UI`: (a) le modifiche alla Home non si vedono, (b) ogni modifica a `shim/app/**`
+# richiederebbe un rebuild dell'immagine. Questa anteprima risolve entrambe le cose.
+#
+# COSA SERVE, E DOVE
+#   caddy-ux  :80  → http://127.0.0.1:8089   la Home dal worktree, stesse rotte del progetto
+#   shim-ux  :8000 → http://127.0.0.1:8090   lo shim dal worktree, con `--reload`
+#
+# Il container di **esercizio** (`trasi-shim-1`, `trasi-caddy-1`) resta intatto: questa anteprima
+# non lo tocca. `/api/shim/*` sull'anteprima va a `shim-ux`, cioè al codice del worktree.
+#
+# USO
+#   docker compose -f deployment/docker-compose.anteprima.yml up -d
+#   curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: trasi.lascuolaopensource.org' http://127.0.0.1:8089/
+#   docker compose -f deployment/docker-compose.anteprima.yml down      # a fine cantiere
+#
+# Dopo una modifica a `shim/app/**` NON serve ricostruire: `--reload` riavvia da solo.
+# Dopo una modifica a `deployment/home/**` NON serve nemmeno quello: è un mount.
+#
+# Segreti: `deployment/.env` è un **symlink** al `.env` del progetto (gitignored), così i valori
+# sono gli stessi senza duplicarli.
+
+name: trasi-ux
+
+services:
+  # ---------------------------------------------------------------- anteprima della Home (worktree) ----------
+  caddy-ux:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    environment:
+      TRASI_DOMAIN: ${TRASI_DOMAIN}
+      ONYX_DOMAIN: ${ONYX_DOMAIN}
+      TRASI_SHIM_KEY: ${TRASI_SHIM_KEY}
+    volumes:
+      # Caddyfile dell'anteprima: identico al progetto tranne `/api/shim/*` → `shim-ux`.
+      - ./caddy/Caddyfile.anteprima:/etc/caddy/Caddyfile:ro
+      - ./home:/srv/home:ro
+      - caddy_ux_data:/data
+      - caddy_ux_config:/config
+    ports:
+      - "127.0.0.1:8089:80"
+    depends_on:
+      shim-ux:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:2019/config/"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    networks: [trasi_net]
+
+  # ---------------------------------------------------------------- shim di sviluppo (worktree) --------------
+  # Stessa immagine del progetto (così le dipendenze sono identiche), ma il codice è **montato**
+  # e uvicorn gira con `--reload`: una modifica a `shim/app/**` si applica in ~1 s.
+  shim-ux:
+    image: trasi-shim:local
+    restart: unless-stopped
+    mem_limit: 256m
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--reload", "--reload-dir", "/app/app"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      TRASI_SHIM_KEY: ${TRASI_SHIM_KEY}
+      OVERPASS_URL: ${OVERPASS_URL}
+      OVERPASS_URL_2: ${OVERPASS_URL_2}
+      OVERPASS_TIMEOUT_S: "5"
+      SHIM_TIMEOUT_S: "3"
+      TZ: ${TZ}
+      ONYX_CHAT_TOKEN: ${ONYX_CHAT_TOKEN}
+      ONYX_CHAT_API_URL: ${ONYX_CHAT_API_URL:-}
+      # I turni con più tool call (ognuno è un giro LLM) superano i 120 s di default: la risposta
+      # del modello arriva DOPO l'ultimo tool. Misurato: «dove trovo un proiettore?» → 2 tool call
+      # + testo finale ≈ 140 s.
+      ONYX_CHAT_TIMEOUT_S: "240"
+    volumes:
+      - ../shim/app:/app/app:ro
+      - ../shim/openapi.yaml:/app/openapi.yaml:ro
+    ports:
+      - "127.0.0.1:8099:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    networks: [trasi_net]
+
+volumes:
+  caddy_ux_data:
+  caddy_ux_config:
+
+# NESSUN servizio database qui, ed è deliberato: il DB di esercizio (`trasi-db_trasi-1`) è già
+# raggiungibile sulla rete `trasi_net` con l'alias **`db_trasi`**, che è esattamente ciò che
+# `DATABASE_URL` contiene. Definirne uno qui significherebbe avviare un **secondo Postgres sulla
+# stessa data directory** — due istanze sullo stesso volume PostgreSQL lo corrompono. È
+# l'errore che questa nota esiste per non ripetere.
+
+# La rete del progetto: si connette dall'esterno, non si crea.
+networks:
+  trasi_net:
+    name: trasi_net
+    external: true

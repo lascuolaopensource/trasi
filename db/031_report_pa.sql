@@ -1,4 +1,4 @@
--- Trasi — db/026_report_pa.sql
+-- Trasi — db/031_report_pa.sql
 -- Il report di monitoraggio per la Pubblica Amministrazione (US-4, foglio «4.3 Report Mensili»):
 -- il report di rete diventa un oggetto **persistito** con uno stato d'approvazione deciso da un
 -- umano, visibile in dashboard PA e notificabile.
@@ -48,18 +48,18 @@ BEGIN
                       'trasi.tentativo_login','trasi.audit','trasi.parametro']) x
    WHERE to_regclass(x) IS NULL;
   IF v_missing IS NOT NULL THEN
-    RAISE EXCEPTION '026_report_pa: mancano % — applica prima db/000–025', v_missing;
+    RAISE EXCEPTION '031_report_pa: mancano % — applica prima db/000–025', v_missing;
   END IF;
   IF to_regprocedure('trasi.k_anon(bigint)') IS NULL OR to_regprocedure('trasi.casa_corrente()') IS NULL THEN
-    RAISE EXCEPTION '026_report_pa: mancano k_anon()/casa_corrente() — applica prima db/000–020';
+    RAISE EXCEPTION '031_report_pa: mancano k_anon()/casa_corrente() — applica prima db/000–020';
   END IF;
   -- crypt()/gen_salt() arrivano da pgcrypto (db/013), nel search_path public.
   IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto') THEN
-    RAISE EXCEPTION '026_report_pa: manca pgcrypto — applica prima db/013_credenziali.sql';
+    RAISE EXCEPTION '031_report_pa: manca pgcrypto — applica prima db/013_credenziali.sql';
   END IF;
   -- Il ruolo `pa` è creato da db/000 (i ruoli stanno là, e il canale PA non è un'eccezione).
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pa') THEN
-    RAISE EXCEPTION '026_report_pa: ruolo pa assente — applica prima db/000_roles.sql';
+    RAISE EXCEPTION '031_report_pa: ruolo pa assente — applica prima db/000_roles.sql';
   END IF;
   -- audit.entita/entita_id sono colonne aggiunte da db/005: le funzioni di transizione (§2)
   -- registrano l'oggetto della decisione, e senza queste colonne non potrebbero.
@@ -620,29 +620,29 @@ BEGIN
                      'casa_minimus','casa_pop','casa_bozzano','casa_dream','casa_tuturano',
                      'rete','ti','pa','shim_rw','automazioni');
   IF v_priv IS NOT NULL THEN
-    RAISE EXCEPTION '026_report_pa: ruoli con UPDATE/DELETE su report: %', v_priv;
+    RAISE EXCEPTION '031_report_pa: ruoli con UPDATE/DELETE su report: %', v_priv;
   END IF;
 
   -- Le due policy di scrittura sull'eccezione chat_interazione_log devono essere le sole.
   SELECT count(*) INTO v_n FROM pg_policies
    WHERE schemaname='trasi' AND tablename='chat_interazione_log' AND cmd='INSERT';
   IF v_n <> 2 THEN
-    RAISE EXCEPTION '026_report_pa: attese 2 policy INSERT su chat_interazione_log, trovate %', v_n;
+    RAISE EXCEPTION '031_report_pa: attese 2 policy INSERT su chat_interazione_log, trovate %', v_n;
   END IF;
 
   -- Vocabolario chiuso: `pa` non è membro di metabase_ro e non è nemmeno LOGIN.
   IF EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.roleid
               WHERE r.rolname='metabase_ro'
                 AND m.member = (SELECT oid FROM pg_roles WHERE rolname='pa')) THEN
-    RAISE EXCEPTION '026_report_pa: pa è membro di metabase_ro (non deve esserlo)';
+    RAISE EXCEPTION '031_report_pa: pa è membro di metabase_ro (non deve esserlo)';
   END IF;
 
   -- I report osservatorio senza casa_id devono rispettare il CHECK: la prova è che lo stato
   -- default è 'bozza' e che ambio osservatorio ⟺ casa_id NULL sui seed già presenti.
   IF EXISTS (SELECT 1 FROM trasi.report WHERE (ambito='osservatorio') <> (casa_id IS NULL)) THEN
-    RAISE EXCEPTION '026_report_pa: righe report incoerenti con il CHECK ambito/casa_id';
+    RAISE EXCEPTION '031_report_pa: righe report incoerenti con il CHECK ambito/casa_id';
   END IF;
 
-  RAISE NOTICE '026_report_pa applicato: report (stato/approvato_da/ts, inviato_pa_ts, osservatorio senza casa) + credenziale_servizio (rete2026!/pa2026!) + crea_sessione_servizio + chat_interazione_log + 4 viste k-anonime (fasce, confronto, chat_mensile, da_notificare)';
+  RAISE NOTICE '031_report_pa applicato: report (stato/approvato_da/ts, inviato_pa_ts, osservatorio senza casa) + credenziale_servizio (rete2026!/pa2026!) + crea_sessione_servizio + chat_interazione_log + 4 viste k-anonime (fasce, confronto, chat_mensile, da_notificare)';
 END
 $verify$;

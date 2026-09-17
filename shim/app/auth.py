@@ -25,7 +25,7 @@ della sessione e basta.
 **Sessioni di servizio (`rete`/`pa`, US-4).** La stessa conversazione — login, cookie, logout — vale anche per i due
 ruoli senza Casa: l'operatore referente (`rete`, approva i report) e la Pubblica Amministrazione (`pa`, li legge).
 Le differenze sono nel database, non in un secondo meccanismo: la credenziale vive in `trasi.credenziale_servizio`,
-la sessione porta `ruolo_db` invece di `casa_id` (CHECK mutuamente esclusivo, db/026), e la creazione è
+la sessione porta `ruolo_db` invece di `casa_id` (CHECK mutuamente esclusivo, db/031), e la creazione è
 `trasi.crea_sessione_servizio` con lo stesso anti-brute-force. Il cookie è lo **stesso** (`trasi_sessione`): due
 cookie significherebbero due logout e una sessione che resta accesa quando l'altra è stata chiusa.
 
@@ -136,7 +136,7 @@ class SessioneServizio:
 
     Stessa forma di `SessioneOperatore`, senza Casa: il canale conosce il **ruolo** (`pa` o `rete`) e basta. Non è
     una sessione speciale: è la stessa tabella `trasi.sessione` con `ruolo_db` valorizzato al posto di `casa_id`,
-    guardata dal CHECK mutuamente esclusivo di db/026.
+    guardata dal CHECK mutuamente esclusivo di db/031.
     """
 
     def __init__(self, base: Sessione, ruolo: str, token: uuid.UUID) -> None:
@@ -236,7 +236,7 @@ async def _dipendenza_sessione_servizio(
     ruolo atteso è una decisione applicativa — così chi tiene un cookie di servizio può verificare da solo con
     `GET /pa/me` se è rimasto dentro la sessione scaduta (401) senza che lo shim sveli quale ruolo il token porta.
 
-    La query legge **solo** `sessione`: `ruolo_db` su una sessione di Casa è `NULL` per il CHECK di db/026, quindi
+    La query legge **solo** `sessione`: `ruolo_db` su una sessione di Casa è `NULL` per il CHECK di db/031, quindi
     il confronto stringa basta a escluderle — non serve un JOIN che distingua i due casi, perché la distinzione è
     già un vincolo del database. Il formato del ruolo è verificato prima dell'`SET LOCAL ROLE`: identificatori non
     parametrici si possono solo interpolare, e la forma è la barriera giusta per una stringa che il DB vincola ma

@@ -766,6 +766,237 @@ paths:
           $ref: '#/components/responses/ParametriNonAmmessi'
         '501':
           $ref: '#/components/responses/NonImplementato'
+  /attrezzoteca:
+    get:
+      operationId: attrezzoteca
+      tags:
+      - kb
+      summary: 'Cerca nell''inventario condiviso della rete (attrezzoteca): dove si trova un oggetto, in che quantità
+        e condizioni, con la disponibilità già al netto dei prestiti confermati in corso. Usalo per le domande su
+        materiali, arredi e utensili ("mi servono 5 microfoni", "dov''è il proiettore?"). Il badge della fonte va
+        riportato così com''è.'
+      parameters:
+      - name: q
+        in: query
+        required: false
+        description: Testo libero della ricerca, in italiano (nome dell'oggetto, descrizione o Casa). Es. "microfono",
+          "proiettore", "bozzano". Omissione restituisce tutto l'inventario.
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: Oggetti dell'inventario con Casa, quantità, condizione e badge della fonte (V3).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaAttrezzoteca'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /prenota:
+    post:
+      operationId: prenota_oggetto
+      tags:
+      - proposte
+      summary: 'Prenota un oggetto per un periodo futuro (anche solo disponibile oggi): la prenotazione nasce in
+        attesa e va confermata dalla Casa che l''oggetto riceverà. Se nello stesso periodo l''oggetto è già
+        prenotato o in prestito, la risposta lo dichiara nel campo `conflitti` (elenco di prenotazioni che si
+        sovrappongono): segnalalo sempre all''operatore — la decisione resta alle due Case, non rifiutare tu
+        la prenotazione.'
+      requestBody:
+        required: true
+        description: La prenotazione. `a_casa` è lo slug della Casa che riceve; le date sono AAAA-MM-GG e `al` deve
+          essere uguale o successiva a `dal`.
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - oggetto_id
+              - a_casa
+              - dal
+              - al
+              properties:
+                oggetto_id:
+                  type: integer
+                  minimum: 1
+                  description: Identificativo dell'oggetto (da `attrezzoteca`).
+                a_casa:
+                  type: string
+                  minLength: 1
+                  description: Slug della Casa che riceverà l'oggetto (es. bozzano).
+                dal:
+                  type: string
+                  format: date
+                  description: Data di inizio della prenotazione (anche futura).
+                al:
+                  type: string
+                  format: date
+                  description: Data di fine della prenotazione, uguale o successiva a `dal`.
+                motivazione:
+                  type: string
+                  maxLength: 80
+                  description: Uso dichiarato, facoltativo (max 80 caratteri, senza dati personali).
+      responses:
+        '201':
+          description: Prenotazione registrata, con l'elenco (anche vuoto) dei conflitti di periodo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaPrenota'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /movimento:
+    post:
+      operationId: registra_movimento
+      tags:
+      - proposte
+      summary: 'Registra lo spostamento fisico di un oggetto dalla propria Casa a un''altra (prestito): chi sposta
+        è la Casa dell''operatore autenticato. Lo spostamento nasce in attesa di conferma dalla Casa che riceve:
+        comunica sempre all''operatore che la conferma spetta all''altra Casa.'
+      requestBody:
+        required: true
+        description: Lo spostamento. `a_casa` è lo slug della Casa destinataria.
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - oggetto_id
+              - a_casa
+              properties:
+                oggetto_id:
+                  type: integer
+                  minimum: 1
+                  description: Identificativo dell'oggetto (da `attrezzoteca`).
+                a_casa:
+                  type: string
+                  minLength: 1
+                  description: Slug della Casa destinataria (es. bozzano).
+                dal:
+                  type: string
+                  format: date
+                  description: Data di inizio del prestito; se omessa è oggi.
+                al:
+                  type: string
+                  format: date
+                  description: Data di rientro prevista, facoltativa.
+      responses:
+        '201':
+          description: Spostamento registrato in stato «proposto».
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaMovimento'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /movimento/{movimento_id}/conferma:
+    post:
+      operationId: conferma_movimento
+      tags:
+      - proposte
+      summary: 'Conferma, rifiuta o chiude un prestito. La conferma (proposto → confermato) spetta alla Casa che
+        riceve l''oggetto; il rientro (confermato → rientrato, con la condizione dell''oggetto al passaggio) alla
+        Casa che lo ha prestato o alla rete. Mai confermare/rifiutare se non è la tua Casa: la funzione nel database
+        verifica il ruolo e risponde con l''errore parlante.'
+      parameters:
+      - name: movimento_id
+        in: path
+        required: true
+        description: Identificativo del movimento da decidere.
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: false
+        description: 'Azione richiesta. Assente = conferma. `rifiuta` per dire no (terminale); `rientro` con
+          `condizione_rientro` per chiudere il prestito registrando in che stato torna l''oggetto.'
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                azione:
+                  type: string
+                  enum:
+                  - conferma
+                  - rifiuta
+                  - rientro
+                  description: Decisione del movimento; conferma se omessa.
+                condizione_rientro:
+                  type: string
+                  enum:
+                  - integro
+                  - danneggiato
+                  - mancante_di_parti
+                  description: 'Obbligatoria con `azione=rientro`: come torna l''oggetto. Un oggetto danneggiato
+                    va segnalato all''operatore e la Casa proprietaria avvisata.'
+      responses:
+        '200':
+          description: Decisione registrata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaMovimento'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '409':
+          description: 'La decisione non spetta alla Casa dell''operatore, o la transizione non è ammessa: il `detail`
+            spiega chi decide (riportalo così com''è).'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Errore'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /uso_oggetti:
+    get:
+      operationId: uso_oggetti
+      tags:
+      - kb
+      summary: 'Statistiche d''uso dell''attrezzoteca negli ultimi 12 mesi, con fascia di uso (basso/medio/alto) e
+        rientri in ritardo. Gli oggetti poco usati sono candidati a cessione, quelli molto richiesti a un secondo
+        esemplare: usa questo strumento quando l''operatore chiede cosa conviene condividere meglio o acquistare.'
+      responses:
+        '200':
+          description: Uso per oggetto (fascia da soglie di rete) ed elenco dei rientri in ritardo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaUsoOggetti'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
 components:
   responses:
     ChiaveShimNonValida:
@@ -1222,6 +1453,284 @@ components:
           type: string
           format: date
           description: Data di validazione di una scheda di servizio.
+        quantita:
+          type: integer
+          minimum: 1
+          description: 'Esemplari dell''oggetto proposto (`nuovo_oggetto`/`modifica_oggetto`, attrezzoteca).'
+        condizione:
+          type: string
+          enum:
+          - integro
+          - danneggiato
+          - mancante_di_parti
+          description: Condizione dell'oggetto proposto (attrezzoteca).
+        attivo:
+          type: boolean
+          description: 'Per `modifica_oggetto`: falso = ritiro dall''inventario; vero = ripristino (es. dopo riparazione).'
+    RispostaAttrezzoteca:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      description: Esito della ricerca nell'inventario condiviso (US-5.1).
+      properties:
+        items:
+          type: array
+          description: Oggetti trovati, ordinati per Casa e nome.
+          items:
+            $ref: '#/components/schemas/OggettoInventario'
+    OggettoInventario:
+      type: object
+      additionalProperties: false
+      required:
+      - oggetto_id
+      - nome
+      - casa
+      - quantita
+      - quantita_fuori
+      - quantita_disponibile
+      - condizione
+      - badge
+      description: Un oggetto dell'inventario, con la Casa che lo tiene e la disponibilità in tempo reale.
+      properties:
+        oggetto_id:
+          type: integer
+          minimum: 1
+          description: Identificativo dell'oggetto (serve per prenotare o registrare lo spostamento).
+        nome:
+          type: string
+          description: Nome dell'oggetto (es. "proiettore").
+        descrizione:
+          type: string
+          description: Descrizione breve, se presente.
+        casa:
+          type: string
+          description: Slug della Casa che ha l'oggetto.
+        quantita:
+          type: integer
+          minimum: 1
+          description: Esemplari presenti presso la Casa.
+        quantita_fuori:
+          type: integer
+          minimum: 0
+          description: Esemplari in prestito confermato in corso.
+        quantita_disponibile:
+          type: integer
+          minimum: 0
+          description: Disponibili subito (quantità meno i pezzi fuori).
+        condizione:
+          type: string
+          enum:
+          - integro
+          - danneggiato
+          - mancante_di_parti
+          description: Condizione dell'oggetto. Un oggetto danneggiato va segnalato all'operatore.
+        fonte:
+          type: string
+          description: Nome della fonte del dato (V3), se dichiarata.
+        badge:
+          type: string
+          description: Badge della fonte (es. kb); riportalo così com'è (V3).
+    RispostaPrenota:
+      type: object
+      additionalProperties: false
+      required:
+      - movimento_id
+      - oggetto_id
+      - oggetto
+      - da_casa
+      - a_casa
+      - dal
+      - al
+      - stato
+      - conflitti
+      description: Esito di una prenotazione anticipata (US-5.2).
+      properties:
+        movimento_id:
+          type: integer
+          minimum: 1
+          description: Identificativo del movimento di prenotazione creato.
+        oggetto_id:
+          type: integer
+          minimum: 1
+          description: Identificativo dell'oggetto prenotato.
+        oggetto:
+          type: string
+          description: Nome dell'oggetto.
+        da_casa:
+          type: string
+          description: Casa che ha oggi l'oggetto (cedente).
+        a_casa:
+          type: string
+          description: Casa che lo riceverà.
+        dal:
+          type: string
+          format: date
+          description: Inizio della prenotazione.
+        al:
+          type: string
+          format: date
+          description: Fine della prenotazione.
+        stato:
+          type: string
+          enum:
+          - proposto
+          description: La prenotazione nasce in attesa della Casa ricevente (V6).
+        conflitti:
+          type: array
+          description: 'Prenotazioni o prestiti che si sovrappongono al periodo, anche vuoto. NON è un errore:
+            registra comunque e segnalali all''operatore.'
+          items:
+            $ref: '#/components/schemas/ConflittoPrenotazione'
+    ConflittoPrenotazione:
+      type: object
+      additionalProperties: false
+      required:
+      - movimento_id
+      - stato
+      - da_casa
+      - a_casa
+      - dal
+      - al
+      description: Una prenotazione (o prestito) che si sovrappone al periodo richiesto.
+      properties:
+        movimento_id:
+          type: integer
+          minimum: 1
+          description: Identificativo del movimento in conflitto.
+        stato:
+          type: string
+          description: Stato del movimento in conflitto (proposto o confermato).
+        da_casa:
+          type: string
+          description: Casa cedente del movimento in conflitto.
+        a_casa:
+          type: string
+          description: Casa ricevente del movimento in conflitto.
+        dal:
+          type: string
+          format: date
+          description: Inizio del periodo in conflitto.
+        al:
+          type: string
+          description: Fine del periodo in conflitto (data o null = rientro non previsto).
+    RispostaMovimento:
+      type: object
+      additionalProperties: false
+      required:
+      - movimento_id
+      - stato
+      description: Esito di una decisione o registrazione di movimento (US-5.2/5.3).
+      properties:
+        movimento_id:
+          type: integer
+          minimum: 1
+          description: Identificativo del movimento toccato.
+        stato:
+          type: string
+          description: Stato risultante (proposto, confermato, rientrato, rifiutato).
+    RispostaUsoOggetti:
+      type: object
+      additionalProperties: false
+      required:
+      - uso
+      - in_ritardo
+      description: Statistiche d'uso dell'attrezzoteca (US-5.4).
+      properties:
+        uso:
+          type: array
+          description: Un riga per oggetto attivo, con la fascia d'uso calcolata dalle soglie di rete.
+          items:
+            $ref: '#/components/schemas/UsoOggetto'
+        in_ritardo:
+          type: array
+          description: Prestiti confermati con rientro previsto scaduto e non ancora rientrati.
+          items:
+            $ref: '#/components/schemas/RitardoRientro'
+    UsoOggetto:
+      type: object
+      additionalProperties: false
+      required:
+      - oggetto_id
+      - nome
+      - casa
+      - condizione
+      - n_movimenti_12m
+      - fascia_uso
+      description: Uso di un oggetto negli ultimi 12 mesi.
+      properties:
+        oggetto_id:
+          type: integer
+          minimum: 1
+          description: Identificativo dell'oggetto.
+        nome:
+          type: string
+          description: Nome dell'oggetto.
+        casa:
+          type: string
+          description: Casa che lo tiene.
+        condizione:
+          type: string
+          description: Condizione corrente (integro, danneggiato, mancante_di_parti).
+        n_movimenti_12m:
+          type: integer
+          minimum: 0
+          description: Quanti prestiti confermati/rientrati negli ultimi 12 mesi.
+        ultimo_movimento:
+          type: string
+          format: date-time
+          description: Quando è stato mosso l'ultima volta (null se mai).
+        fascia_uso:
+          type: string
+          enum:
+          - basso
+          - medio
+          - alto
+          description: 'basso = candidato a cessione; alto = candidato a secondo esemplare (soglie di rete
+            nei parametri).'
+    RitardoRientro:
+      type: object
+      additionalProperties: false
+      required:
+      - movimento_id
+      - oggetto_id
+      - oggetto
+      - da_casa
+      - a_casa
+      - dal
+      - al
+      - giorni_ritardo
+      description: Un rientro non avvenuto nei tempi previsti.
+      properties:
+        movimento_id:
+          type: integer
+          minimum: 1
+          description: Identificativo del movimento.
+        oggetto_id:
+          type: integer
+          minimum: 1
+          description: Identificativo dell'oggetto.
+        oggetto:
+          type: string
+          description: Nome dell'oggetto.
+        da_casa:
+          type: string
+          description: Casa cedente.
+        a_casa:
+          type: string
+          description: Casa che ha l'oggetto.
+        dal:
+          type: string
+          format: date
+          description: Inizio del prestito.
+        al:
+          type: string
+          format: date
+          description: Rientro previsto (già passato).
+        giorni_ritardo:
+          type: integer
+          minimum: 1
+          description: Giorni di ritardo sul rientro previsto.
     FasceOrario:
       type: array
       description: Fasce orarie del giorno, in coppie «apertura», «chiusura» (elenco vuoto = chiuso).
