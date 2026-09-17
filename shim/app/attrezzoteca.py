@@ -145,7 +145,7 @@ async def op_registra_richiesta(
     tags=["op"],
 )
 async def op_attrezzoteca(
-    q: str | None = Query(default=None, min_length=1, description="Nome o descrizione dell'oggetto."),
+    q: str | None = Query(default=None, description="Nome o descrizione dell'oggetto (vuoto = tutto l'inventario)."),
     sess: SessioneOperatore = Depends(sessione_corrente),
 ) -> dict[str, Any]:
     """GET /op/attrezzoteca?q= — inventario di rete, leggibile da ogni Casa (US-5.1).
@@ -155,17 +155,32 @@ async def op_attrezzoteca(
     (V3) arriva dalla vista ed è restituito com'è, non ricomposto.
     """
     testo = (q or "").strip() or None
-    righe = await sess.fetch(
-        """
-        SELECT oggetto_id, nome, descrizione, casa_id, casa_slug, quantita, quantita_fuori, quantita_disponibile,
-               condizione, fonte_nome, badge_fonte
-          FROM trasi.v_inventario
-         WHERE ($1::text IS NULL OR nome ILIKE '%' || $1 || '%' OR COALESCE(descrizione, '') ILIKE '%' || $1 || '%'
-                OR casa_slug ILIKE '%' || $1 || '%')
-         ORDER BY casa_slug, nome
-        """,
-        testo,
-    )
+    if testo is None:
+        righe = await sess.fetch(
+            """
+            SELECT oggetto_id, nome, descrizione, casa_id, casa_slug, quantita, quantita_fuori,
+                   quantita_disponibile, condizione, fonte_nome, badge_fonte
+              FROM trasi.v_inventario
+             ORDER BY casa_slug, nome
+            """
+        )
+    else:
+        # La ricerca espande il termine con i sinonimi (`trasi.termine_espanso`, tabella
+        # `sinonimo_ricerca`): «seggiole» trova le sedie, «proiettori» il proiettore. I termini
+        # espansi sono cercati su nome, descrizione e Casa; nessun punteggio da calcolare qui.
+        righe = await sess.fetch(
+            """
+            SELECT DISTINCT oggetto_id, nome, descrizione, casa_id, casa_slug, quantita, quantita_fuori,
+                   quantita_disponibile, condizione, fonte_nome, badge_fonte
+              FROM trasi.v_inventario
+             CROSS JOIN LATERAL unnest(trasi.termine_espanso($1)) AS t(termino)
+             WHERE nome ILIKE '%' || t.termino || '%'
+                OR COALESCE(descrizione, '') ILIKE '%' || t.termino || '%'
+                OR casa_slug ILIKE '%' || t.termino || '%'
+             ORDER BY casa_slug, nome
+            """,
+            testo,
+        )
     items = [
         {
             "oggetto_id": r["oggetto_id"],

@@ -941,22 +941,40 @@ class DecidiMovimentoIn(BaseModel):
 
 @router.get(**_argomenti("attrezzoteca"))
 async def attrezzoteca(
-    q: str | None = Query(default=None, min_length=1), sess: Sessione = Depends(sessione)
+    q: str | None = Query(default=None, description="Nome o descrizione dell'oggetto (vuoto = tutto l'inventario)."), sess: Sessione = Depends(sessione)
 ) -> dict[str, Any]:
-    """GET attrezzoteca — l'inventario di rete da `v_inventario` (US-5.1), con la ricerca su nome,
-    descrizione e Casa. La quantità «disponibile» è quella della vista: qui non si somma nulla."""
+    """GET attrezzoteca — l'inventario di rete da `v_inventario` (US-5.1), con ricerca flessibile.
+
+    La ricerca espande il termine con i sinonimi registrati (`trasi.termine_espanso`, tabella
+    `sinonimo_ricerca` estendibile dal TI senza deploy): «seggiole» trova le sedie, «proiettori»
+    trova il proiettore, «ciabatta» trova l'estensione elettrica. Il fallback trigramma
+    (`similarity` su testo senza accenti) copre i refusi e le parole incomplete: «proietto»
+    trova comunque il proiettore. Il nome, la descrizione e la Casa sono tutti campi di ricerca.
+    """
     testo = (q or "").strip() or None
-    righe = await sess.fetch(
-        """
-        SELECT oggetto_id, nome, descrizione, casa_slug, quantita, quantita_fuori,
-               quantita_disponibile, condizione, fonte_nome, badge_fonte
-          FROM trasi.v_inventario
-         WHERE ($1::text IS NULL OR nome ILIKE '%' || $1 || '%' OR COALESCE(descrizione, '') ILIKE '%' || $1 || '%'
-                OR casa_slug ILIKE '%' || $1 || '%')
-         ORDER BY casa_slug, nome
-        """,
-        testo,
-    )
+    if testo is None:
+        righe = await sess.fetch(
+            """
+            SELECT oggetto_id, nome, descrizione, casa_slug, quantita, quantita_fuori,
+                   quantita_disponibile, condizione, fonte_nome, badge_fonte
+              FROM trasi.v_inventario
+             ORDER BY casa_slug, nome
+            """
+        )
+    else:
+        righe = await sess.fetch(
+            """
+            SELECT DISTINCT oggetto_id, nome, descrizione, casa_slug, quantita, quantita_fuori,
+                   quantita_disponibile, condizione, fonte_nome, badge_fonte
+              FROM trasi.v_inventario
+             CROSS JOIN LATERAL unnest(trasi.termine_espanso($1)) AS t(termino)
+             WHERE nome ILIKE '%' || t.termino || '%'
+                OR COALESCE(descrizione, '') ILIKE '%' || t.termino || '%'
+                OR casa_slug ILIKE '%' || t.termino || '%'
+             ORDER BY casa_slug, nome
+            """,
+            testo,
+        )
     return {
         "items": [
             {
