@@ -106,7 +106,7 @@
 
   /* ---------------------------------------------------------------- accesso */
 
-  var VOCI = { "index.html": null, "home.html": null, "osservatorio.html": null, "account.html": null, "aiuto.html": null };
+  var VOCI = { "home.html": null, "osservatorio.html": null, "account.html": null, "aiuto.html": null };
 
   function paginaCorrente() {
     var p = location.pathname.split("/").pop() || "index.html";
@@ -115,8 +115,8 @@
 
   function segnaVoce() {
     var p = paginaCorrente();
-    // Home e accesso vivono nello stesso file: `index.html` è la voce Home.
-    var voce = (p === "index.html" || p === "home.html") ? "index.html" : p;
+    // L'accesso vive in index.html; la pagina Home della sessione è home.html.
+    var voce = p;
     var voci = document.querySelectorAll(".nav-voce");
     for (var i = 0; i < voci.length; i++) {
       if (voci[i].getAttribute("href") === voce) {
