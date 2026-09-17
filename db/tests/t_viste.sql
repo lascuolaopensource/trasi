@@ -19,18 +19,19 @@ DECLARE attesi text[][] := ARRAY[
     ['giorno_ciclo_mensile','3'],
     -- schede !NEW (2026-09-16)
     ['session_ttl_hours','12'],['messaggi_retention_days','90'],
-    ['attrezzoteca_soglia_bassa','2'],['attrezzoteca_soglia_alta','10']];
+    -- soglie attrezzoteca (US-5) + recapito PA per la notifica del report approvato (US-4, 026)
+    ['attrezzoteca_soglia_bassa','2'],['attrezzoteca_soglia_alta','10'],['email_report_pa','']];
   r text[]; v text;
 BEGIN
-  IF (SELECT count(*) FROM trasi.parametro) <> 14 THEN
-    RAISE EXCEPTION 'FAIL V01 — parametri presenti: %, attesi 14', (SELECT count(*) FROM trasi.parametro);
+  IF (SELECT count(*) FROM trasi.parametro) <> 15 THEN
+    RAISE EXCEPTION 'FAIL V01 — parametri presenti: %, attesi 15', (SELECT count(*) FROM trasi.parametro);
   END IF;
   FOREACH r SLICE 1 IN ARRAY attesi LOOP
     v := trasi.p_text(r[1]);
     IF v IS NULL THEN RAISE EXCEPTION 'FAIL V01 — parametro % assente', r[1]; END IF;
     IF v <> r[2] THEN RAISE EXCEPTION 'FAIL V01 — % = ''%'', atteso ''%'' (architettura §7.2)', r[1], v, r[2]; END IF;
   END LOOP;
-  RAISE NOTICE 'PASS V01 — 14 parametri [P] con i valori attesi (raggio 800, scadenza 30, fiducia_min 2, max_esterni 5, k_anon 5, …)';
+  RAISE NOTICE 'PASS V01 — 15 parametri [P] con i valori attesi (raggio 800, scadenza 30, fiducia_min 2, max_esterni 5, k_anon 5, email_report_pa, …)';
 END $$;
 
 -- V02 · p_int/p_text/p_bool: tipi corretti, e NULL (non eccezione) su chiave inesistente -----

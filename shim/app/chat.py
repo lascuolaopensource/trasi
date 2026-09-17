@@ -422,10 +422,50 @@ async def op_chat(
         raise errore(503, DETAIL_CASA_SENZA_IDENTITA)
 
     esito = await _conversa(configurazione_chat, corpo.messaggio, email)
+    # Il ramo «guasto» si logga prima del raise: la traccia è best-effort e non deve far fallire la risposta,
+    # ma deve rispondere a «è successo qualcosa» anche quando l'operatore non la vede (es. sessione Onyx lenta).
     if isinstance(esito, Guasto):
+        await _log_chat_mensile(sess.casa_id, "sportello", "errore", None)
         raise errore(503, esito.detail)
 
+    await _log_chat_mensile(sess.casa_id, "sportello", "risposta", _fonte_log(esito))
     return {"risposta": esito.testo, "fonte": esito.fonte}
+
+
+def _fonte_log(esito: Conversazione) -> str:
+    """La fonte della risposta come valore per `chat_interazione_log.fonte`: `kb`, `esterna` o `nessuna`.
+
+    Il badge leggibile resta nella risposta al browser; qui si traduce nella forma che il database accetta,
+    perché la tabella non conserva testo (V5) e serve a contare per k-anonimato, non a ricostruire il testo.
+    """
+    if esito.fonte.startswith("[Esterna"):
+        return "esterna"
+    if esito.fonte.startswith("[KB"):
+        return "kb"
+    return "nessuna"
+
+
+async def _log_chat_mensile(casa_id: int | None, canale: str, esito: str, fonte: str | None) -> None:
+    """Traccia la conversazione in `trasi.chat_interazione_log`. Mai far fallire la risposta all'operatore.
+
+    È l'eccezione dichiarata al flusso proposte (come `messaggio`/`richiesta`): serve a contare quante volte la
+    chat è stata usata e con quale esito, senza conservare il testo. Se il DB non accetta la riga, il log resta
+    nel container e il flusso continua.
+    """
+    try:
+        async with _pool_corrente().acquire() as conn:
+            await conn.execute(
+                """
+INSERT INTO trasi.chat_interazione_log (casa_id, canale, esito, fonte)
+VALUES ($1, $2, $3, $4)
+                """,
+                casa_id,
+                canale,
+                esito,
+                fonte,
+            )
+    except Exception:
+        logger.warning("log chat non scritto: la risposta resta valida")
 
 
 def monta(applicazione: FastAPI) -> None:

@@ -131,6 +131,8 @@ services:
       # rompere la chat.
       ONYX_CHAT_TOKEN: ${ONYX_CHAT_TOKEN}
       ONYX_CHAT_API_URL: ${ONYX_CHAT_API_URL:-}
+      # Persona «Trasi Monitoraggio PA» (US-4): distinta dalla «Trasi Casa» dello sportello.
+      ONYX_PERSONA_PA_ID: ${ONYX_PERSONA_PA_ID:-7}
     ports:
       - "127.0.0.1:${HOST_PORT_SHIM}:8000"
     healthcheck:
