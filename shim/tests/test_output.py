@@ -554,63 +554,12 @@ def test_biglietto_id_int32_massimo_passa_la_guardia(app_cliente):
     assert risposta.status_code == 404
 
 
-def test_biglietto_formato_pdf_rende_un_file(app_cliente):
-    """`formato=pdf` risponde `application/pdf` con lo stesso contenuto del foglio, pronto al download.
 
-    La verifica è sulla forma della risposta (magic number `%PDF`, `Content-Disposition` con il nome del
-    luogo) e sul fatto che il PDF sia **una pagina** — un biglietto di due pagine è un difetto di stampa,
-    non un dettaglio. La conversione usa lo stesso `_foglio` dell'HTML: un contenuto diverso sarebbe un
-    secondo foglio da tenere allineato.
-    """
-    client = app_cliente(SessioneFinta(luogo=LUOGO_BOZZANO, casa_id=5))
+def test_biglietto_html_non_offre_pdf_e_porta_il_font_incorporato(app_cliente):
+    """La pagina HTML non espone `formato=pdf` (export HTML deciso in prodotto) e incorpora Commissioner in base64.
 
-    risposta = client.get(
-        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
-        headers=_intestazioni(),
-        params={"luogo_id": 6, "formato": "pdf"},
-    )
-
-    assert risposta.status_code == 200
-    assert risposta.headers["content-type"].startswith("application/pdf")
-    assert risposta.content[:5] == b"%PDF-"
-    # Il nome file è ASCII (l'header non può portare l'em dash): i caratteri fuori ASCII diventano `?`
-    # (`encode('ascii', 'replace')`).
-    assert 'filename="biglietto - Bar interno ? Centro di Aggregazione Bozzano.pdf"' in risposta.headers["content-disposition"]
-    # Una pagina A6: il conteggio pagine sta nel dizionario del PDF (`/Count N`), che weasyprint
-    # scrive dentro un object stream compresso — si decomprimono i flussi e si prende il `/Count`.
-    import re
-    import zlib
-
-    conteggio = 0
-    for blocco in re.finditer(rb"stream\r?\n(.*?)endstream", risposta.content, re.S):
-        try:
-            decompresso = zlib.decompress(blocco.group(1))
-        except Exception:
-            continue
-        for trovato in re.finditer(rb"/Count (\d+)", decompresso):
-            conteggio = max(conteggio, int(trovato.group(1)))
-    assert conteggio == 1
-
-
-def test_biglietto_formato_sconosciuto_422(app_cliente):
-    """`formato=docx` non è un formato del contratto: 422, prima di toccare il database."""
-    client = app_cliente(SessioneFinta(luogo=LUOGO_BOZZANO, casa_id=5))
-
-    risposta = client.get(
-        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
-        headers=_intestazioni(),
-        params={"luogo_id": 6, "formato": "docx"},
-    )
-
-    assert risposta.status_code == 422
-
-
-def test_biglietto_html_porta_il_pulsante_pdf_e_il_font_incorporato(app_cliente):
-    """La pagina HTML offre il download del PDF (`?formato=pdf`) e incorpora Commissioner in base64.
-
-    Il font incorporato non è estetica: nel PDF WeasyPrint non segue l'URL `/assets/…` (che nel browser
-    puntava alla Home statica) e senza incorporazione il foglio cade su un font sostituito — oppure, peggio,
-    la resa fallisce. Il pulsante è `no-print`: l'HTML resta il foglio, il pulsante è azione del browser.
+    Il font incorporato non è estetica: senza incorporazione il foglio stampato dal browser cade su un font
+    sostituito a seconda del client. Il foglio è l'HTML stesso: la stampa è del browser, non una conversione.
     """
     client = app_cliente(SessioneFinta(luogo=LUOGO_BOZZANO, casa_id=5))
 
@@ -621,7 +570,8 @@ def test_biglietto_html_porta_il_pulsante_pdf_e_il_font_incorporato(app_cliente)
     )
 
     corpo = risposta.text
-    assert "formato=pdf" in corpo
+    assert "formato=pdf" not in corpo
+    assert "Scarica il PDF" not in corpo
     assert "data:font/ttf;base64," in corpo
     assert 'url("/assets/CommissionerVF.ttf")' not in corpo
 

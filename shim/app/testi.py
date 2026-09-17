@@ -213,39 +213,6 @@ def _font_commissioner() -> str:
         return ""
 
 
-# La query del PDF, relativa alla pagina corrente: il pulsante «Scarica il PDF» deve funzionare sia sul
-# `/biglietto` del contratto sia sulla `/op/scheda_evento` del browser, senza che `_foglio` sappia su quale
-# dei due canali sta stampando. `formato=pdf` sostituito alla stringa di query precedente.
-def _query_pdf() -> str:
-    """Il `href` del pulsante «Scarica il PDF»: la stessa pagina con `formato=pdf`."""
-    return "?formato=pdf"
-
-
-def _pdf_dall_html(html_foglio: str, nome_file: str) -> Response:
-    """La stessa pagina, resa come file: `application/pdf` con `Content-Disposition` per il nome al download.
-
-    La conversione è sincrona e blocca l'event loop per l'intera resa: su un foglio A6/A5 è decine di
-    millisecondi (misurato sull'immagine), e la complessità di un thread dedicato non compra nulla —
-    la richiesta successiva può attendere una resa di decine di ms.
-
-    Il nome file è **ASCII**: l'header non può portare l'em dash di «Bar interno — Centro di Aggregazione
-    Bozzano» (`UnicodeEncodeError` al bind della risposta) e i nomi dei luoghi portano caratteri fuori
-    ASCII. La RFC 6266 prevede `filename*=UTF-8''…` per i non-ASCII: qui il nome visibile resta quello
-    esteso nel PDF, e sul disco basta una forma ripulita — i caratteri fuori ASCII diventano `_`.
-    """
-    import weasyprint  # import locale: l'immagine lo porta, l'host di sviluppo può non averlo
-
-    pdf = weasyprint.HTML(string=html_foglio).write_pdf()
-    nome_ascii = (
-        nome_file.encode("ascii", "replace").decode("ascii").replace('"', "").replace("/", "-").strip()
-    ) or "biglietto"
-    return Response(
-        content=pdf,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{nome_ascii}.pdf"'},
-    )
-
-
 def _foglio(
     *,
     titolo: str,
@@ -321,7 +288,7 @@ def _foglio(
     Fonte: {html.escape(fonte)} · consultato il {consultato.strftime('%d/%m/%Y')} alle {consultato.strftime('%H:%M')}
     <p class="nota">{html.escape(nota)}</p>
   </footer>
-  <p class="azioni-stampa"><a href="{_query_pdf()}" class="no-print">Scarica il PDF</a></p>
+  <p class="nota-stampa">Usa «Stampa» del browser per il foglio su carta (A6 per il biglietto, A5 per la scheda evento).</p>
 </body>
 </html>
 """
@@ -420,18 +387,14 @@ def _identificativo_osm(valore: str) -> int | None:
 async def biglietto(
     luogo_id: str = Query(..., min_length=1),
     casa: str | None = Query(default=None, min_length=1),
-    formato: str = Query(default="html", pattern="^(html|pdf)$"),
     sess: Sessione = Depends(sessione),
 ) -> Response:
-    """Il biglietto stampabile (A6) del luogo scelto: `text/html` (default) o `application/pdf` con `formato=pdf`.
+    """Il biglietto stampabile (A6) del luogo scelto: `text/html`, pronto per la stampa del browser.
 
     Due origini, un solo foglio: un luogo della memoria della rete (badge `[KB …]`) o un POI esterno indicato come
     `osm:node:<id>` (badge `[Esterna …]`, ricaricato da Overpass). Nel secondo caso il POI **non viene scritto** in
     `luogo` — lo shim non scrive il dominio (V4): il foglio serve a indicare la destinazione, e la promozione in
     memoria resta una proposta.
-
-    Il PDF è la **stessa pagina** (una sola pipeline, `_foglio`) resa come file: l'operatore lo scarica invece di
-    mandare l'HTML alla stampante. Il nome file è il nome del luogo: è ciò che resta sul disco della Casa.
     """
     riferimento = await _casa_riferimento(sess, casa)
     consultato = adesso_locale()
@@ -478,8 +441,6 @@ async def biglietto(
             consultato=consultato,
             tipo=riga["tipo"],
         )
-        if formato == "pdf":
-            return _pdf_dall_html(documento, f"biglietto - {riga['nome']}")
         return HTMLResponse(documento)
 
     config = await _configurazione_osm(sess)
@@ -510,8 +471,6 @@ async def biglietto(
         consultato=consultato,
         tipo=poi.tipo or "luogo esterno",
     )
-    if formato == "pdf":
-        return _pdf_dall_html(documento, f"biglietto - {poi.nome}")
     return HTMLResponse(documento)
 
 
@@ -851,7 +810,6 @@ async def _evento_kb(sess: SessioneOperatore, evento_id: int) -> dict[str, Any] 
 )
 async def op_scheda_evento(
     evento_id: int = Query(..., ge=1, description="Identificativo dell'evento (`trasi.evento.id`)."),
-    formato: str = Query(default="html", pattern="^(html|pdf)$"),
     sess: SessioneOperatore = Depends(sessione_corrente),
 ) -> Response:
     """GET /op/scheda_evento?evento_id= — il foglio stampabile di un evento, per il browser dell'operatore.
@@ -928,6 +886,4 @@ async def op_scheda_evento(
         url=riga["url"],
         consultato=consultato,
     )
-    if formato == "pdf":
-        return _pdf_dall_html(documento, f"scheda evento - {titolo}")
     return HTMLResponse(documento)
