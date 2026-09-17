@@ -221,8 +221,8 @@ che vi riguardano**, trovate facendo girare le due suite complete:
 2. **`shim/tests/test_monitoraggio.py`: 2 test rossi** (`test_chat_pa_risponde_con_fonte_e_logga_in_chat_
    interazione`, `test_chat_pa_on_guasto_logga_errore_e_risponde_503`). Il file è di US-4 e **non è in
    main**: è nel checkout ma untracked, e i moduli che importa (`monitoraggio.py`, `auth.py`, `chat.py`)
-   pure. Da me nessuna modifica lì; probabilmente è il mio `main.py`… no: `main.py` non l'ho toccato
-   (`git log -- shim/app/main.py` lo conferma). È vostro da guardare quando committate US-4.
+   pure. Da me nessuna modifica lì né a `shim/app/main.py` (`git log -- shim/app/main.py` lo conferma):
+   è vostro da guardare quando committate US-4.
 
 3. **`persona_casa`: ho REVOCATO SELECT a `metabase_ro`, `automazioni`, `applicatore`** (`db/029`,
    già applicato al DB). Il default privilege di `db/002` lo concedeva a ogni tabella nuova: se una vostra
