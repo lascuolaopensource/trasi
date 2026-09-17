@@ -3,20 +3,27 @@
 Entrambi leggono solo `trasi.luogo` / `trasi.casa` / `trasi.evento` come ruolo della Casa dell'operatore: la RLS fa
 il resto, e una Casa non vede nulla di più di quanto il suo ruolo concede.
 
-Due scelte che vale la pena dichiarare:
+Tre scelte che vale la pena dichiarare:
 
 - **`cerca_luogo` risponde 200 con `items: []`**, mai 404. «Nessun luogo in memoria» è un'informazione vera e utile
   (è lo scenario US-02: l'assistente dichiara l'astensione invece di inventare), mentre un 404 direbbe che
   l'*endpoint* non esiste. Il 422 di `q` troppo corta è invece un errore di chi chiama: una ricerca di un carattere
   restituirebbe mezzo database.
-- **`eventi_oggi` risponde 404 se lo slug non esiste**: la Casa è un vocabolario chiuso, e una Casa inesistente è una
-  richiesta sbagliata, non una risposta vuota. Se la Casa esiste ma non ha eventi, la risposta è 200 con `eventi: []`.
+- **`eventi_oggi` senza `casa` copre TUTTE le Case della rete** (il calendario è condiviso e la RLS concede a
+  ogni ruolo Casa la lettura dell'intera memoria degli eventi). Con `casa` esplicito è solo quella Casa; il
+  modello ne scrive di solito il **nome** («San Bao») e non lo slug, quindi un valore che non è uno slug si prova
+  a risolvere in Casa, e solo un testo che non è riconoscibile è 404. Una Casa esistente senza eventi è 200 con
+  `eventi: []`. Ogni item porta `casa_slug`/`casa_nome`, così la provenienza viaggia con l'evento.
+- **`data` è un giorno o l'inizio di un intervallo**: con `al` la risposta copre `data..al` (inclusi), così
+  «questo weekend» o «questa settimana» sono una sola chiamata e non una per giorno. Un evento di più giorni
+  compare in ogni giornata che attraversa (overlap), non solo nel giorno d'inizio.
 """
 
 from __future__ import annotations
 
 import re
-from datetime import date
+from calendar import monthrange
+from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
@@ -45,6 +52,11 @@ MIN_LUNGHEZZA_RICERCA = 2
 # La ricerca è sulla memoria della rete, che è piccola (22 luoghi nel seed): un tetto dichiarato evita che una
 # richiesta generica restituisca tutto e tenga fuori il resto della risposta del LLM.
 TETTO_CERCA_LUOGO = 20
+
+# «Questo weekend», «questa settimana», «questo mese» sono intervalli; oltre ~3 mesi la richiesta non è più una
+# consultazione di calendario ma un dump, e riempirebbe il contesto del LLM. Il tetto è sull'ampiezza (al − data),
+# non sulla distanza: «gli eventi di dicembre» resta ammesso.
+MAX_GIORNI_INTERVALLO = 92
 
 # Ricerca su nome, descrizione e indirizzo. `ILIKE` e non full-text: la memoria della rete ha 22 luoghi nel seed
 # (ordine di grandezza di una manciata di migliaia a regime), e un indice GIN non guadagnerebbe nulla su questa
@@ -80,19 +92,41 @@ SQL_CASA_ESISTE = "SELECT id FROM trasi.casa WHERE slug = $1"
 
 # Il giorno si ritaglia nel fuso del database (`TimeZone` = Europe/Rome dal compose), non in UTC: l'evento delle
 # 21:30 di oggi appartiene a oggi, e confrontare un `timestamptz` con una data in UTC lo sposterebbe a domani.
+#
+# `$1` (slug) è facoltativo: NULL = tutte le Case (il calendario è della rete). `$2`/`$3` sono l'intervallo
+# `dal..al` (inclusi). `$4` è la parola chiave facoltativa su titolo/descrizione.
+#
+# Due filtri, perché due cose diverse. Un evento **singolo** entra se la sua giornata cade nell'intervallo
+# (`inizio <= al AND COALESCE(fine, inizio) >= dal`: un evento di più giorni compare in ogni giornata che
+# attraversa, non solo in quella d'inizio). Un evento **ricorrente** entra se la sua ricorrenza può ancora
+# produrre un'occorrenza nell'intervallo (`ricorrenza_fine` NULL = senza termine): le occorrenze si calcolano
+# dopo, in `_occorrenze`, perché la regola è un vocabolario di `trasi.evento` (db/025) che il database non
+# espande da sé.
 SQL_EVENTI = """
-SELECT e.id, e.titolo, e.inizio, e.fine, e.luogo_testo,
+SELECT e.id, e.titolo, e.descrizione, e.inizio, e.fine, e.luogo_testo,
        COALESCE(e.url, f.url) AS url,
        COALESCE(e.affidabilita, 2) AS affidabilita,
        f.nome AS fonte_nome, f.autorita AS fonte_autorita,
        (e.uid_ical IS NULL AND e.fonte_id IS NULL) AS inserito_a_mano,
-       c.nome AS casa_nome, c.slug AS casa_slug
+       c.nome AS casa_nome, c.slug AS casa_slug,
+       e.costo, e.fascia_eta, e.tag, e.ricorrenza, e.ricorrenza_fine,
+       e.prenotazione, e.prenotazione_nota
 FROM trasi.evento e
 JOIN trasi.casa c ON c.id = e.casa_id
 LEFT JOIN trasi.fonte f ON f.id = e.fonte_id
-WHERE c.slug = $1
+WHERE ($1::text IS NULL OR c.slug = $1)
   AND e.annullato = false
-  AND e.inizio::date = $2
+  AND (
+        (e.ricorrenza IS NULL
+         AND e.inizio::date <= $3
+         AND COALESCE(e.fine, e.inizio)::date >= $2)
+     OR (e.ricorrenza IS NOT NULL
+         AND e.inizio::date <= $3
+         AND (e.ricorrenza_fine IS NULL OR e.ricorrenza_fine >= $2))
+      )
+  AND ($4::text IS NULL
+       OR e.titolo ILIKE '%' || $4 || '%'
+       OR COALESCE(e.descrizione, '') ILIKE '%' || $4 || '%')
 ORDER BY e.inizio
 """
 
@@ -154,37 +188,68 @@ async def cerca_luogo(
 async def eventi_oggi(
     casa: str | None = Query(
         default=None,
-        description="Slug della Casa di Quartiere. Se omesso si usa la Casa dell'operatore autenticato.",
+        description="Slug o nome della Casa di Quartiere. Se omesso, gli eventi di TUTTE le Case della rete "
+        "(il calendario è condiviso); ogni item dichiara la sua Casa in `casa_slug`/`casa_nome`.",
     ),
-    data: date | None = Query(default=None, description="Data ISO `AAAA-MM-GG`; se omessa, oggi."),
+    data: date | None = Query(
+        default=None,
+        description="Giorno singolo o inizio dell'intervallo, ISO `AAAA-MM-GG`; se omessa, oggi (Europe/Rome).",
+    ),
+    al: date | None = Query(
+        default=None,
+        description="Fine dell'intervallo (inclusa): con `al` la risposta copre `data..al` — «questo weekend» o "
+        "«questa settimana» in una sola chiamata. Per un solo giorno, ometterla.",
+    ),
+    q: str | None = Query(
+        default=None,
+        description="Parola chiave facoltativa: filtra gli eventi per titolo/descrizione (es. «bambini»).",
+    ),
     sess: Sessione = Depends(dipendenza_sessione),
 ) -> RispostaEventiOggi:
-    """Gli eventi di una Casa in una data (oggi se non indicata), dal calendario della rete.
+    """Gli eventi del calendario della rete in una data o nell'intervallo `data..al`.
 
-    «Oggi» è calcolato nel fuso italiano: alle 00:30 di Roma gli eventi della sera prima non sono più «oggi», ed è
-    il comportamento che l'operatore allo sportello si aspetta.
+    «Oggi» è calcolato nel fuso italiano: alle 00:30 di Roma gli eventi della sera prima non sono più «oggi».
 
-    La Casa, se non indicata, è quella dell'operatore: l'assistente non deve conoscerla (v. `slug_casa_da_identita`).
+    Senza `casa` la risposta copre **tutte** le Case della rete (fino al 2026-09-17 prendeva la sola Casa
+    dell'operatore, e gli eventi delle altre erano invisibili in chat: una Casa non vedeva il calendario della
+    rete). Con `casa` esplicito è quella Casa; il modello ne scrive di solito il **nome** e non lo slug, quindi un
+    valore che non è uno slug si prova a risolvere in Casa, e solo un testo che non è riconoscibile è 404. Ogni
+    item porta `casa_slug`/`casa_nome`: la provenienza viaggia con l'evento, non si deduce dal campo `casa` (che è
+    `null` quando la ricerca è su tutta la rete).
     """
-    slug = (casa or "").strip() or await slug_casa_da_identita(sess)
-    if not slug:
-        raise errore(422, "parametri non ammessi — casa: obbligatoria per un ruolo senza Casa (es. rete)")
-    # Il modello scrive il nome («San Bao») più spesso dello slug: si prova a riconoscerlo. Solo se non è una
-    # Casa riconoscibile si ripiega su quella dell'operatore (v. `routes_geo`), com'era prima.
-    if await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
-        slug = await risolvi_slug_casa(sess, slug) or await slug_casa_da_identita(sess) or slug
+    richiesto = (casa or "").strip() or None
+    slug = richiesto
+    if slug is not None and await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
+        # Il modello riempie `casa` col nome della Casa, non con lo slug (v. `risolvi_slug_casa`): un nome
+        # riconoscibile diventa lo slug, un testo che non è una Casa è 404 — mai un ripiego silenzioso su un'altra.
+        slug = await risolvi_slug_casa(sess, slug)
+        if slug is None:
+            raise errore(404, f"casa non trovata: nessuna Casa di Quartiere con «{richiesto}»")
 
-    riferimento = data or oggi_locale()
-    # Il parametro è un `date`, non una stringa ISO: `$2::date` fa dedurre ad asyncpg il tipo del parametro, e una
-    # stringa lì è un `DataError` a runtime (verificato: `'str' object has no attribute 'toordinal'`).
-    righe = await sess.fetch(SQL_EVENTI, slug, riferimento)
+    dal = data or oggi_locale()
+    fine_intervallo = al or dal
+    if fine_intervallo < dal:
+        raise errore(422, "parametri non ammessi — al: deve essere uguale o successiva a data")
+    if (fine_intervallo - dal).days > MAX_GIORNI_INTERVALLO:
+        raise errore(422, f"parametri non ammessi — intervallo troppo ampio (max {MAX_GIORNI_INTERVALLO} giorni)")
 
-    if not righe and await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
-        raise errore(404, f"casa non trovata: nessuna Casa di Quartiere con slug «{slug}»")
+    parola = (q or "").strip() or None
+    if parola is not None and len(parola) < MIN_LUNGHEZZA_RICERCA:
+        raise errore(422, f"parametri non ammessi — q: almeno {MIN_LUNGHEZZA_RICERCA} caratteri")
 
-    return RispostaEventiOggi(
-        casa=slug, data=riferimento, eventi=[_item_evento(riga) for riga in righe]
-    )
+    # `data` è un `date`, non una stringa ISO: `$2::date`/`$3::date` fanno dedurre ad asyncpg il tipo del
+    # parametro, e una stringa lì è un `DataError` a runtime (verificato: `'str' object has no attribute 'toordinal'`).
+    righe = await sess.fetch(SQL_EVENTI, slug, dal, fine_intervallo, parola)
+
+    eventi: list[ItemEvento] = []
+    for riga in righe:
+        for occ_inizio, occ_fine in _occorrenze(riga, dal, fine_intervallo):
+            eventi.append(_item_evento(riga, occ_inizio, occ_fine))
+    # Una ripetizione può cadere in un giorno diverso dall'`inizio` memorizzato (che è la prima occorrenza):
+    # l'ordine è per data **dell'occorrenza**, non per `inizio`, altrimenti la lista mentirebbe sul calendario.
+    eventi.sort(key=lambda e: (e.data, e.ora_inizio or ""))
+
+    return RispostaEventiOggi(casa=slug, data=dal, al=al, eventi=eventi)
 
 
 def _item_luogo(riga) -> ItemLuogo:
@@ -206,32 +271,117 @@ def _item_luogo(riga) -> ItemLuogo:
     )
 
 
-def _item_evento(riga) -> ItemEvento:
-    """Una riga di `trasi.evento` → `ItemEvento` del contratto.
+# Il tetto alle occorrenze di un singolo evento ricorrente: l'intervallo è già limitato (`MAX_GIORNI_INTERVALLO`),
+# quindi serve solo a fermare un conteggio impazzito, non a limitare l'uso normale.
+MAX_OCCORRENZE = 400
 
-    Le ore si convertono **esplicitamente** nel fuso italiano: `asyncpg` restituisce i `timestamptz` in UTC, e un
-    `strftime('%H:%M')` diretto mostrerebbe l'evento delle 18:30 come «16:30» (verificato). Il badge porta la data
-    locale dell'evento, che è il giorno in cui l'operatore lo vede in calendario.
+
+def _in_italia(giorno: date, ora: time) -> datetime:
+    """`giorno`+`ora` nel fuso italiano. Ricomposta invece di sommata: `+ timedelta(days=7)` su un istante
+    consapevole è aritmetica assoluta, e attraverso il cambio d'ora sposterebbe l'evento delle 10:00 alle 11:00."""
+    return datetime.combine(giorno, ora, tzinfo=FUSO)
+
+
+def _giorni_occorrenza(base: date, regola: str, dal: date, al: date, fine_ric: date | None) -> list[date]:
+    """I giorni in cui cade la ricorrenza dentro `dal..al`, a partire dal giorno `base` (quello d'inizio).
+
+    Settimanale/bisettimanale avanzano di giorni; mensile/annuale avanzano **sul calendario** (il 31/01 mensile
+    resta il 31, o l'ultimo giorno di un mese corto), non di 30/365 giorni, che farebbero scivolare la data.
+    """
+    giorni: list[date] = []
+    if regola in ("settimanale", "bisettimanale"):
+        passo = 7 if regola == "settimanale" else 14
+        # Si parte da un multiplo vicino a `dal`, non da `base`: un evento settimanale attivo da anni produrrebbe
+        # centinaia di passi scartati prima di arrivare all'intervallo.
+        n = max(0, (dal - base).days // passo - 1)
+        while n < MAX_OCCORRENZE:
+            giorno = base + timedelta(days=passo * n)
+            if giorno > al or (fine_ric is not None and giorno > fine_ric):
+                break
+            if giorno >= dal:
+                giorni.append(giorno)
+            n += 1
+        return giorni
+
+    passo_mesi = 1 if regola == "mensile" else 12
+    n = max(0, ((dal.year - base.year) * 12 + (dal.month - base.month)) // passo_mesi - 1)
+    while n < MAX_OCCORRENZE:
+        totale = (base.year * 12 + (base.month - 1)) + passo_mesi * n
+        anno, mese = totale // 12, totale % 12 + 1
+        giorno = date(anno, mese, min(base.day, monthrange(anno, mese)[1]))
+        if giorno > al or (fine_ric is not None and giorno > fine_ric):
+            break
+        if giorno >= dal:
+            giorni.append(giorno)
+        n += 1
+    return giorni
+
+
+def _occorrenze(riga, dal: date, al: date) -> list[tuple[datetime, datetime | None]]:
+    """Quando cade un evento dentro `dal..al`: l'intervallo memorizzato se è singolo, le occorrenze se ricorre.
+
+    La durata (`fine - inizio`) resta la stessa a ogni ripetizione, così una festa di due giorni resta di due
+    giorni anche alla terza occorrenza. Per un evento **non** ricorrente l'intervallo è quello memorizzato: la
+    query ha già verificato che cade nei giorni chiesti.
+    """
+    inizio = riga["inizio"]
+    fine = riga["fine"]
+    regola = riga["ricorrenza"]
+    if not regola:
+        return [(inizio, fine)]
+    durata = (fine - inizio) if fine else None
+    riferimento = inizio.astimezone(FUSO)
+    return [
+        (
+            _in_italia(giorno, riferimento.time()),
+            _in_italia(giorno, riferimento.time()) + durata if durata else None,
+        )
+        for giorno in _giorni_occorrenza(riferimento.date(), regola, dal, al, riga["ricorrenza_fine"])
+    ]
+
+
+def _item_evento(riga, inizio: datetime, fine: datetime | None) -> ItemEvento:
+    """Una occorrenza di un evento → `ItemEvento` del contratto, con il badge già composto (V3).
+
+    `inizio`/`fine` sono l'occorrenza (per un ricorrente, quella calcolata). Le ore si convertono
+    **esplicitamente** nel fuso italiano: `asyncpg` restituisce i `timestamptz` in UTC, e uno `strftime('%H:%M')`
+    diretto mostrerebbe l'evento delle 18:30 come «16:30» (verificato). Il badge porta la data locale
+    dell'occorrenza, che è il giorno in cui l'operatore la vede in calendario.
+
+    I campi di db/025 e db/030 (costo, fascia d'età, tag, ricorrenza, prenotazione) viaggiano con l'item: sono le
+    risposte a «è gratuito?», «serve prenotare?», «per chi è?», e senza di essi l'assistente le cerca a vuoto
+    invece di rispondere.
     """
     fonte = (
         "inserito dall'operatore"
         if riga["inserito_a_mano"]
         else nome_fonte(riga["fonte_autorita"], riga["fonte_nome"])
     )
-    inizio = riga["inizio"].astimezone(FUSO)
-    fine = riga["fine"].astimezone(FUSO) if riga["fine"] else None
+    locale = inizio.astimezone(FUSO)
+    chiusura = fine.astimezone(FUSO) if fine else None
+    costo = float(riga["costo"]) if riga["costo"] is not None else None
     return ItemEvento(
         provenienza="kb",
         titolo=riga["titolo"],
         dove=riga["luogo_testo"] or riga["casa_nome"],
-        data=inizio.date(),
-        ora_inizio=inizio.strftime("%H:%M"),
-        ora_fine=fine.strftime("%H:%M") if fine else None,
+        casa_slug=riga["casa_slug"],
+        casa_nome=riga["casa_nome"],
+        data=locale.date(),
+        ora_inizio=locale.strftime("%H:%M"),
+        ora_fine=chiusura.strftime("%H:%M") if chiusura else None,
         orari_nota=None,
+        descrizione=riga["descrizione"],
+        costo=costo,
+        gratuito=True if costo == 0 else None,
+        fascia_eta=riga["fascia_eta"],
+        tag=list(riga["tag"]) if riga["tag"] else None,
+        ricorrenza=riga["ricorrenza"],
+        prenotazione=riga["prenotazione"],
+        prenotazione_nota=riga["prenotazione_nota"],
         fonte=fonte,
         url=riga["url"],
         fiducia=riga["affidabilita"],
-        badge=badge_kb(fonte, inizio.date(), riga["affidabilita"]),
+        badge=badge_kb(fonte, locale.date(), riga["affidabilita"]),
     )
 
 SQL_STATISTICHE = """

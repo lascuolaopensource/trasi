@@ -54,17 +54,32 @@ class RispostaCercaLuogo(BaseModel):
 
 
 class ItemEvento(BaseModel):
-    """`eventi_oggi`: un evento in programma in una Casa di Quartiere."""
+    """`eventi_oggi`: un'occorrenza di un evento del calendario della rete, con la sua Casa e i suoi dettagli.
+
+    I dettagli (costo, fascia d'età, tag, prenotazione) sono le risposte a «è gratuito?», «serve prenotare?»,
+    «per chi è?»: `null` significa «non dichiarato», che è diverso da «no» — ed è la distinzione che permette
+    all'assistente di dire «non lo so» invece di inventare.
+    """
 
     model_config = TIPO_STRETTO
 
     provenienza: Literal["kb"]
     titolo: str
     dove: str
+    casa_slug: str
+    casa_nome: str
     data: date
     ora_inizio: str | None
     ora_fine: str | None
     orari_nota: str | None
+    descrizione: str | None = None
+    costo: float | None = None
+    gratuito: bool | None = None
+    fascia_eta: str | None = None
+    tag: list[str] | None = None
+    ricorrenza: str | None = None
+    prenotazione: bool | None = None
+    prenotazione_nota: str | None = None
     fonte: str
     url: str | None
     fiducia: int = Field(ge=1, le=3)
@@ -72,12 +87,13 @@ class ItemEvento(BaseModel):
 
 
 class RispostaEventiOggi(BaseModel):
-    """Eventi di una Casa in una data."""
+    """Eventi in una data (o nell'intervallo `data`..`al`); senza `casa`, di tutte le Case della rete."""
 
     model_config = TIPO_STRETTO
 
-    casa: str
+    casa: str | None
     data: date
+    al: date | None = None
     eventi: list[ItemEvento]
 
 
