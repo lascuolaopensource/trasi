@@ -107,7 +107,8 @@ http://{$TRASI_DOMAIN} {
   # rende la rivalidazione un 304). Senza, Cloudflare e i browser tengono `.js`/`.css`
   # per ore con la loro euristica, e una modifica alla Home compare a chi la ricarica
   # forzando e non a chi la apre — che è chi la usa allo sportello.
-		root * /srv/home
+  handle {
+    root * /srv/home
 		header Cache-Control "no-cache"
 		file_server
 	}
