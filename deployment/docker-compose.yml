@@ -1,8 +1,9 @@
 # Trasi — stack infra (blocco B0)
 #
-# Convive con Onyx (compose separato, /opt/onyx/deployment/docker_compose) sullo stesso host.
+# Convive con Onyx (compose separato) quando gira sull'host onice; su Coolify (giorgio) la
+# stessa firma è usata senza i servizi Onyx-dipendenti (v. «modalità Coolify» più sotto).
 # Regole invarianti:
-#   - binding di rete SOLO su 127.0.0.1: la pubblicazione esterna passa dal tunnel Cloudflare;
+#   - binding di rete SOLO su 127.0.0.1 (onice): su Coolify l'ingresso è coolify-proxy (Traefik);
 #   - mem_limit esplicito su OGNI servizio (nessun over-commit: vedi README.md, «avvio selettivo»);
 #   - restart: unless-stopped + healthcheck reale su ogni servizio.
 #
@@ -58,6 +59,34 @@ services:
     logging: *default-logging
     networks: [trasi_net]
 
+  # ---------------------------------------------------------------- inizializzazione dati -----------------
+  # Uno-shot: applica db/*.sql nell'ordine del contratto B1 e crea il database di NocoDB.
+  # Va a buon fine e termina; chi ne dipende parte solo a `service_completed_successfully`.
+  # Idempotente: lo stesso strato è db/apply.sh, qui invocato con il ruolo amministratore.
+  db_init:
+    build:
+      context: ../db
+      dockerfile: Dockerfile
+    image: trasi-db-init:local
+    restart: "no"
+    mem_limit: 128m
+    depends_on:
+      db_trasi:
+        condition: service_healthy
+    environment:
+      PGHOST: ${SERVICE_NAME_DB_TRASI:-db_trasi}
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${TRASI_DB}
+      TRASI_DB: ${TRASI_DB}
+      SHIM_DB_PASSWORD: ${SHIM_DB_PASSWORD}
+      NOCODB_DB_NAME: ${NOCODB_DB_NAME:-nocodb_db}
+      TZ: ${TZ}
+    entrypoint: ["bash", "/db/init-entrypoint.sh"]
+    logging: *default-logging
+    networks: [trasi_net]
+
   # ---------------------------------------------------------------- ricerca web su allow-list (V-07) -------
   # Interno: lo interroga solo lo shim (http://searxng:8080). Nessuna porta pubblica.
   searxng:
@@ -103,10 +132,13 @@ services:
     # `condition: service_healthy` rende il ritardo impossibile all'origine; il riavvio a caldo del pool
     # (`pool_pronto`) copre comunque il caso in cui Postgres si riavvii dopo.
     depends_on:
-      db_trasi:
-        condition: service_healthy
+      db_init:
+        condition: service_completed_successfully
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      # Composta il DSN qui invece di aspettarsi `DATABASE_URL` dall'esterno: l'host è il
+      # servizio del compose (`${SERVICE_NAME_DB_TRASI}`), che Coolify genera (db_trasi,
+      # db_trasi-pr-<N> nelle anteprime); su onice compose lo imposta al valore «db_trasi».
+      DATABASE_URL: postgresql://shim_rw:${SHIM_DB_PASSWORD}@${SERVICE_NAME_DB_TRASI:-db_trasi}:5432/${TRASI_DB}
       TRASI_SHIM_KEY: ${TRASI_SHIM_KEY}
       OVERPASS_URL: ${OVERPASS_URL}
       OVERPASS_URL_2: ${OVERPASS_URL_2}
@@ -160,10 +192,18 @@ services:
       NC_TOOL_DIR: /usr/app/data
       NC_AUTH_JWT_SECRET: ${NOCODB_JWT_SECRET}
       NC_SITE_URL: ${NOCODB_SITE_URL}
+      # Metadati su database DEDICATO (non `trasi_db`): NocoDB esegue le sue migrazioni sullo
+      # schema `public` del DB che gli si passa, e sul dominio quel schema non è suo. Il DB
+      # `nocodb_db` è creato da `db_init`. Formato verificato su immagine 2026.09.0:
+      # NC_DB=pg://utente:pass@host:5432/db?u=...&p=...&d=...
+      NC_DB: pg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${SERVICE_NAME_DB_TRASI:-db_trasi}:5432/${NOCODB_DB_NAME:-nocodb_db}?u=${POSTGRES_USER}&p=${POSTGRES_PASSWORD}&d=${NOCODB_DB_NAME:-nocodb_db}
       # CE 2026 blocca "internal hosts" sulle sorgenti esterne; qui DB e NocoDB vivono
       # nella stessa rete Docker privata (non esposti fuori dal loopback/host), quindi è sicuro.
       NC_ALLOW_LOCAL_HOSTS: "true"
       TZ: ${TZ}
+    depends_on:
+      db_init:
+        condition: service_completed_successfully
     volumes:
       - nocodb_data:/usr/app/data
     ports:
@@ -285,7 +325,11 @@ services:
     networks: [trasi_net]
 
   # ---------------------------------------------------------------- ingresso unico (B6) -------------------
+  # Su Coolify l'ingresso è coolify-proxy (Traefik): Caddy non parte, e la Home statica è servita
+  # dal servizio `home` (nginx). Su onice è il contrario: Caddy entra dal tunnel Cloudflare e
+  # `home` non serve. Il profilo seleziona la variante: `--profile onice` o `--profile coolify`.
   caddy:
+    profiles: [onice]
     image: caddy:2.11.4-alpine
     restart: unless-stopped
     mem_limit: 128m
@@ -319,16 +363,40 @@ services:
     logging: *default-logging
     networks: [trasi_net, onyx_net]
 
+  # ---------------------------------------------------------------- Home statica (modalità Coolify) -------
+  # nginx che serve il contenuto del checkout (`./home`), come immagine costruita e non come
+  # bind mount: Coolify riscrive i bind relativi verso /data/coolify/applications/<uuid>/
+  # dove il contenuto del repo NON è copiato (misurato: home-pr-4 vuota → 403 + unhealthy).
+  # Costruito dal checkout, il contenuto è quello del commit deployato, per ogni PR.
+  home:
+    profiles: [coolify]
+    build:
+      context: ./home
+      dockerfile: Dockerfile
+    image: trasi-home:local
+    restart: unless-stopped
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:80/index.html"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging: *default-logging
+    networks: [trasi_net]
+
+  # ---------------------------------------------------------------- servizio database NocoDB --------------
+  # Su Coolify nocodb richiede un database dedicato (v. NC_DB sopra): qui lo crea db_init.
+  # Nessuna porta host pubblicata in modalità Coolify: l'ingresso è Traefik.
+
 networks:
   trasi_net:
     name: trasi_net
     driver: bridge
-  # Rete del compose Onyx (già attiva): serve a Caddy per raggiungere onyx-nginx.
-  # `docker compose config` valida anche se la rete non esiste ancora; gli altri
-  # servizi non la usano e non ne dipendono.
-  onyx_net:
-    name: onyx_default
-    external: true
+  # Rete del compose Onyx (già attiva su onice): serve a Caddy per raggiungere onyx-nginx.
+  # In modalità Coolify (giorgio) Onyx non c'è: la variante esterna è rimessa nel file
+  # docker-compose.onice.yml, così il parse di Coolify non si impianta su una rete esterna
+  # assente (misurato: `network onyx_default declared as external, but could not be found`).
 
 volumes:
   db_trasi_data:
@@ -346,5 +414,9 @@ volumes:
 # Nota operativa: `include` **non** avvia nulla da solo. `docker compose up -d db_trasi searxng`
 # resta l'avvio selettivo di B0 (RAM), e `automazioni` si accende quando serve:
 #     docker compose up -d automazioni
-include:
-  - docker-compose.automazioni.yml
+#
+# MODALITÀ COOLIFY (giorgio / broolify): il compose viene parso da Coolify e i servizi
+# `caddy`, `home`, `automazioni` e le reti Onyx non devono partire. Lì la selezione è:
+#   docker compose -f docker-compose.yml -f docker-compose.coolify.yml up -d
+# con `COMPOSE_PROFILES=coolify`, e le anteprime PR ottengono automaticamente
+# `SERVICE_NAME_DB_TRASI=db_trasi-pr-<N>` (host del DSN) senza toccare questo file.
