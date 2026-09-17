@@ -25,7 +25,10 @@
      con i turni e deve poter scorrere. Con `height` il compositore agganciato coprirebbe l'ultimo
      turno; con `min-height` la colonna si allunga e lo `sticky` del compositore resta in fondo
      al flusso, mai sopra il testo (regola 10 di §1.3). */
-  min-height: calc(100vh - 8rem);
+  /* Lo spazio di shell comprende testata e margini del contenuto, che precedono la chat. */
+  --chat-spazio-shell: 8rem;
+  min-height: calc(100vh - var(--chat-spazio-shell));
+  min-height: calc(100dvh - var(--chat-spazio-shell));
 }
 
 /* S0 — VUOTO: titolo e compositore centrati, suggerimenti sotto. Il compositore **non** è
