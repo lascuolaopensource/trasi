@@ -19,28 +19,59 @@
     "finché il TI non li verifica, e per i 2 CAF del seed, marcati «orari da verificare».",
     "",
     "Un bersaglio non verificato che resta attivo produce un errore a **ogni notte**: il flusso",
-    "prova `https://www.comune.brindisi.it/urp` (che risponde 404 da qui — verificato), registra",
-    "`fonte_run.esito = 'errore'` e l'alert di coerenza delle fonti segnala all'AT una fonte rotta che",
-    "non è rotta: non è ancora configurata. Un allarme che suona ogni notte per un motivo noto è un",
-    "allarme che si impara a ignorare — e il giorno in cui una fonte *vera* si rompe, nessuno guarda.",
+    "registra `fonte_run.esito = 'errore'` e l'alert di coerenza delle fonti segnala all'AT una fonte",
+    "rotta che non è rotta: non è ancora configurata. Un allarme che suona ogni notte per un motivo",
+    "noto è un allarme che si impara a ignorare — e il giorno in cui una fonte *vera* si rompe,",
+    "nessuno guarda.",
     "",
-    "Il bersaglio resta nel registro, inattivo e con la nota di cosa manca: è la stessa forma del seed",
-    "(`fonte.attiva = false`), e il TI lo accende quando ha verificato l'URL. Il flusso, dal canto",
-    "suo, non ignora i bersagli inattivi: li dichiara in `flusso_run.dettaglio.inattivi`, così il",
-    "registro dice «c'è una pagina che nessuno sorveglia» invece di lasciarlo implicito nella",
-    "configurazione."
+    "Il bersaglio resta nel registro, inattivo e con la nota di cosa manca: il flusso non ignora i",
+    "bersagli inattivi, li dichiara in `flusso_run.dettaglio.inattivi`, così il registro dice «c'è una",
+    "pagina che nessuno sorveglia» invece di lasciarlo implicito nella configurazione."
   ],
   "bersagli": [
     {
-      "fonte": "Comune di Brindisi-3",
-      "url": "https://www.comune.brindisi.it/urp",
-      "selettore": "#orari-urp",
+      "fonte": "ASL Brindisi — CUP-3",
+      "url": "https://www.sanita.puglia.it/web/asl-brindisi/cup",
+      "selettore": ".card-body",
+      "entita": "luogo",
+      "entita_id": 17,
+      "campo": "orari",
+      "casa": null,
+      "attivo": true,
+      "_nota": "Verificato il 16/09/2026: pagina 200, selettore `.card-body` estrae 1692 caratteri utili (numero verde CUP, indirizzi e telefoni degli sportelli). È l'orario che il cittadino chiede più spesso. entita_id=17 è «ASL Brindisi — Distretto socio-sanitario»; la proposta la decide l'AT (§11)."
+    },
+    {
+      "fonte": "Comune di Brindisi — Anagrafe-3",
+      "url": "https://www.comune.brindisi.it/amministrazione/unita_organizzativa/ufficio-anagrafe/",
+      "selettore": ".card-body",
       "entita": "luogo",
       "entita_id": 16,
       "campo": "orari",
       "casa": null,
+      "attivo": true,
+      "_nota": "Verificato il 16/09/2026: pagina 200, selettore `.card-body` estrae 893 caratteri (orari di sportello e contatti). ⚠️ `.journal-content-article` su questa pagina estrae 0 caratteri: il contenuto utile è nei blocchi `.card-body`. entita_id=16 è «Comune di Brindisi — URP»."
+    },
+    {
+      "fonte": "Comune di Brindisi-3",
+      "url": "https://www.comune.brindisi.it/notizie/avvisi/",
+      "selettore": ".journal-content-article",
+      "entita": "scheda_servizio",
+      "entita_id": null,
+      "campo": "descrizione",
+      "casa": null,
       "attivo": false,
-      "_nota": "URL e selettore da verificare: la home del Comune esiste, questa pagina risponde 404 (misurato il 16/09) e il blocco `#orari-urp` va individuato sulla pagina reale. Si accende con `attivo: true` dopo la verifica."
+      "_nota": "URL verificato 200 il 16/09/2026, ma il selettore del blocco avvisi NON è individuato: `.journal-content-article` è il contenitore dei portlet e va misurato su questa pagina prima di accendere. Gli avvisi sono la fonte naturale delle opportunità (contributi, avvisi con scadenza). Da fare: misurare il selettore e valorizzare `entita_id` con la scheda reale."
+    },
+    {
+      "fonte": "Comune di Brindisi-3",
+      "url": "https://www.comune.brindisi.it/vivere-il-comune/eventi/",
+      "selettore": ".journal-content-article",
+      "entita": "scheda_servizio",
+      "entita_id": null,
+      "campo": "descrizione",
+      "casa": null,
+      "attivo": false,
+      "_nota": "URL verificato 200 il 16/09/2026. Il palinsesto comunale cambia: la sorveglianza propone, l'operatore decide. Selettore da misurare sulla pagina vera. NB: `entita='evento'` NON è ammessa da questo flusso (solo `luogo` e `scheda_servizio`) — per gli eventi la via è la proposta in chat o il connettore iCal, quando esisterà un feed."
     }
   ]
 }
