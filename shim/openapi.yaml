@@ -512,6 +512,14 @@ paths:
                   format: email
                   description: 'Solo per `entita=casa`: recapito che riceve il digest mensile. Indirizzo di servizio
                     della Casa, non di una persona.'
+                indirizzo:
+                  type: string
+                  description: 'Solo per `entita=casa`: indirizzo civico della sede (es. "Via San Bao 12"). Diverso
+                    dall''indirizzo di un luogo: quello è la destinazione, questo è dove si trova la Casa.'
+                edificio:
+                  type: string
+                  description: 'Solo per `entita=casa`: denominazione dell''immobile (es. "Ex scuola elementare"), come
+                    lo conosce il quartiere. Aiuta chi non arriva dall''indirizzo.'
       responses:
         '201':
           description: Dato salvato nella memoria della rete.

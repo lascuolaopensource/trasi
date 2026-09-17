@@ -398,7 +398,10 @@ ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa")
 COLONNE_DIRETTE: dict[str, tuple[str, ...]] = {
     "scheda_servizio": ("titolo", "descrizione", "categoria", "orari", "referente_ruolo", "scadenza", "url"),
     "opportunita": ("titolo", "descrizione", "categoria", "scadenza", "url"),
-    "casa": ("orari", "orari_provvisori", "email_digest"),
+    # Le colonne della Casa: gli orari, i recapiti, e i tre campi del foglio 1.1 di Processi
+    # (`indirizzo`, `edificio`, `telefono`). È **esattamente** il privilegio che il database concede al ruolo
+    # della Casa: `db/002` per orari/email_digest, `db/025` per i tre nuovi.
+    "casa": ("orari", "orari_provvisori", "email_digest", "indirizzo", "edificio"),
 }
 
 
@@ -428,6 +431,13 @@ class SalvaDatoIn(BaseModel):
     # I campi della Casa (solo `entita="casa"`): gli orari di apertura e i recapiti del digest.
     orari_provvisori: bool | None = None
     email_digest: str | None = None
+    # I campi del foglio 1.1 (gruppo Processi): indirizzo civico della sede e denominazione dell'immobile.
+    # **`telefono` NON c'è, deliberatamente**: il filtro `pii.TELEFONO` riconosce qualunque numero fisso o
+    # cellulare italiano e non può distinguere un centralino di sportello da un cellulare personale — la
+    # differenza non è nella forma del numero. Una colonna che accetta numeri in una tabella esportata in KB
+    # (e quindi citabile in chat) riaprirebbe per la porta di servizio ciò che V5 tiene fuori. Vedi `db/025`.
+    indirizzo: str | None = None
+    edificio: str | None = None
 
     @model_validator(mode="after")
     def _coerenza(self) -> "SalvaDatoIn":
@@ -448,10 +458,15 @@ class SalvaDatoIn(BaseModel):
                 raise ValueError("«casa» non vuole id: la Casa è quella dell'identità, un ruolo una Casa")
             if any(v is not None for v in (self.titolo, self.descrizione, self.categoria,
                                            self.referente_ruolo, self.scadenza, self.url)):
-                raise ValueError("«casa» accetta solo orari, orari_provvisori ed email_digest")
+                raise ValueError(
+                    "«casa» accetta solo orari, orari_provvisori, email_digest, indirizzo ed edificio"
+                )
         else:
-            if self.orari_provvisori is not None or self.email_digest is not None:
-                raise ValueError("orari_provvisori/email_digest si applicano solo a «casa»")
+            if any(v is not None for v in (self.orari_provvisori, self.email_digest,
+                                           self.indirizzo, self.edificio)):
+                raise ValueError(
+                    "orari_provvisori/email_digest/indirizzo/edificio si applicano solo a «casa»"
+                )
         return self
 
 
