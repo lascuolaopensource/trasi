@@ -374,17 +374,21 @@ def item_kb(
     di fiducia, non parte del nome (vedi `badge.py`).
     """
     fonte = nome_fonte(riga["fonte_autorita"], riga["fonte_nome"])
+    # Le colonne numeriche arrivano dall'asyncpg come `Decimal` (la query le arrotonda con ::numeric):
+    # con `indirizzo` il centro cambia e la distanza va ricalcolata in Python, dove `Decimal - float`
+    # solleva TypeError (misurato live 17/09: 500 su vicino_a?indirizzo). Si normalizza qui, una volta.
+    lat_r, lon_r = float(riga["lat"]), float(riga["lon"])
     distanza = riga.get("distanza_m")
     if distanza is None:
-        distanza = distanza_m(casa_lat, casa_lon, riga["lat"], riga["lon"])
+        distanza = distanza_m(casa_lat, casa_lon, lat_r, lon_r)
     orari_testo = riga["orari_testo"]
     return {
         "provenienza": "kb",
         "nome": riga["nome"],
         "tipo": tipo,
         "indirizzo": riga["indirizzo"] or "",
-        "lat": riga["lat"],
-        "lon": riga["lon"],
+        "lat": lat_r,
+        "lon": lon_r,
         "distanza_m": round(float(distanza), 1),
         "aperto_adesso": riga["aperto_adesso"],
         "orari_testo": orari_testo,
