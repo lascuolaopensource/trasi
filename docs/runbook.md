@@ -999,3 +999,42 @@ una volta sola**. Il README dichiara che sta in `deployment/.env` — dal 2026-0
 
 **Verificato** dopo l'esecuzione: login reale di `op.molo12@trasi.local` → **204** con cookie di
 sessione; 22/22 utenti con `effective_permissions = ["basic"]`; `oggi` via shim → `{"casa":"molo12",…}`.
+
+---
+
+### 11.3 · `statistiche` — la lettura aggregata in chat (aggiunta il 2026-09-17)
+
+**Difetto**: all'operatore che chiedeva «quante richieste ha seguito la Casa questo mese?» l'assistente
+rispondeva di non avere strumenti per interrogare l'archivio aggregato (misurato in chat: rimando a un
+report esterno). Il dato esisteva — `trasi.v_report_mensile` e `trasi.v_confronto_case`, le stesse viste
+di Metabase — ma lo shim non lo esponeva.
+
+**Fix**: nuova operazione di lettura `statistiche` (contratto 11 → 12 operazioni):
+
+```bash
+$ curl -s -H 'X-Trasi-Key: …' \
+    'http://127.0.0.1:8001/v1/u/op.san-bao@trasi.local/statistiche?casa=san-bao'
+{"casa":"san-bao","mese":"2026-09","ambiti":[
+  {"categoria":"fiscale_isee","esito":"inviata_altrove","n":null,"n_label":"<5"},
+  {"categoria":"orientamento","esito":"risolta","n":384,"n_label":"384"}],
+ "testo":"San Bao · 2026-09: <5 inviate ad altro servizio in fiscale isee, 384 richieste risolte in orientamento"}
+```
+
+**Le tre scelte che contano** (valgono per chi estende ulteriormente il contratto):
+
+1. **Il k-anonimato resta nel database.** La sorgente è `v_report_mensile`: `n` è `NULL` sotto la
+   soglia `p_int('k_anonimato')` e resta solo `n_label` («<5», «—» a zero). Lo shim non vede mai il
+   numero grezzo, quindi non può rivelarlo — in chat o in un log.
+2. **Il filtro «solo la propria Casa» sta nella query**, con `trasi.casa_corrente()`: la vista è
+   `security_invoker=false`, quindi senza quel filtro ogni ruolo leggerebbe le statistiche di tutte
+   le dieci Case (stessa scelta di `oggi`, §11.1).
+3. **Il `testo` è composto solo su `n_label`**: nessun numero ricostruito in Python. Se un domani la
+   soglia cambia, la chat dice la stessa cosa del report, senza una seconda regola da allineare.
+
+**Verificato end-to-end** (2026-09-17): chat reale come `op.san-bao@trasi.local` (persona 2 «Trasi
+Casa») → l'assistente chiama `statistiche` e riporta «San Bao · 2026-09: <5 inviate ad altro servizio
+in fiscale isee, 384 richieste risolte in orientamento», citando il k-anonimato. Nota operativa: le
+chat fatte con credenziali admin (PAT `trasi-kb-export`) rispondono **403** — Onyx inietta l'email
+**dell'utente della chat** (`tool_constructor.py:436-447`), e l'admin non ha un'identità in
+`trasi.identita_onyx`: è il comportamento atteso, non un difetto. Il tool Onyx (id 12) è stato
+ri-registrato con il contratto a 12 operazioni.
