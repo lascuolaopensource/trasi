@@ -106,6 +106,13 @@ CATEGORIE = (
     "altro",
 )
 ESITI = ("risolta", "inviata_altrove", "non_trovata", "rinviata")
+# Le fasce del foglio 4.4 (gruppo Processi, decisione 2026-09-17): **le stesse** di `evento.fascia_eta`
+# (`db/025`), senza `tutte` — una persona ha un'età, un evento può essere «per tutti» — e con
+# `non_dichiarat*`, che è una risposta e non un buco. Elenco chiuso anche qui: un testo libero
+# («72 anni») sarebbe un valore esatto, cioè ciò che le fasce esistono per non raccogliere.
+FASCE_ETA = ("0-13", "14-17", "18-29", "30-44", "45-59", "60-74", "75+", "non_dichiarata")
+GENERI = ("donna", "uomo", "altro", "non_dichiarato")
+PROVENIENZE = ("italia", "ue", "extra_ue", "non_dichiarata")
 TIPI_PROPOSTA = (
     "nuovo_luogo",
     "modifica_luogo",
@@ -125,9 +132,12 @@ GIORNI = ("lun", "mar", "mer", "gio", "ven", "sab", "dom")
 # `extra="forbid"` è il presidio strutturale contro i dati personali (§12): un campo non previsto — `casa_id`,
 # `nome_cittadino`, `telefono` — è un 422, non una colonna in più scritta per distrazione.
 
-
 class RichiestaIn(BaseModel):
-    """Il corpo di `registra_richiesta`: solo campi del registro, nessun campo del cittadino."""
+    """Il corpo di `registra_richiesta`: i campi del registro e le fasce del foglio 4.4.
+
+    `extra="forbid"` resta il presidio strutturale contro i dati personali (§12): un campo non previsto —
+    `casa_id`, `nome_cittadino`, `telefono` — è un 422, non una colonna in più scritta per distrazione.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -135,6 +145,13 @@ class RichiestaIn(BaseModel):
     esito: Literal[ESITI]  # type: ignore[valid-type]
     destinazione_id: int | None = Field(default=None, ge=1)
     destinazione_nota: str | None = Field(default=None, min_length=1)
+    # Le tre fasce del foglio 4.4 (db/026): **facoltative** e a vocabolario chiuso. L'assenza è
+    # legittima («non ho chiesto») e i valori ammessi sono gli stessi del CHECK del database, così un
+    # valore fuori elenco è un 422 parlante e non un 500 da CHECK. Non sono dati identificativi: sono
+    # classi, e i loro conteggi escono solo mascherati da `v_fasce_cittadino`.
+    fascia_eta: Literal[FASCE_ETA] | None = None  # type: ignore[valid-type]
+    genere: Literal[GENERI] | None = None  # type: ignore[valid-type]
+    provenienza: Literal[PROVENIENZE] | None = None  # type: ignore[valid-type]
 
     @model_validator(mode="after")
     def _destinazione_obbligatoria(self) -> "RichiestaIn":
@@ -271,19 +288,26 @@ def _rifiuta_violazione(exc: Exception) -> None:
 async def registra_richiesta(
     corpo: RichiestaIn, sess: Sessione = Depends(sessione)
 ) -> dict[str, int]:
-    """Registra la richiesta di orientamento: solo il registro operativo, nessun dato del cittadino.
+    """Registra la richiesta di orientamento: il registro operativo e le fasce del foglio 4.4.
 
     `casa_id` viene **dall'identità** (`identita_onyx` → `SET LOCAL ROLE` → `trasi.casa_corrente()`), mai dal corpo:
     un operatore non può registrare una richiesta a nome di un'altra Casa. La policy `rich_ins_casa` del database
     verifica comunque che la riga appartenga alla Casa corrente — la seconda barriera, non la prima.
+
+    **Le fasce (`fascia_eta`, `genere`, `provenienza`) non sono dati identificativi**: sono classi a
+    vocabolario chiuso (db/026) e i loro conteggi escono solo mascherati da `trasi.v_fasce_cittadino` —
+    sotto la soglia `[P] k_anonimato` il numero non esiste. Resteranno fuori da ogni superficie che
+    esponga righe di sportello: nessuna vista le porta riga per riga. Chiedi le fasce **solo se l'operatore
+    le ha chieste alla persona**: un campo vuoto è una risposta legittima, un dato indovinato no.
     """
     pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
 
     try:
         richiesta_id = await sess.fetchval(
             """
-            INSERT INTO trasi.richiesta (casa_id, categoria, esito, destinazione_id, destinazione_nota)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO trasi.richiesta (casa_id, categoria, esito, destinazione_id, destinazione_nota,
+                                         fascia_eta, genere, provenienza)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
             """,
             sess.casa_id,
@@ -291,6 +315,9 @@ async def registra_richiesta(
             corpo.esito,
             corpo.destinazione_id,
             corpo.destinazione_nota,
+            corpo.fascia_eta,
+            corpo.genere,
+            corpo.provenienza,
         )
     except ForeignKeyViolationError as exc:
         raise errore(422, DETAIL_DESTINAZIONE_INESISTENTE) from exc
@@ -377,14 +404,7 @@ async def crea_evento(
 #: proposta → approvazione **non ha un secondo umano a cui passare**: chiedere a qualcuno di approvare ciò che
 #: ha appena scritto l'unica identità della Casa è la definizione del vicolo cieco, ed è esattamente BUG-02.
 #:
-#: `evento` era già così (`crea_evento`, decisione S2 «opzione A»); `scheda_servizio` e `opportunita` lo
-#: diventano qui, come il piano prevedeva già (`plan.md` §7 riga 390: «scrittura diretta gestore su proprie
-#: schede/eventi/opportunità … **Ammessa** (principio 3)»).
-#:
-#: Restano al ciclo mediato le entità che **non sono della Casa**: `luogo` (il territorio), le promozioni
-#: dall'esterno, l'anagrafica della Casa in senso stretto. Lì un secondo decisore esiste davvero, e V4 fa il
-#: suo lavoro.
-ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa")
+ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa", "persona")
 
 #: Le colonne che `salva_dato` accetta di scrivere, per entità. Elenco chiuso: `casa_id` non c'è perché viene
 #: dall'identità (la policy lo impone comunque), e le colonne di servizio (`fonte_id`, `affidabilita`,
@@ -395,6 +415,14 @@ ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa")
 #: (`db/002`: `UPDATE (orari, orari_eccezioni, orari_provvisori, email_digest)`). Non è una coincidenza da
 #: mantenere a mano: è lo stesso criterio di least-privilege visto dai due lati, e un campo in più qui
 #: produrrebbe un `42501` — cioè un rifiuto del database, non una scrittura.
+#:
+#: Per `persona` (db/027): il **nome è l'unico dato personale che questa operazione accetta**, ed è il
+#: punto della decisione del gruppo Processi (2026-09-17, forma C): le persone della Casa entrano nella
+#: knowledge base — e quindi in chat — **solo con il consenso dell'interessata**. Per questo
+#: `consenso` è **obbligatorio e deve essere `true` alla creazione**: un'operazione che creasse una
+#: persona senza dichiarare il consenso sarebbe una scrittura di un nome in attesa di una promessa.
+#: La revoca non passa da qui: è `DELETE` della persona (la RLS la concede alla propria Casa), e il
+#: flusso export cancella il documento da Onyx. Vedi `db/027_persone_casa.sql`.
 COLONNE_DIRETTE: dict[str, tuple[str, ...]] = {
     "scheda_servizio": ("titolo", "descrizione", "categoria", "orari", "referente_ruolo", "scadenza", "url"),
     "opportunita": ("titolo", "descrizione", "categoria", "scadenza", "url"),
@@ -402,6 +430,7 @@ COLONNE_DIRETTE: dict[str, tuple[str, ...]] = {
     # (`indirizzo`, `edificio`, `telefono`). È **esattamente** il privilegio che il database concede al ruolo
     # della Casa: `db/002` per orari/email_digest, `db/025` per i tre nuovi.
     "casa": ("orari", "orari_provvisori", "email_digest", "indirizzo", "edificio"),
+    "persona": ("nome", "ruolo", "competenze", "informativa"),
 }
 
 
@@ -416,7 +445,7 @@ class SalvaDatoIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    entita: Literal["scheda_servizio", "opportunita", "casa"]  # type: ignore[valid-type]
+    entita: Literal["scheda_servizio", "opportunita", "casa", "persona"]  # type: ignore[valid-type]
     # None = nuova entità; un id = modifica di quella esistente (che la RLS riserva alla propria Casa).
     # Per `entita="casa"` è **sempre** None: la Casa è una sola, quella dell'identità, e non si sceglie.
     id: int | None = Field(default=None, ge=1)
@@ -438,6 +467,16 @@ class SalvaDatoIn(BaseModel):
     # (e quindi citabile in chat) riaprirebbe per la porta di servizio ciò che V5 tiene fuori. Vedi `db/025`.
     indirizzo: str | None = None
     edificio: str | None = None
+    # I campi del foglio 1.1 «Persone» (solo `entita="persona"`), db/027. `nome` è l'unico dato
+    # personale ammesso da questa operazione, ed è condizionato: vedi `COLONNE_DIRETTE["persona"]`.
+    nome: str | None = Field(default=None, min_length=3, max_length=120)
+    ruolo: str | None = Field(default=None, min_length=2, max_length=80)
+    competenze: list[str] | None = None
+    informativa: str | None = Field(default=None, max_length=200)
+    # Il consenso: **obbligatorio a `true` alla creazione** di una persona. Non è un campo tra gli
+    # altri, è la condizione che rende legittimo scrivere il nome — per questo il validatore lo
+    # impone e la risposta della API lo riporta.
+    consenso: bool | None = None
 
     @model_validator(mode="after")
     def _coerenza(self) -> "SalvaDatoIn":
@@ -448,11 +487,28 @@ class SalvaDatoIn(BaseModel):
         """
         if self.entita == "opportunita" and self.orari is not None:
             raise ValueError("orari non si applica a «opportunita»: è una colonna di scheda_servizio")
-        if self.entita != "casa" and (self.titolo is None or not self.titolo.strip()):
+        if self.entita not in ("casa", "persona") and (self.titolo is None or not self.titolo.strip()):
             # `titolo` è obbligatorio per scheda/opportunità ed è `NOT NULL` nello schema: senza questo
             # controllo l'assenza diventerebbe un `NotNullViolation` tradotto in un 500, invece del 422
             # parlante che il contratto dichiara.
             raise ValueError(f"titolo è obbligatorio per «{self.entita}»")
+        if self.entita == "persona":
+            # `consenso` non è un campo tra gli altri: è la condizione che rende legittimo scrivere il
+            # nome di una persona. Alla creazione deve essere `true` esplicito — l'assenza non è
+            # interpretabile come consenso — e la colonna `consenso_il` del database timbra quando.
+            if self.id is None and self.consenso is not True:
+                raise ValueError(
+                    "creare una persona richiede consenso=true: il nome entra nella knowledge base "
+                    "(quindi in chat) solo con il consenso dell'interessata (db/027)"
+                )
+            if any(v is not None for v in (self.titolo, self.descrizione, self.categoria,
+                                           self.orari, self.referente_ruolo, self.scadenza, self.url,
+                                           self.orari_provvisori, self.email_digest,
+                                           self.indirizzo, self.edificio)):
+                raise ValueError(
+                    "«persona» accetta solo nome, ruolo, competenze, informativa e consenso"
+                )
+            return self
         if self.entita == "casa":
             if self.id is not None:
                 raise ValueError("«casa» non vuole id: la Casa è quella dell'identità, un ruolo una Casa")
@@ -482,25 +538,37 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
     chiedere l'approvazione. Il ciclo mediato resta per ciò che **non** è della Casa (`luogo`, promozioni
     dall'esterno), dove il secondo decisore c'è.
 
-    Tre entità, due forme:
+    Quattro entità, due forme:
 
     * `scheda_servizio` / `opportunita` — `id` assente = INSERT, `id` presente = UPDATE della propria riga;
     * `casa` — **sempre** UPDATE della riga dell'identità (`casa_corrente()`), mai INSERT: una Casa non si
       crea dallo sportello, e `id` non è ammesso perché la Casa è quella di chi scrive, non una da scegliere.
       Si scrivono solo gli orari e i recapiti — cioè esattamente le colonne che `db/002` concede al ruolo
       della Casa (`UPDATE (orari, orari_eccezioni, orari_provvisori, email_digest)`).
+    * `persona` (db/027) — INSERT o UPDATE come una scheda, **con il consenso richiesto dal validatore**:
+      il nome entra nella KB, e la revoca è la cancellazione della riga.
 
-    **Chi garantisce cosa.** La RLS: `scheda_ins_casa`/`scheda_upd_casa` (e le omologhe su `opportunita` e
-    `casa`) impongono `casa_id = casa_corrente()`. La scrittura su un dato di un'altra Casa non è un errore
-    da validare qui — è una riga che Postgres non rende possibile: un `UPDATE` che non tocca righe è un
-    rifiuto (403), non un 500. La tracciabilità è dei trigger di dominio (`scrittura_00_ts` timbra
+    **Chi garantisce cosa.** La RLS: `scheda_ins_casa`/`scheda_upd_casa` (e le omologhe su `opportunita`,
+    `casa` e `persona`) impongono `casa_id = casa_corrente()`. La scrittura su un dato di un'altra Casa non
+    è un errore da validare qui — è una riga che Postgres non rende possibile: un `UPDATE` che non tocca
+    righe è un rifiuto (403), non un 500. La tracciabilità è dei trigger di dominio (`scrittura_00_ts` timbra
     `aggiornato_ts` e `aggiornato_da`), quindi la scrittura è contabilizzata da `v_scritture_senza_audit`
     come ogni altra.
     """
     if sess.casa_id is None:
         raise errore(403, DETAIL_RUOLO_NON_CONSENTITO)
 
-    pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
+    # Il filtro anti-PII sui **valori** (V5/§12). Per `persona` il campo `nome` è l'unica eccezione
+    # dichiarata in tutto lo shim: è ciò che la decisione C del gruppo Processi ha chiesto di registrare,
+    # ed è condizionato dal consenso (validatore sopra). Un nome non è comunque un'email, un telefono o
+    # un codice fiscale — il filtro non lo riconosce, ma l'eccezione è esplicita perché visibile: nessun
+    # altro campo di nessun'altra operazione la riceve. Gli altri campi testuali di `persona`
+    # (`ruolo`, `competenze`, `informativa`) restano **dentro** il filtro: un telefono incollato lì
+    # sarebbe un dato personale pubblicato in KB.
+    campi_pii = corpo.model_dump(exclude_unset=True, mode="json")
+    if corpo.entita == "persona":
+        campi_pii.pop("nome", None)
+    pii.rifiuta_se_presente(campi_pii)
 
     tabella = corpo.entita
     orari = corpo.orari.model_dump(exclude_unset=True, mode="json") if corpo.orari else None
@@ -527,27 +595,41 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
                 *valori,
             )
 
-        # --- `scheda_servizio` / `opportunita`: INSERT o UPDATE ------------------------------
+        # --- `scheda_servizio` / `opportunita` / `persona`: INSERT o UPDATE ------------------
         elif corpo.id is None:
+            # Il nome dell'entità nel corpo non è sempre il nome della tabella: `persona` (il dato del
+            # foglio 1.1) vive in `persona_casa` (db/027). La mappa è qui, non nel chiamante.
+            if tabella == "persona":
+                tabella = "persona_casa"
             # `casa_id` dall'identità; `aggiornato_ts`/`aggiornato_da` li timbra il trigger. Le colonne
             # scritte sono l'elenco chiuso di COLONNE_DIRETTE: nessun nome di colonna dal chiamante.
             colonne = ["casa_id"]
             valori = [sess.casa_id]
-            for nome in COLONNE_DIRETTE[tabella]:
+            for nome in COLONNE_DIRETTE["persona"]:
                 valore = valore_di(nome)
                 if valore is not None:
                     colonne.append(nome)
                     valori.append(valore)
+            # `consenso_il` è la colonna che `v_kb_export` filtra: vale la data locale alla creazione e
+            # non è nel corpo, perché è un fatto del database — chi crea una persona ha già dichiarato
+            # il consenso (il validatore lo impone). Vedi `db/027_persone_casa.sql`.
+            if tabella == "persona_casa":
+                colonne.append("consenso_il")
+                valori.append(_oggi())
             segnaposti = ", ".join(f"${i}" for i in range(1, len(valori) + 1))
             nuovo_id = await sess.fetchval(
                 f"INSERT INTO trasi.{tabella} ({', '.join(colonne)}) VALUES ({segnaposti}) RETURNING id",
                 *valori,
             )
+            if tabella == "persona_casa":
+                return {"id": nuovo_id, "entita": "persona", "creato": True, "consenso": True}
             return {"id": nuovo_id, "entita": tabella, "creato": True}
 
         else:
+            if tabella == "persona":
+                tabella = "persona_casa"
             assegnazioni, valori = [], []
-            for nome in COLONNE_DIRETTE[tabella]:
+            for nome in COLONNE_DIRETTE["persona"]:
                 if nome in inviati:
                     valori.append(valore_di(nome))
                     assegnazioni.append(f"{nome} = ${len(valori)}")
@@ -558,6 +640,7 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
                 f"UPDATE trasi.{tabella} SET {', '.join(assegnazioni)} WHERE id = ${len(valori)}",
                 *valori,
             )
+
     except Exception as exc:  # noqa: BLE001 — la traduzione è il compito di `_rifiuta_violazione`
         _rifiuta_violazione(exc)
 

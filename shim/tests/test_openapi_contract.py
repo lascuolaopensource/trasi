@@ -78,7 +78,16 @@ def test_ogni_schema_oggetto_dichiara_additional_properties_false(contratto):
 
 
 def test_nessuno_schema_prevede_campi_per_dati_personali(contratto):
-    """Le proprietà ammesse non includono nomi di campo anagrafici: il 422 su `nome_cittadino` deve restare possibile."""
+    """Le proprietà ammesse non includono nomi di campo anagrafici del **cittadino**: il 422 su
+    `nome_cittadino` deve restare possibile.
+
+    L'eccezione dichiarata è `nome`/`ruolo` per `salva_dato` (db/027): le **persone della Casa** entrano
+    nella KB con il consenso dell'interessata (decisione del gruppo Processi, 2026-09-17, forma C). Il
+    test non allenta il presidio — lo precisa: quel solo schema può portare un nome, e **deve** esigere
+    `consenso`, perché è la condizione che rende legittima la pubblicazione. `cognome`, `telefono` e
+    `codice_fiscale` restano vietati ovunque, anche lì (il foglio 1.1 chiede «Nome Cognome» e lo shim lo
+    raccoglie come un unico campo `nome`).
+    """
     vietati = ("nome_cittadino", "cognome", "telefono", "codice_fiscale", "email_cittadino", "nome_persona")
 
     ammesse = {
@@ -88,6 +97,35 @@ def test_nessuno_schema_prevede_campi_per_dati_personali(contratto):
     }
 
     assert ammesse.isdisjoint(vietati)
+
+
+def test_le_persone_esistono_solo_nello_schema_che_esige_consenso(contratto):
+    """La persona (nome + ruolo + consenso) è ammessa in un solo schema, e il consenso è parte del corpo.
+
+    La decisione C (gruppo Processi) apre una porta: il nome di un **operatore** può finire in chat. La
+    sorveglianza giusta non è sul generico `nome` — che è il nome di un *luogo* in `ItemVicinanza`,
+    `ItemLuogo` e `PayloadProposta` — è sulla **coppia** che identifica una persona: `ruolo` + `consenso`.
+    Se quella coppia compare in un altro schema, o se lo schema delle persone smette di esigere
+    `consenso`, la decisione è stata aggirata — ed è *qui* che si accorge, non dopo che l'assistente ha
+    già citato un nome in chat.
+    """
+    schemi_persona = [
+        percorso for percorso, schema in _schemi_oggetto(contratto)
+        if "consenso" in schema.get("properties", {}) or "informativa" in schema.get("properties", {})
+    ]
+    assert len(schemi_persona) == 1, (
+        f"l'anagrafica delle persone compare in {len(schemi_persona)} schemi ({schemi_persona}): "
+        "deve stare in uno solo, quello di `salva_dato`, dove il consenso è parte del corpo"
+    )
+
+    schema_persone = contratto["paths"]["/salva_dato"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+    proprieta = schema_persone["properties"]
+    assert "consenso" in proprieta and "informativa" in proprieta, (
+        "lo schema che ammette il nome di una persona deve anche esigere consenso e informativa"
+    )
+    assert "consenso" in schema_persone.get("required", []), (
+        "`consenso` facoltativo equivale a scrivere il nome senza una promessa"
+    )
 
 
 def test_i_corpi_di_richiesta_ammettono_solo_application_json(contratto):

@@ -231,6 +231,38 @@ paths:
                   minLength: 1
                   description: Destinazione in testo libero quando non è un luogo della rete (es. un POI esterno `osm:node:…`
                     o un servizio non censito).
+                fascia_eta:
+                  type: string
+                  enum:
+                  - 0-13
+                  - 14-17
+                  - 18-29
+                  - 30-44
+                  - 45-59
+                  - 60-74
+                  - 75+
+                  - non_dichiarata
+                  description: 'Fascia d''età della persona ricevuta (foglio 4.4), **facoltativa**. Chiedila solo se
+                    l''operatore l''ha chiesta alla persona: un campo vuoto è una risposta legittima. Classi, mai
+                    l''età esatta; i conteggi escono solo mascherati dalla soglia di k-anonimato (sotto 5: «<5»).'
+                genere:
+                  type: string
+                  enum:
+                  - donna
+                  - uomo
+                  - altro
+                  - non_dichiarato
+                  description: 'Genere dichiarato dalla persona (foglio 4.4), **facoltativo**. «non_dichiarato» è una
+                    risposta, non un buco: non indovinare.'
+                provenienza:
+                  type: string
+                  enum:
+                  - italia
+                  - ue
+                  - extra_ue
+                  - non_dichiarata
+                  description: 'Area di provenienza (foglio 4.4), **facoltativa**: Italia, UE, extra-UE. Non il Paese e
+                    non la nazionalità: serve a decidere se stanziare un mediatore culturale, non a identificare nessuno.'
       responses:
         '201':
           description: Richiesta registrata.
@@ -447,6 +479,7 @@ paths:
               additionalProperties: false
               required:
               - entita
+              - consenso
               properties:
                 entita:
                   type: string
@@ -454,8 +487,9 @@ paths:
                   - scheda_servizio
                   - opportunita
                   - casa
-                  description: 'Cosa si scrive: una scheda di servizio, un''opportunità, oppure gli orari/recapiti
-                    della Casa stessa.'
+                  - persona
+                  description: 'Cosa si scrive: una scheda di servizio, un''opportunità, gli orari/recapiti della
+                    Casa stessa, oppure una **persona della Casa** (foglio 1.1, db/027).'
                 id:
                   type: integer
                   minimum: 1
@@ -520,6 +554,36 @@ paths:
                   type: string
                   description: 'Solo per `entita=casa`: denominazione dell''immobile (es. "Ex scuola elementare"), come
                     lo conosce il quartiere. Aiuta chi non arriva dall''indirizzo.'
+                nome:
+                  type: string
+                  minLength: 3
+                  maxLength: 120
+                  description: 'Solo per `entita=persona`: nome della persona **come vuole che sia citato** (es. "Maria
+                    Rossi"), dal foglio 1.1. È l''unico dato personale che un''operazione di questo contratto accetta, e
+                    entra nella knowledge base — quindi in chat — **solo con il consenso dell''interessata**: chiedi
+                    conferma all''operatore prima di usarlo. Nessun recapito: email e telefoni sono respinti.'
+                ruolo:
+                  type: string
+                  minLength: 2
+                  maxLength: 80
+                  description: 'Solo per `entita=persona`: il ruolo presso la Casa (es. "psicologa di comunità"). Non è
+                    il nome: la scheda di un servizio porta `referente_ruolo`, questa porta chi ricopre il ruolo.'
+                competenze:
+                  type: array
+                  items:
+                    type: string
+                  description: 'Solo per `entita=persona`: competenze della persona (es. ["mediazione linguistica",
+                    "supporto ISEE"]). Facoltativo.'
+                informativa:
+                  type: string
+                  maxLength: 200
+                  description: 'Solo per `entita=persona`: riferimento all''informativa data alla persona (es. "informativa
+                    v1 · 2026-09-17"). Facoltativo ma raccomandato: è la prova di dove il nome può comparire.'
+                consenso:
+                  type: boolean
+                  description: 'Solo per `entita=persona` e **obbligatorio `true` alla creazione**: dichiara che la persona
+                    ha acconsentito a comparire nella KB e in chat. Il database timbra la data; la revoca è la
+                    cancellazione della persona, che il flusso di export rimuove da Onyx.'
       responses:
         '201':
           description: Dato salvato nella memoria della rete.

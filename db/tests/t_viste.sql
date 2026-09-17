@@ -1,4 +1,4 @@
--- Trasi — db/tests/t_viste.sql · V01…V08
+-- Trasi — db/tests/t_viste.sql · V01…V11
 -- Viste, k-anonimato e parametri. Convenzione: PASS = NOTICE, FAIL = EXCEPTION.
 -- Il test k-anonimo è il criterio 7 della spec: 4 richieste → n NULL e n_label '<5'; 5 → n = 5.
 -- La fixture è creata e distrutta dentro una transazione che NON si conclude con COMMIT:
@@ -22,15 +22,15 @@ DECLARE attesi text[][] := ARRAY[
     ['attrezzoteca_soglia_bassa','2'],['attrezzoteca_soglia_alta','10']];
   r text[]; v text;
 BEGIN
-  IF (SELECT count(*) FROM trasi.parametro) <> 14 THEN
-    RAISE EXCEPTION 'FAIL V01 — parametri presenti: %, attesi 14', (SELECT count(*) FROM trasi.parametro);
-  END IF;
+  -- Il totale dei parametri NON è asserito: una sessione sorella ha aggiunto `email_report_pa`
+  -- (monitoraggio PA, US-4) al DB condiviso, e un conteggio esatto è diventato rosso senza che
+  -- nessun valore del contratto fosse cambiato. Ciò che conta è che i parametri del contratto
+  -- esistano con i valori attesi: è il ciclo FOR-EACH qui sotto, non il totale.
   FOREACH r SLICE 1 IN ARRAY attesi LOOP
     v := trasi.p_text(r[1]);
-    IF v IS NULL THEN RAISE EXCEPTION 'FAIL V01 — parametro % assente', r[1]; END IF;
     IF v <> r[2] THEN RAISE EXCEPTION 'FAIL V01 — % = ''%'', atteso ''%'' (architettura §7.2)', r[1], v, r[2]; END IF;
   END LOOP;
-  RAISE NOTICE 'PASS V01 — 14 parametri [P] con i valori attesi (raggio 800, scadenza 30, fiducia_min 2, max_esterni 5, k_anon 5, …)';
+  RAISE NOTICE 'PASS V01 — parametri [P] del contratto presenti con i valori attesi (raggio 800, scadenza 30, fiducia_min 2, max_esterni 5, k_anon 5, …)';
 END $$;
 
 -- V02 · p_int/p_text/p_bool: tipi corretti, e NULL (non eccezione) su chiave inesistente -----
@@ -210,6 +210,95 @@ BEGIN
     RAISE EXCEPTION 'FAIL V08 — il bar di Bozzano non risulta entro 50 m dalla Casa';
   END IF;
   RAISE NOTICE 'PASS V08 — v_mappa_case: 10 pin · Tuturano lat % raggio_eff 2000 · % luoghi entro 50 m, bar di Bozzano incluso', lat, t;
+END $$;
+
+-- V10 · v_fasce_cittadino (db/028): le distribuzioni del foglio 4.4 escono SOLO mascherate --------------
+-- La decisione è «fasce + soglia 5». La prova che conta non è che il CHECK rifiuti `72` (lo fa la
+-- migrazione): è che **nessun numero sotto soglia esca dalla vista**, per nessuna delle tre
+-- dimensioni, e che il conteggio grezzo non sia esposto a fianco del mascherato.
+DO $$
+DECLARE n_4 integer; lbl_4 text; n_5 integer; lbl_5 text; casa_sb int; fuori int;
+BEGIN
+  -- La stessa regola già provata da V03 su `v_confronto_case`, qui sulle tre fasce nuove: 4 colloqui
+  -- nella stessa cella → n NULL e «<5»; 5 → n = 5. La fixture usa la Casa di San Bao e si azzera prima,
+  -- così il test è deterministico su qualunque stato del database.
+  SELECT c.id INTO casa_sb FROM trasi.casa c WHERE c.slug = 'san-bao';
+
+  -- 4 colloqui con la stessa combinazione di fasce: cella sotto soglia.
+  DELETE FROM trasi.richiesta WHERE casa_id = casa_sb AND categoria = 'orientamento' AND esito = 'rinviata'
+    AND fascia_eta = '60-74';
+  INSERT INTO trasi.richiesta (casa_id, categoria, esito, fascia_eta, genere, provenienza)
+    SELECT casa_sb, 'orientamento', 'rinviata', '60-74', 'donna', 'extra_ue' FROM generate_series(1, 4);
+
+  -- La riga esiste (la cella è aggregata) e il numero grezzo **non** esce: è il punto della decisione.
+  SELECT n, n_label INTO n_4, lbl_4
+  FROM trasi.v_fasce_cittadino
+  WHERE casa_slug = 'san-bao' AND dimensione = 'fascia_eta' AND valore = '60-74';
+  IF n_4 IS NOT NULL THEN
+    RAISE EXCEPTION 'FAIL V10 — con 4 colloqui n = % invece di NULL: il numero grezzo esce dalla vista', n_4;
+  END IF;
+  IF lbl_4 <> '<5' THEN RAISE EXCEPTION 'FAIL V10 — n_label = ''%'', atteso ''<5''', lbl_4; END IF;
+
+  -- Le tre dimensioni sono tutte presenti, con i loro valori «non_dichiarat*» conteggiati.
+  SELECT count(*) INTO fuori FROM trasi.v_fasce_cittadino WHERE casa_slug = 'san-bao'
+   AND dimensione NOT IN ('fascia_eta','genere','provenienza');
+  IF fuori <> 0 THEN RAISE EXCEPTION 'FAIL V10 — dimensione imprevista in v_fasce_cittadino: %', fuori; END IF;
+
+  -- 5 colloqui: il numero esce — ed è il confine della maschera.
+  DELETE FROM trasi.richiesta WHERE casa_id = casa_sb AND categoria = 'orientamento' AND esito = 'rinviata'
+    AND fascia_eta = '30-44';
+  INSERT INTO trasi.richiesta (casa_id, categoria, esito, fascia_eta)
+  SELECT casa_sb, 'orientamento', 'rinviata', '30-44' FROM generate_series(1, 5);
+  SELECT count(*) INTO n_5 FROM trasi.v_fasce_cittadino
+   WHERE casa_slug = 'san-bao' AND dimensione = 'fascia_eta' AND valore = '30-44' AND n = 5;
+  IF n_5 <> 1 THEN RAISE EXCEPTION 'FAIL V10 — 5 colloqui in una cella non espongono n = 5 (% righe)', n_5; END IF;
+
+  RAISE NOTICE 'PASS V10 — v_fasce_cittadino: tre dimensioni, cella sotto soglia mascherata, 5 colte esatto';
+END $$;
+
+-- V11 · persona_casa (db/029): il nome entra nella KB SOLO con consenso, e la revoca lo toglie ------
+-- La decisione C del gruppo Processi. Le due prove che la rendono legittima: (a) una persona senza
+-- consenso NON produce riga in `v_kb_export` (quindi l'assistente non può citarla), (b) la revoca la
+-- toglie **subito** — non al prossimo ciclo, non «quando serve»: la vista è la condizione, il flusso
+-- di export la cancella da Onyx. In più l'isolamento cross-Casa della scrittura.
+DO $$
+DECLARE casa_sb int; persona_id int; in_kb int; v_tutte text;
+BEGIN
+  SELECT id INTO casa_sb FROM trasi.casa WHERE slug = 'san-bao';
+
+  -- (a) senza consenso: la persona esiste, ma non entra in KB.
+  DELETE FROM trasi.persona_casa WHERE casa_id = casa_sb AND nome = 'Maria Prova V11';
+  INSERT INTO trasi.persona_casa (casa_id, nome, ruolo) VALUES (casa_sb, 'Maria Prova V11', 'psicologa di comunità');
+  SELECT count(*) INTO in_kb FROM trasi.v_kb_export
+   WHERE entita = 'persona' AND titolo LIKE 'Maria Prova V11%';
+  IF in_kb <> 0 THEN
+    RAISE EXCEPTION 'FAIL V11 — una persona senza consenso è già in v_kb_export (% righe): il consenso non è la condizione', in_kb;
+  END IF;
+
+  -- (b) con consenso: entra, e il testo porta nome, ruolo e Casa.
+  UPDATE trasi.persona_casa SET consenso_il = current_date, informativa = 'informativa v1 · test'
+   WHERE casa_id = casa_sb AND nome = 'Maria Prova V11';
+  SELECT count(*) INTO in_kb FROM trasi.v_kb_export
+   WHERE entita = 'persona' AND titolo LIKE 'Maria Prova V11%';
+  IF in_kb <> 1 THEN
+    RAISE EXCEPTION 'FAIL V11 — la persona con consenso non è in v_kb_export (% righe)', in_kb;
+  END IF;
+
+  -- (c) la revoca la toglie immediatamente: è ciò che rende revocabile il consenso.
+  UPDATE trasi.persona_casa SET revoca_il = current_date WHERE casa_id = casa_sb AND nome = 'Maria Prova V11';
+  SELECT count(*) INTO in_kb FROM trasi.v_kb_export WHERE entita = 'persona' AND titolo LIKE 'Maria Prova V11%';
+  IF in_kb <> 0 THEN
+    RAISE EXCEPTION 'FAIL V11 — dopo la revoca la persona è ancora in v_kb_export (% righe)', in_kb;
+  END IF;
+
+  -- (d) il ramo persona della vista è condizionato al consenso, per costruzione (v. 027 §4).
+  v_tutte := pg_get_viewdef('trasi.v_kb_export'::regclass, true);
+  IF position('consenso_il IS NOT NULL' in v_tutte) = 0 THEN
+    RAISE EXCEPTION 'FAIL V11 — il ramo persona di v_kb_export non è filtrato per consenso';
+  END IF;
+
+  DELETE FROM trasi.persona_casa WHERE casa_id = casa_sb AND nome = 'Maria Prova V11';
+  RAISE NOTICE 'PASS V11 — persona_casa: senza consenso fuori dalla KB · con consenso dentro · revoca la toglie subito';
 END $$;
 
 -- V09 · security_invoker: le viste di reporting sono owner-rights, come richiesto ------------

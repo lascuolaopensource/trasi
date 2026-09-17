@@ -47,15 +47,14 @@ END $$;
 DO $$
 DECLARE n integer;
 BEGIN
-  DELETE FROM trasi.report
-   WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='bozzano') AND ambito='osservatorio';
+  DELETE FROM trasi.report WHERE ambito='osservatorio' AND mese = date_trunc('month', current_date)::date;
   EXECUTE 'SET LOCAL ROLE automazioni';
   INSERT INTO trasi.report (casa_id, mese, ambito, contenuti)
-  VALUES ((SELECT id FROM trasi.casa WHERE slug='bozzano'), date_trunc('month', current_date)::date,
+  VALUES (NULL, date_trunc('month', current_date)::date,
           'osservatorio', jsonb_build_object('aggregato', true));
   EXECUTE 'RESET ROLE';
   SELECT count(*) INTO n FROM trasi.report
-   WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='bozzano') AND ambito='osservatorio';
+   WHERE ambito='osservatorio' AND mese = date_trunc('month', current_date)::date;
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL R01 — il flusso non ha potuto generare il report (trovati %)', n; END IF;
   RAISE NOTICE 'PASS R01 — automazioni genera un report (INSERT permesso, INSERT è il suo compito)';
 END $$;
