@@ -41,6 +41,7 @@ import csv
 import io
 import json
 import os
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -50,7 +51,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from comune import (  # noqa: E402
     CAMPI_V6,
+    COMPOSE,
+    DB_DEFAULT,
     FlussoErrore,
+    SERVIZIO_DB,
     apri_run,
     esegui_sql,
     leggi,
@@ -437,15 +441,20 @@ def _persisti_report(mese: date, *, digest_righe: list[dict]) -> int:
     stessa regola del CSV. Un report già presente per (Casa, mese) **non si riscrive** — `automazioni` non ha
     UPDATE (db/024) — e la scelta si fa con una SELECT di esistenza, non con `ON CONFLICT`: la chiave unica di
     `report` è cambiata forma fra db/024 (vincolo) e il ramo PA (indici parziali), e legare il flusso a una delle
-    due lo romperebbe sull'altra. Il ritorno conta le righe **presenti** per il mese, non quelle scritte.
-    `flusso_run_id` è l'ultima esecuzione del ciclo per questo mese, appena registrata da `registra_run`.
+    due lo romperebbe sull'altra. Il ritorno conta le righe **scritte** — le SELECT di esistenza e l'INSERT per-statement sono la
+    guardia contro il doppio, con il conflitto di chiave unica come rete (un INSERT in corsa con un
+    parallelo fallisce invece di duplicare). `flusso_run_id` è l'ultima esecuzione del ciclo per questo
+    mese, appena registrata da `registra_run`.
     """
-    gia_presenti = {
-        r["casa_slug"] for r in leggi(
-            "SELECT c.slug AS casa_slug FROM trasi.report r JOIN trasi.casa c ON c.id = r.casa_id "
-            f" WHERE r.mese = DATE '{mese.isoformat()}' AND r.ambito = 'casa'"
-        )
-    }
+    gia_presenti: set[str] = set()
+    esiti = esegui_sql(
+        "BEGIN; SET LOCAL ROLE rete;\n"
+        "COPY (SELECT c.slug AS casa_slug FROM trasi.report r JOIN trasi.casa c ON c.id = r.casa_id "
+        f" WHERE r.mese = DATE '{mese.isoformat()}' AND r.ambito = 'casa') TO STDOUT;\n"
+        "ROLLBACK;\n"
+    ).strip()
+    if esiti:
+        gia_presenti = {riga for riga in esiti.splitlines() if riga.strip()}
     celle = leggi(
         "SELECT casa_slug, categoria, esito, n_label FROM trasi.v_report_mensile "
         f" WHERE mese = DATE '{mese.isoformat()}' ORDER BY casa_slug, categoria, esito"
@@ -484,16 +493,22 @@ def _persisti_report(mese: date, *, digest_righe: list[dict]) -> int:
             f":'j{indice}'::jsonb, :'v{indice}', "
             "(SELECT max(id) FROM trasi.flusso_run WHERE nome = 'ciclo_mensile' AND dettaglio->>'mese' = :'mese'))"
         )
-    if valori:
+    insertiti = 0
+
+    # INSERT **senza `RETURNING`**: il ramo di ritorno forza una lettura della riga appena scritta, e la
+    # policy `rep_sel` non ammette `automazioni` — misurato: «new row violates row-level security policy»
+    # su un INSERT con `RETURNING`, su uno senza. La conta dichiarata è il numero di statement che il
+    # database ha accettato (uno per Casa, con l'esistenza già verificata prima).
+    for indice in range(len(digest_righe)):
+        if f"s{indice}" not in variabili:
+            continue
         esegui_sql(
             "INSERT INTO trasi.report (casa_id, mese, ambito, contenuti, csv, flusso_run_id)\nVALUES\n"
-            + ",\n".join(valori) + ";\n",
+            + valori[indice] + ";\n",
             variabili=variabili,
         )
-    return int(uno(
-        f"SELECT count(*) AS n FROM trasi.report WHERE mese = DATE '{mese.isoformat()}' AND ambito = 'casa'",
-        "n", "0",
-    ))
+        insertiti += 1
+    return insertiti
 
 
 def main(argv: list[str] | None = None) -> int:

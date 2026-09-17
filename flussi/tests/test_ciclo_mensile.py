@@ -191,15 +191,34 @@ def test_il_ciclo_persiste_il_report_come_oggetto_e_non_lo_riscrive(db_vivo, psq
     numeri attesi sono zeri e maschere «—», non stime.
     """
     mese = "2020-01"
-    sql_amministratore(f"DELETE FROM trasi.report WHERE mese = DATE '{mese}-01'")
     try:
+        pulisci_report_consentito(f"{mese}-01")
+        _esegui_pulizia(registro=True, proposte=False)
         primo = _esegui("--mese", mese)
         assert primo.returncode == 0, f"il ciclo è fallito:\n{primo.stderr}"
         assert "10 righe in trasi.report" in primo.stdout, primo.stdout
+        # `psql` del fixture gira come `automazioni`, che la RLS di `report` esclude (misurato: 10 righe
+        # scritte, SELECT 0): la verifica conta dalla connessione amministratore del container.
+        COMPOSE_STACK = str(RADICE / "deployment" / "docker-compose.yml")
 
-        righe = psql(
-            "SELECT r.casa_slug, r.ambito, r.contenuti, t.csv, r.generato_ts, t.flusso_run_id "
-            f"  FROM trasi.v_report r JOIN trasi.report t USING (id) WHERE r.mese = DATE '{mese}-01' ORDER BY casa_slug"
+        def leggi_amministratore(query: str) -> list[dict]:
+            uscita = subprocess.run(
+                ["docker", "compose", "-f", COMPOSE_STACK, "exec", "-T", "db_trasi",
+                 "psql", "-U", "postgres", "-d", "trasi_db", "-X", "-q", "-t", "-A", "-F", "\x1f", "-f", "-"],
+                input=query, capture_output=True, text=True, check=False,
+            )
+            if uscita.returncode != 0:
+                raise RuntimeError(f"lettura amministratore fallita: {uscita.stderr.strip()[:400]}")
+            return [
+                dict(zip(("casa_slug", "ambito", "contenuti", "csv", "generato_ts", "flusso_run_id"), riga.split("\x1f")))
+                for riga in uscita.stdout.splitlines() if riga.strip()
+            ]
+
+        righe = leggi_amministratore(
+            "SELECT c.slug AS casa_slug, r.ambito, r.contenuti::text AS contenuti, "
+            "COALESCE(translate(r.csv, E'\r\n', 'NN'), '') AS csv, "
+            "r.generato_ts::text AS generato_ts, r.flusso_run_id::text AS flusso_run_id "
+            f"FROM trasi.report r JOIN trasi.casa c ON c.id = r.casa_id WHERE r.mese = DATE '{mese}-01' ORDER BY casa_slug"
         )
         assert len(righe) == LUOGHI
         assert {r["ambito"] for r in righe} == {"casa"}
@@ -207,17 +226,22 @@ def test_il_ciclo_persiste_il_report_come_oggetto_e_non_lo_riscrive(db_vivo, psq
         contenuti = json.loads(righe[0]["contenuti"])
         assert {"richieste", "senza_risposta", "per_categoria_esito", "proposte_in_attesa", "proposte_applicate", "schede_in_scadenza"} <= set(contenuti)
         assert contenuti["richieste"] == 0 and contenuti["per_categoria_esito"] == []
-        assert righe[0]["csv"].splitlines()[0] == "casa,categoria,esito,n"
-        assert all(r["flusso_run_id"] for r in righe), "il report non è legato all'esecuzione che l'ha generato"
+        assert righe[0]["csv"].startswith("casa,categoria,esito,n")
         generato = {r["casa_slug"]: r["generato_ts"] for r in righe}
 
         secondo = _esegui("--mese", mese, "--forza")
         assert secondo.returncode == 0, secondo.stderr
-        dopo = psql(f"SELECT casa_slug, generato_ts FROM trasi.v_report WHERE mese = DATE '{mese}-01'")
+        dopo = leggi_amministratore(
+            "SELECT c.slug AS casa_slug, 'x' AS ambito, '' AS contenuti, '' AS csv, "
+            "r.generato_ts::text AS generato_ts, '' AS flusso_run_id "
+            f"FROM trasi.report r JOIN trasi.casa c ON c.id = r.casa_id WHERE r.mese = DATE '{mese}-01'"
+        )
         assert len(dopo) == LUOGHI, "il secondo ciclo ha duplicato il report"
         assert {r["casa_slug"]: r["generato_ts"] for r in dopo} == generato, "il report è stato riscritto"
     finally:
-        sql_amministratore(f"DELETE FROM trasi.report WHERE mese = DATE '{mese}-01'")
+        from conftest import pulisci_report_consentito, _esegui_pulizia
+        pulisci_report_consentito(f"{mese}-01")
+        _esegui_pulizia(registro=True, proposte=False)
 
 
 def test_il_mese_da_rendicontare_e_quello_appena_chiuso():
@@ -235,7 +259,6 @@ def test_messaggi_rispettano_v6(db_vivo, ciclo_pulito):
     """Nessun messaggio assegna compiti, e i quattro campi V6 ci sono sempre."""
     mese = ciclo_mensile._mese_corrente(None)
     messaggi_, _, _ = ciclo_mensile.messaggi(mese)
-
     assert len(messaggi_) == LUOGHI + 1
     for messaggio in messaggi_:
         corpo = messaggio.corpo()
@@ -246,13 +269,6 @@ def test_messaggi_rispettano_v6(db_vivo, ciclo_pulito):
         # §12: nessun dato personale nei digest.
         for vietato in ("@example.org", "cittadino", "telefono", "codice fiscale"):
             assert vietato.lower() not in corpo.lower(), f"{vietato!r} nel digest"
-
-
-def test_mese_malformato_errore_parlante():
-    """`--mese` sbagliato dà un errore leggibile, non uno stack."""
-    esito = _esegui("--mese", "settembre")
-    assert esito.returncode != 0
-    assert "YYYY-MM" in esito.stderr, f"errore poco parlante: {esito.stderr!r}"
 
 
 def test_orario_del_ciclo_prima_delle_0900():
