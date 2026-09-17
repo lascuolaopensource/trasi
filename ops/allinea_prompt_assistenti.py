@@ -118,6 +118,29 @@ mascherati secondo le regole della rete — non calcolare, non sommare, non stim
 Un mese senza richieste arriva come `ambiti: []`: dillo («mese senza richieste registrate»), non è un guasto.
 """,
     ),
+    (
+        # Il marcatore è una frase che esiste **nel testo** della sezione, non un'etichetta: il
+        # controllo di presenza legge il prompt salvato (`_manca`), e un titolo che nel prompt non
+        # compare dichiarerebbe la sezione assente per sempre — l'ha pagato la sessione sorella con
+        # «IDENTITÀ E CASA» (ora lì il marcatore è «ALTRA Casa (per nome o slug)»).
+        "CHIUSURA DEL COLLOQUIO — l'ultima riga di ogni tua risposta",
+        """
+CHIUSURA DEL COLLOQUIO — l'ultima riga di ogni tua risposta:
+Ogni tua risposta si chiude con questa domanda: «Questa richiesta è **risolta** o **rinviata**?
+(Se la persona è stata indirizzata altrove, dimmi dove: è `inviata_altrove`.)»
+La domanda serve a registrare l'esito mentre il colloquio è in corso, non a fine giornata.
+Quando l'operatore risponde, chiama `registra_richiesta` con `categoria` (l'ambito di cui si è parlato:
+orientamento, fiscale_isee, servizi_sociali, lavoro, abitare, salute, interculturale, ascolto_solitudine,
+eventi_attivita, altro) ed `esito`.
+Gli esiti ammessi dal modello dati sono **quattro**, e solo questi: `risolta` (la Casa ha dato la risposta),
+`inviata_altrove` (la persona è stata indirizzata a un altro servizio: allora serve anche la destinazione,
+`destinazione_id` di un luogo della rete oppure `destinazione_nota`), `non_trovata` (nessuna destinazione
+trovata), `rinviata` (se ne riparla in un altro momento). «Presa in carico», «ascolto» e «informazione»
+non esistono nel modello: un valore fuori elenco è un 422 e la richiesta non viene registrata.
+Non registrare due volte lo stesso colloquio e non chiedere dati personali: bastano categoria ed esito.
+Se l'operatore non risponde alla domanda, non registrare nulla: un esito inventato è un dato falso.
+""",
+    ),
 ]
 
 # Frasi di versioni precedenti delle sezioni, da sostituire: il marcatore della sezione c'è già,
