@@ -789,3 +789,62 @@ I tre bug hanno una cosa in comune: **nessuno si vedeva dalle suite esistenti**,
 Sono emersi da verifiche *laterali* — un caso limite (scadenza), un confronto fra due fonti di verità
 (KB vs vista), una ripetizione (due notti). Le suite verificavano che il sistema facesse ciò che era
 stato chiesto; questi erano casi in cui faceva qualcosa che **non** era stato chiesto.
+
+
+## Caccia ai bug (2026-09-17) — BUG 4: il biglietto per una destinazione esterna rispondeva **500**
+
+**Come l'ho trovato**: nel registro chat di Onyx, sessione `350a77a1` (ore 12:31), assistente `Trasi Casa`:
+*«Il **biglietto stampabile** non riesco a generarlo in questo momento: lo strumento risponde con un errore interno
+(ho riprovato due volte)»*. L'operatore di Molo 12 chiedeva «come arrivo alla sfizioteca» (POI OSM
+`Antosquare La sfizioteca`, nodo `6042688692`) e non ha avuto il biglietto.
+
+**Causa** (`shim/app/testi.py`): il LLM, davanti a un item **esterno** di `vicino_a`, ha chiamato `biglietto` con
+l'id del **nodo OSM** (che sta nell'`url` dell'item, `…/node/6042688692`) come se fosse un `luogo.id` della memoria.
+La colonna `luogo.id` è `integer` (int4): il bind `asyncpg` è esploso con `OverflowError: value out of int32 range`
+prima di toccare il database → 500 `errore interno dello shim` (il contratto dichiara il 422 per `luogo_id`
+malformato). La forma giusta esisteva già (`osm:node:<id>`, testata: **200**, foglio A6 generato) ma il contratto
+dichiara `luogo_id` come `type: integer`, quindi il modello non poteva saperlo: l'`url` dell'item porta l'id del
+nodo, e il modello lo passa come numero.
+
+**Prova della causa** (container `onyx-api_server-1`, chiave dello shim):
+
+```
+biglietto?luogo_id=6042688692        → 500 {"detail":"errore interno dello shim"}   (riprodotto il bug)
+biglietto?luogo_id=osm:node:6042688692 → 200  HTML A6, badge [Esterna …]            (la forma documentata)
+```
+
+**Fix** (due difese, una sola idea: il chiamante deve capire l'errore e sapersi correggere):
+
+1. **Contratto** (`shim/openapi.yaml`): `biglietto.luogo_id` → `type: string` con descrizione che insegna le due
+   forme («per un luogo della memoria il numero; per un POI esterno `osm:node:<id>`, l'id sta nell'URL dell'item,
+   NON il numero da solo»). Il codice accettava già la forma testuale: era il **documento** a dire l'intero.
+   Il runtime non cambia: FastAPI validava `luogo_id: str`, il valore arrivava identico.
+2. **Guardia runtime** (`shim/app/testi.py`): un intero oltre il int32 (lo stesso valore che asyncpg rifiuterebbe)
+   → **422 leggibile** che insegna la forma `osm:node:<id>`, invece del 500 opaco. Il limite è quello della
+   colonna `luogo.id`, non una preferenza.
+
+**Verifica** (container ricostruito e ri-deployato, `trasi-shim-1` healthy):
+
+```
+luogo_id=6042688692          → 422 «…usa la forma «osm:node:<id>»…»      (era 500)
+luogo_id=osm:node:6042688692 → 200  HTML A6 (2030 byte)                  (percorso esterno)
+luogo_id=21 (CAF ACLI KB)    → 200  HTML A6                              (percorso memoria, nessuna regressione)
+```
+
+Log shim: `biglietto status=422` / `status=200`, **0 occorrenze di 500**.
+
+**Test di regressione** in `shim/tests/test_output.py` (2 nuovi): nodo OSM come numero → 422 con «osm:node» nel
+detail; int32 massimo → 404 (la guardia respinge solo ciò che `asyncpg` rifiuterebbe).
+**Suite**: `pytest shim/tests` → **191 passed, 0 failed** (era 189: +2). Contratto: `tests/test_openapi_contract.py`
+→ **11 passed** (Onyx validator incluso).
+
+**Nota operativa**: la prima ricostruzione dell'immagine è partita dal compose del workspace (senza `.env`), che ha
+ricreato il container con `TRASI_SHIM_KEY=""` → **401** su ogni chiamata da Onyx. Il progetto in esercizio usa il
+compose di `/root/orca/projects/onice/deployment/` (con `.env`): ri-deployato da lì, chiavi Caddy/shim/Onyx di nuovo
+allineate. Lezione: ricostruire i container **solo** dalla directory del compose attivo.
+
+**Contratto aggiornato (segnalazione, come da precedente «Contratto aggiornato» in B3)**: il `type` di `luogo_id`
+passa da `integer` a `string` — non è una rottura: ogni valore intero ammesso prima resta ammesso (come stringa).
+**Tool Onyx già allineato**: verificato per confronto semantico fra `shim/openapi.yaml` e `tool.openapi_schema`
+del tool `trasi_shim` (id 12) su `onyx-relational_db` — il documento registrato è **identico** al file corretto
+(parametro `luogo_id` compreso), quindi il modello già legge la descrizione che insegna la forma `osm:node:<id>`.

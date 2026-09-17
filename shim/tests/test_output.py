@@ -519,6 +519,41 @@ def test_biglietto_luogo_id_non_numerico_ne_osm_422(app_cliente):
     assert risposta.status_code == 422
 
 
+
+def test_biglietto_id_nodo_osm_come_numero_422_non_500(app_cliente):
+    """Un id di nodo OSM passato come numero (es. `6042688692`) è 422, non un 500.
+
+    Il bug reale del 17/09/2026: il LLM, davanti a un item esterno di `vicino_a`, chiamava `biglietto` con
+    l'id del **nodo** (che sta nell'`url` dell'item) come se fosse un `luogo.id`. Il valore oltre il int32
+    esplodeva in `asyncpg` (OverflowError → 500 «errore interno dello shim») e l'assistente dichiarava
+    «lo strumento risponde con un errore interno», lasciando l'operatore senza biglietto. La risposta giusta
+    è un 422 che insegna la forma corretta: la colonna `luogo.id` è `integer` e il nodo OSM non è un luogo.
+    """
+    client = app_cliente(SessioneFinta(luogo=None))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
+        headers=_intestazioni(),
+        params={"luogo_id": 6042688692},
+    )
+
+    assert risposta.status_code == 422
+    assert "osm:node" in risposta.json()["detail"]
+
+
+def test_biglietto_id_int32_massimo_passa_la_guardia(app_cliente):
+    """La guardia respinge solo ciò che asyncpg rifiuterebbe: al limite del int32 si arriva al 404 del database."""
+    client = app_cliente(SessioneFinta(luogo=None))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
+        headers=_intestazioni(),
+        params={"luogo_id": 2147483647},
+    )
+
+    assert risposta.status_code == 404
+
+
 @respx.mock
 def test_biglietto_accetta_osm_node_e_mostra_badge_esterna(app_cliente):
     """Un POI esterno (`osm:node:<id>`) produce un biglietto con badge `[Esterna …]`, senza scrivere nulla in memoria.
