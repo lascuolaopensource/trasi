@@ -37,6 +37,14 @@ umask 077
   printf 'export PGDATABASE=%s\n' "${PGDATABASE:-trasi_db}"
   printf 'export PGPASSWORD=%s\n' "${PGPASSWORD:-}"
   printf 'export TRASI_DB_VIA=%s\n' "${TRASI_DB_VIA:-diretta}"
+  # Le credenziali verso Onyx (F3 export KB): `cron` non eredita l'ambiente del container, e senza
+  # queste variabili `export_kb.py` esce con «PAT Onyx assente» a ogni notte — verificato il 17/09,
+  # con `export_kb.log` che registra il fallimento e la KB ferma. Le variabili arrivano dal compose
+  # (`ONYX_API_URL`, `ONYX_TRASI_KB_API_KEY`, `ONYX_KB_CC_PAIR_ID`) e qui vengono riproposte al job
+  # solo se impostate, così sul host — dove non esistono — il file resta come prima.
+  if [ -n "${ONYX_API_URL:-}" ]; then printf 'export ONYX_API_URL=%s\n' "$ONYX_API_URL"; fi
+  if [ -n "${ONYX_TRASI_KB_API_KEY:-}" ]; then printf 'export ONYX_TRASI_KB_API_KEY=%s\n' "$ONYX_TRASI_KB_API_KEY"; fi
+  if [ -n "${ONYX_KB_CC_PAIR_ID:-}" ]; then printf 'export ONYX_KB_CC_PAIR_ID=%s\n' "$ONYX_KB_CC_PAIR_ID"; fi
 } > /run/trasi/env
 # **Il proprietario deve essere `automazioni`, non root.** L'entrypoint gira come root (cron lo
 # richiede) e creerebbe il file con il proprio uid: `chmod 600` lo renderebbe leggibile **solo da
