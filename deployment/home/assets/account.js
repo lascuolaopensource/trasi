@@ -167,6 +167,25 @@
     contenitore.hidden = false;
   }
 
+  /* ---------------------------------------------------------------- pannello: l'assistente */
+
+  /* La chat **è Onyx**: il pannello della sidebar dichiara l'assistente e apre
+     `onyx.lascuolaopensource.org/app?agentId=2` («Trasi Casa») in una scheda nuova. Non c'è
+     una chat compatta da replicare: la conversazione corrente vive dove vive Onyx. */
+  function montaPannello() {
+    if (!window.Trasi || !window.Trasi.montaPannello) return;
+    window.Trasi.montaPannello(
+      '<div class="pannello-testa">' +
+        '<a class="azione" href="https://onyx.lascuolaopensource.org/app?agentId=2" ' +
+        'target="_blank" rel="noopener">Apri l&apos;assistente</a>' +
+      '</div>' +
+      '<div class="pannello-corpo">' +
+        '<p class="pannello-nota">L&apos;assistente Trasi Casa apre in una scheda nuova.</p>' +
+      '</div>'
+    );
+  }
+
+  montaPannello();
   /* ---------------------------------------------------------------- avvio */
 
   function caricaCoda(nomeCasa) {

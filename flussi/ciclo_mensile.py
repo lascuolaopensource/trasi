@@ -41,6 +41,7 @@ import csv
 import io
 import json
 import os
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -50,12 +51,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from comune import (  # noqa: E402
     CAMPI_V6,
+    COMPOSE,
+    DB_DEFAULT,
     FlussoErrore,
+    SERVIZIO_DB,
     apri_run,
+    esegui_sql,
     leggi,
     log,
     parametro_int,
     registra_run,
+    uno,
     verifica_v6,
 )
 
@@ -74,10 +80,18 @@ class CicloErrore(FlussoErrore):
 
 
 def _mese_corrente(mese: str | None) -> date:
-    """Il primo giorno del mese da rendicontare. `--mese 2026-09` o il mese corrente."""
+    """Il primo giorno del mese da rendicontare: `--mese 2026-09`, oppure il **mese appena chiuso**.
+
+    Il ciclo gira il giorno `[P] giorno_ciclo_mensile` (3): a quella data il mese in corso ha tre giorni
+    di dati e il mese precedente è completo. La prima versione rendicontava il mese **corrente** — misurato
+    il 17/09/2026 (P2.1): il report di settembre generato il 3 settembre portava tre giorni di richieste e
+    veniva presentato come «il mese», e il mese di agosto non aveva nessun report. Il mese da rendicontare
+    è quello chiuso; per un mese specifico c'è `--mese`.
+    """
     if not mese:
-        oggi = date.today()
-        return oggi.replace(day=1)
+        primo_del_corrente = date.today().replace(day=1)
+        ultimo_del_precedente = primo_del_corrente.fromordinal(primo_del_corrente.toordinal() - 1)
+        return ultimo_del_precedente.replace(day=1)
     try:
         return datetime.strptime(mese, "%Y-%m").date().replace(day=1)
     except ValueError as errore:
@@ -321,11 +335,17 @@ def _gia_fatto(mese: date) -> bool:
 
     Si legge da `flusso_run`, che è append-only: la storia *è* la memoria di ciò che è stato fatto. Un
     file di stato separato sarebbe una seconda verità da tenere allineata.
+
+    Contano solo le esecuzioni che hanno **inviato**: un `--dry-run` chiude il run con `ok` e lo stesso
+    `mese` nel dettaglio, e la prima versione lo leggeva come «già fatto» — misurato il 17/09/2026: dopo un
+    dry-run di prova, il ciclo vero di agosto usciva senza inviare né persistire il report.
     """
     righe = leggi(
         "SELECT id FROM trasi.flusso_run "
         " WHERE nome = 'ciclo_mensile' AND esito IN ('ok','parziale') "
-        f"   AND dettaglio->>'mese' = '{mese.isoformat()}' LIMIT 1"
+        f"   AND dettaglio->>'mese' = '{mese.isoformat()}'"
+        "   AND COALESCE(dettaglio->>'dry_run', 'false') <> 'true'"
+        "   AND COALESCE(dettaglio->>'gia_eseguito', 'false') <> 'true' LIMIT 1"
     )
     return bool(righe)
 
@@ -400,12 +420,100 @@ def esegui(*, mese: str | None, dry_run: bool, forza: bool) -> int:
                forzato=bool(forza), csv=str(percorso_csv), righe_csv=righe_csv,
                recapiti=recapiti, campi_v6=list(CAMPI_V6))
     registra_run(run)
+
+    # Il report come **oggetto** (db/024): finché era solo un CSV in `evidenze/` e un'email, la Home non
+    # aveva niente da mostrare e nessuno poteva commentarlo — misurato il 17/09/2026 (P2.1): la tabella
+    # `report` esisteva da giorni con zero righe, perché nessun flusso la scriveva. Si scrive **dopo**
+    # `registra_run`, così la riga porta l'id dell'esecuzione che l'ha generata.
+    try:
+        persistiti = _persisti_report(primo, digest_righe=_digest_per_casa(primo))
+    except FlussoErrore as errore:
+        print(f"ciclo_mensile: report non persistito ({errore})", file=sys.stderr)
+        return 1
+    log(f"report {primo.strftime('%m/%Y')}: {persistiti} righe in trasi.report (una per Casa, ambito casa)")
     return 0 if esito == "ok" else 1
+
+
+def _persisti_report(mese: date, *, digest_righe: list[dict]) -> int:
+    """Una riga di `trasi.report` per Casa (ambito `casa`), con i contenuti del foglio 4.3 e il CSV della Casa.
+
+    I numeri sono quelli **già mascherati** delle viste (`n_label`): il report trascrive, non ricalcola —
+    stessa regola del CSV. Un report già presente per (Casa, mese) **non si riscrive** — `automazioni` non ha
+    UPDATE (db/024) — e la scelta si fa con una SELECT di esistenza, non con `ON CONFLICT`: la chiave unica di
+    `report` è cambiata forma fra db/024 (vincolo) e il ramo PA (indici parziali), e legare il flusso a una delle
+    due lo romperebbe sull'altra. Il ritorno conta le righe **scritte** — le SELECT di esistenza e l'INSERT per-statement sono la
+    guardia contro il doppio, con il conflitto di chiave unica come rete (un INSERT in corsa con un
+    parallelo fallisce invece di duplicare). `flusso_run_id` è l'ultima esecuzione del ciclo per questo
+    mese, appena registrata da `registra_run`.
+    """
+    gia_presenti: set[str] = set()
+    esiti = esegui_sql(
+        "BEGIN; SET LOCAL ROLE rete;\n"
+        "COPY (SELECT c.slug AS casa_slug FROM trasi.report r JOIN trasi.casa c ON c.id = r.casa_id "
+        f" WHERE r.mese = DATE '{mese.isoformat()}' AND r.ambito = 'casa') TO STDOUT;\n"
+        "ROLLBACK;\n"
+    ).strip()
+    if esiti:
+        gia_presenti = {riga for riga in esiti.splitlines() if riga.strip()}
+    celle = leggi(
+        "SELECT casa_slug, categoria, esito, n_label FROM trasi.v_report_mensile "
+        f" WHERE mese = DATE '{mese.isoformat()}' ORDER BY casa_slug, categoria, esito"
+    )
+    variabili = {"mese": mese.isoformat()}
+    valori: list[str] = []
+    for indice, casa in enumerate(digest_righe):
+        slug = casa["casa_slug"]
+        if slug in gia_presenti:
+            log(f"  report {slug} {mese.strftime('%m/%Y')} già presente: non riscritto")
+            continue
+        proprie = [c for c in celle if c["casa_slug"] == slug]
+        # La forma dei contenuti è quella già presente nelle righe di `report` scritte dal ramo PA
+        # (US-4): stesse chiavi, così Home ed export leggono un report solo, non due dialetti.
+        contenuti = {
+            "richieste": int(casa["richieste"] or 0),
+            "senza_risposta": int(casa["senza_risposta"] or 0),
+            "per_categoria_esito": [
+                {"categoria": c["categoria"], "esito": c["esito"], "n": c["n_label"]}
+                for c in proprie if c["n_label"] != "—"
+            ],
+            "proposte_in_attesa": int(casa["proposte_aperte"] or 0),
+            "proposte_applicate": int(casa["applicate"] or 0),
+            "schede_in_scadenza": int(casa["in_scadenza"] or 0),
+        }
+        buffer = io.StringIO()
+        scrittore = csv.writer(buffer, lineterminator="\n")
+        scrittore.writerow(["casa", "categoria", "esito", "n"])
+        for cella in proprie:
+            scrittore.writerow([slug, cella["categoria"], cella["esito"], cella["n_label"]])
+        variabili[f"s{indice}"] = slug
+        variabili[f"j{indice}"] = json.dumps(contenuti, ensure_ascii=False)
+        variabili[f"v{indice}"] = buffer.getvalue()
+        valori.append(
+            f"((SELECT id FROM trasi.casa WHERE slug = :'s{indice}'), :'mese'::date, 'casa', "
+            f":'j{indice}'::jsonb, :'v{indice}', "
+            "(SELECT max(id) FROM trasi.flusso_run WHERE nome = 'ciclo_mensile' AND dettaglio->>'mese' = :'mese'))"
+        )
+    insertiti = 0
+
+    # INSERT **senza `RETURNING`**: il ramo di ritorno forza una lettura della riga appena scritta, e la
+    # policy `rep_sel` non ammette `automazioni` — misurato: «new row violates row-level security policy»
+    # su un INSERT con `RETURNING`, su uno senza. La conta dichiarata è il numero di statement che il
+    # database ha accettato (uno per Casa, con l'esistenza già verificata prima).
+    for indice in range(len(digest_righe)):
+        if f"s{indice}" not in variabili:
+            continue
+        esegui_sql(
+            "INSERT INTO trasi.report (casa_id, mese, ambito, contenuti, csv, flusso_run_id)\nVALUES\n"
+            + valori[indice] + ";\n",
+            variabili=variabili,
+        )
+        insertiti += 1
+    return insertiti
 
 
 def main(argv: list[str] | None = None) -> int:
     argomenti = argparse.ArgumentParser(description="F5 · ciclo mensile: digest alle Case e report PN")
-    argomenti.add_argument("--mese", help="mese da rendicontare, formato YYYY-MM (default: corrente)")
+    argomenti.add_argument("--mese", help="mese da rendicontare, formato YYYY-MM (default: il mese appena chiuso)")
     argomenti.add_argument("--dry-run", action="store_true", help="mostra cosa invierebbe, non invia")
     argomenti.add_argument("--forza", action="store_true",
                            help="riesegue anche se il ciclo del mese è già stato inviato")

@@ -1,0 +1,78 @@
+/* storico.css — il pannello della sidebar in Home (CONTRATTO-shell.md §3: classi di pagina,
+   prefisso proprio). Era in `chat.css`, che la chat Onyx ha reso superfluo: le voci dello
+   storico sono collegamenti a Onyx, non turni da disegnare. */
+
+.storico-nuova { width: 100%; }
+.storico-elenco { display: flex; flex-direction: column; gap: var(--s-4, 16px); }
+.storico-gruppo { display: flex; flex-direction: column; gap: var(--s-1, 4px); }
+.storico-gruppo-testa {
+  font-size: var(--t-minuto, 0.9375rem); font-weight: 700; letter-spacing: 0.05em;
+  color: var(--testo-tenue);
+}
+.storico-voci { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1, 4px); }
+.storico-voce {
+  display: flex; flex-direction: column; gap: 2px; padding: var(--s-2, 8px);
+  border-radius: var(--raggio, 10px); color: var(--testo); text-decoration: none;
+  min-height: var(--shell-bersaglio, 44px); justify-content: center;
+}
+.storico-titolo { font-size: 1rem; line-height: 1.35; }
+.storico-voce:hover { background: var(--azione-sfondo-hover); }
+.storico-ora { font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+.storico-piede { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+.storico-vuoto { margin: 0; color: var(--testo-tenue); }
+
+/* La nota nel pannello contestuale («L'assistente Trasi Casa apre in una scheda nuova.»):
+   la stessa voce tipografica della zona in testata. */
+.pannello-nota { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+
+/* Il pannello centrale della Home: il riquadro che dichiara l'assistente e lo apre. */
+.onyx-apri { max-width: var(--misura-testo, 36rem); display: flex; flex-direction: column; gap: var(--s-3, 12px); }
+.onyx-sotto { margin: 0; }
+.onyx-nota { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+
+/* «Eventi del mese»: il palinsesto per giorno. La riga è una frase — ora, titolo, dove, fonte —
+   e i numeri sono tabellari perché si scorrono in colonna. */
+.eventi { margin-top: var(--s-6, 24px); }
+.eventi-stato { margin: 0; color: var(--testo-tenue); }
+.eventi-stato[hidden] { display: none; }
+.eventi-lista { display: flex; flex-direction: column; gap: var(--s-4, 16px); }
+.eventi-giorno-testa {
+  margin: 0 0 var(--s-1, 4px); font-size: var(--t-minuto, 0.9375rem); font-weight: 700;
+  letter-spacing: 0.02em; color: var(--testo-tenue); text-transform: capitalize;
+}
+.eventi-voci { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2, 8px); }
+.eventi-voce { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s-3, 12px); line-height: 1.45; }
+.eventi-ora { min-width: 8ch; font-variant-numeric: tabular-nums; color: var(--testo-tenue); }
+.eventi-titolo { font-weight: 600; }
+.eventi-dove { color: var(--testo-tenue); }
+.eventi-dove::before { content: "\00b7\00a0"; color: var(--testo-tenue); }
+.eventi-ripete { color: var(--testo-tenue); font-size: var(--t-minuto, 0.9375rem); }
+.eventi-ripete::before { content: "\00b7\00a0"; }
+.eventi-voce .etichetta { flex-basis: 100%; margin-top: 2px; }
+
+/* «Report mensile»: un riquadro per Casa — testa (Casa, mese), i cinque numeri di sintesi in colonna,
+   le celle per categoria ed esito, il collegamento all'export. Niente moduli: si legge e si scarica. */
+.report { margin-top: var(--s-6, 24px); }
+.report-stato { margin: 0; color: var(--testo-tenue); }
+.report-stato[hidden] { display: none; }
+.report-lista { display: grid; gap: var(--s-4, 16px); grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); }
+.report-voce { display: flex; flex-direction: column; gap: var(--s-3, 12px); padding: var(--s-4, 16px); border: 1px solid var(--bordo-tenue, #C9C3B6); border-radius: var(--raggio-piccolo, 4px); }
+.report-voce-testa { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s-3, 12px); }
+.report-titolo { margin: 0; font-size: var(--t-corpo, 1rem); font-weight: 700; }
+.report-mese { margin: 0; color: var(--testo-tenue); text-transform: capitalize; }
+.report-numeri { display: grid; grid-template-columns: 1fr max-content; gap: var(--s-1, 4px) var(--s-3, 12px); margin: 0; }
+.report-numeri dt { color: var(--testo-tenue); }
+.report-numeri dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.report-celle { list-style: none; margin: 0; padding: var(--s-2, 8px) 0 0; border-top: 1px solid var(--bordo-tenue, #C9C3B6); display: flex; flex-direction: column; gap: var(--s-1, 4px); }
+.report-cella { display: flex; justify-content: space-between; gap: var(--s-3, 12px); font-size: var(--t-minuto, 0.9375rem); }
+.report-cella-n { font-variant-numeric: tabular-nums; }
+.report-nota { margin: 0; color: var(--testo-tenue); font-size: var(--t-minuto, 0.9375rem); }
+.report-azioni { margin: 0; }
+
+
+/* «Nuova conversazione» con la domanda da salvare (P4.1): il modulo si apre sotto il bottone, una
+   riga sola. L'etichetta è visibile (un campo senza nome è una casella che non si sa riempire). */
+.storico-nuova-form { display: flex; flex-direction: column; gap: var(--s-2, 8px); margin-top: var(--s-2, 8px); }
+.storico-nuova-form[hidden] { display: none; }
+.storico-nuova-etichetta { font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+.storico-nuova-form input { padding: var(--s-2, 8px) var(--s-3, 12px); border: 1px solid var(--bordo-tenue, #C9C3B6); border-radius: var(--raggio-piccolo, 4px); font: inherit; }

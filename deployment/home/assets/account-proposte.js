@@ -198,15 +198,15 @@
         ricarica();
       }).catch(function (errore) {
         for (var i = 0; i < altri.length; i++) altri[i].disabled = false;
-        /* Gli errori si dicono per quello che sono, con il testo del server che è già in italiano e
-         * già privo di dati personali:
+        /* La frase la compone `Trasi.spiega` — un traduttore per tutto il sito, mai il `detail` grezzo:
          *   403 → «da approvare in coda»: la RLS ha negato, e il pulsante non doveva esserci. Succede
-         *         solo se la coda è cambiata fra la lettura e la decisione (es. Processi ha corretto
-         *         la regola, o un'altra sessione ha già deciso). Si ricarica, così la riga si
-         *         ricompone con lo stato vero invece di lasciare pulsanti che non funzionano.
+         *         solo se la coda è cambiata fra la lettura e la decisione. Si ricarica, così la riga
+         *         si ricompone con lo stato vero invece di lasciare pulsanti che non funzionano.
          *   409 → già decisa o scaduta: stessa cosa, si ricarica.
          *   422 → nota con dati personali o troppo lunga: si dichiara, e i pulsanti tornano attivi. */
-        esito.textContent = (errore && errore.message) ? errore.message : "decisione non registrata";
+        esito.textContent = window.Trasi && window.Trasi.spiega
+          ? window.Trasi.spiega(errore)
+          : "Decisione non registrata. Si può riprovare fra qualche istante.";
         esito.hidden = false;
         if (errore && (errore.stato === 403 || errore.stato === 409)) ricarica();
       });

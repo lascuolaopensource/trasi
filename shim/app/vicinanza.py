@@ -177,6 +177,9 @@ class PoiOsm:
     aperto_adesso: bool | None
     orari_nota: str | None
     url: str | None
+    # Il recapito **della fonte** (tag OSM `phone` / `contact:phone`), così com'è scritto lì, o `None`: lo shim
+    # non lo normalizza e non lo completa. Un numero che non sta in un tag non esiste per questa risposta.
+    telefono: str | None = None
 
 
 @dataclass
@@ -222,8 +225,19 @@ def _elemento_a_poi(elemento: dict[str, Any], tipo: str, adesso: datetime) -> Po
         aperto_adesso=stato_apertura_osm(orari_grezzi, adesso),
         orari_nota=None if orari_grezzi else NOTA_ORARI_ASSENTI,
         url=_url_elemento(elemento_osm, int(elemento["id"])),
+        telefono=_telefono_da_tag(tag),
     )
 
+
+def _telefono_da_tag(tag: dict[str, Any]) -> str | None:
+    """Il recapito dell'elemento OSM, verbatim (P1.3): `phone` prima, `contact:phone` come sinonimo; più numeri
+    restano nella stringa con il separatore `;` della convenzione OSM — sono i recapiti della fonte, non uno scelto
+    dallo shim. Vuoto o assente → `None`, che il contratto traduce in «Recapito telefonico non disponibile»."""
+    for chiave in ("phone", "contact:phone"):
+        valore = (tag.get(chiave) or "").strip()
+        if valore:
+            return valore
+    return None
 
 def costruisci_query(tipo: str, lat: float, lon: float, raggio_m: int, *, tetto: int = TETTO_INTERROGAZIONE) -> str:
     """La query Overpass QL per un tipo del vocabolario.
@@ -391,6 +405,10 @@ def item_kb(
         "orari_nota": None if orari_testo else NOTA_ORARI_ASSENTI,
         "fonte": fonte,
         "url": riga["url"],
+        # La memoria della rete non ha un recapito telefonico **per decisione** (db/025: il filtro anti-PII non
+        # distingue un centralino da un cellulare personale). Il campo c'è, il valore manca, e il LLM lo legge
+        # come «Recapito telefonico non disponibile» — non come un numero da ricordare.
+        "telefono": None,
         "data_aggiornamento": riga["data_aggiornamento"],
         "fiducia": riga["affidabilita"],
         "consultato_ts": _stampa_ts(adesso),
@@ -426,6 +444,7 @@ def item_esterno(
         "orari_nota": poi.orari_nota,
         "fonte": fonte,
         "url": poi.url,
+        "telefono": poi.telefono,
         "data_aggiornamento": None,
         "fiducia": fiducia,
         "consultato_ts": _stampa_ts(adesso),

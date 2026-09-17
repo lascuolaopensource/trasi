@@ -261,8 +261,10 @@ BEGIN
   SELECT count(*) INTO sotto FROM trasi.fonte WHERE attiva AND livello_fiducia < trasi.p_int('fiducia_min_esterna');
   IF sotto <> 0 THEN RAISE EXCEPTION 'FAIL O07 — % fonti attive sotto fiducia_min_esterna', sotto; END IF;
 
-  -- §3: le 9 fonti dell'allow-list iniziale, con la fiducia dichiarata
-  SELECT count(*) INTO sotto FROM (VALUES ('Rete-kb-3',3),('Google Drive-3',3),('Google Calendar-ical-2',2),
+  -- §3: le fonti dell'allow-list iniziale, con la fiducia dichiarata. `Google Drive-3` è fuori dal
+  -- MVP (17/09/2026, commit 627d6c9): la riga esiste nel seed ma **inattiva**, e non si verifica
+  -- qui (O07 controlla le fonti attive; una riga spenta non è in allow-list e non autorizza nulla).
+  SELECT count(*) INTO sotto FROM (VALUES ('Rete-kb-3',3),('Google Calendar-ical-2',2),
       ('OpenStreetMap/Overpass-2',2),('Comune di Brindisi-3',3),('ASL Brindisi-3',3),('INPS-3',3),
       ('Regione Puglia-3',3),('Questura di Brindisi-3',3)) AS v(nome, fid)
   WHERE NOT EXISTS (SELECT 1 FROM trasi.fonte f WHERE f.nome = v.nome AND f.attiva AND f.livello_fiducia = v.fid);

@@ -142,9 +142,13 @@
     testa.appendChild(segno);
     testa.appendChild(nome);
 
+    /* Un luogo senza coordinate non ha un pin sulla mappa (P1.2): l'elenco lo dice a parole, al posto
+     * della distanza che non si può calcolare. È l'equivalente funzionale che promette la pagina. */
+    var senzaPosizione = voce.lat === null || voce.lat === undefined || voce.lon === null || voce.lon === undefined;
     var riga = document.createElement("span");
     riga.className = "mappa-voce-riga";
-    [etichettaTipo(voce), voce.zona, voce.indirizzo, metri(voce.distanza_m), statoApertura(voce)]
+    [etichettaTipo(voce), voce.zona, voce.indirizzo,
+     senzaPosizione ? "posizione non disponibile" : metri(voce.distanza_m), statoApertura(voce)]
       .filter(function (pezzo) { return pezzo; })
       .forEach(function (pezzo) {
         var pezzo_el = document.createElement("span");

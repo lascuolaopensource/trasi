@@ -129,6 +129,9 @@
     pin = {};
 
     voci.forEach(function (voce) {
+      /* Un luogo senza coordinate (P1.2) non ha un pin: `L.marker([null, null])` farebbe saltare l'intero
+       * disegno per una voce sola. Resta nell'elenco, con «posizione non disponibile» (elenco.js). */
+      if (voce.lat === null || voce.lat === undefined || voce.lon === null || voce.lon === undefined) { return; }
       var marcatore = L.marker([voce.lat, voce.lon], {
         icon: icona(voce.livello),
         title: voce.nome,
@@ -161,7 +164,9 @@
       elemento.classList.toggle("mappa-pin--scelto", altra === chiave);
     });
     var voce = stato.perChiave[chiave];
-    if (voce && centra && mappa) { mappa.panTo([voce.lat, voce.lon]); }
+    if (voce && centra && mappa && voce.lat !== null && voce.lat !== undefined && voce.lon !== null && voce.lon !== undefined) {
+      mappa.panTo([voce.lat, voce.lon]);
+    }
   }
 
   /* ------------------------------------------------------------------ i filtri */
@@ -438,22 +443,21 @@
 
   /* ------------------------------------------------------------------ il pannello contestuale
    *
-   * §4 del contratto: in Osservatorio il pannello è la **chat compatta** — «l'ultimo scambio e il
-   * compositore compatto», con in testa «Apri nella Home». La conversazione vive nel modulo della
-   * Home (`chat.js`): qui non se ne tiene una seconda copia, perché «la conversazione corrente è
-   * **una sola** per sessione» (§3.2). Il corpo del pannello lo riempie il modulo che possiede la
-   * chat; qui si dichiara il contenitore e il collegamento in testa.
+   * §4 del contratto: in Osservatorio il pannello dichiara l'assistente. La chat **è Onyx**:
+   * il collegamento apre `onyx.lascuolaopensource.org/app?agentId=2` («Trasi Casa») in una
+   * scheda nuova — non c'è una chat compatta da replicare, e la conversazione corrente vive
+   * dove vive Onyx, non in una copia qui.
    */
   function montaPannello() {
     window.Trasi.montaPannello(
-      '<div class="pannello-testa"><a class="azione" href="home.html">Apri nella Home</a></div>' +
-      '<div class="pannello-corpo" id="chat-compatta"></div>'
+      '<div class="pannello-testa">' +
+        '<a class="azione" href="https://onyx.lascuolaopensource.org/app?agentId=2" ' +
+        'target="_blank" rel="noopener">Apri l&apos;assistente</a>' +
+      '</div>' +
+      '<div class="pannello-corpo">' +
+        '<p class="pannello-nota">L&apos;assistente Trasi Casa apre in una scheda nuova.</p>' +
+      '</div>'
     );
-    /* Se il modulo della chat compatta esiste monta sé stesso nel contenitore; altrimenti il
-     * pannello resta con il solo collegamento, che è comunque la via per la conversazione. */
-    if (window.TrasiChatCompatta && typeof window.TrasiChatCompatta.monta === "function") {
-      window.TrasiChatCompatta.monta(document.getElementById("chat-compatta"));
-    }
   }
 
   /* ------------------------------------------------------------------ avvio */

@@ -98,6 +98,15 @@ paths:
         schema:
           type: string
           format: date
+      - name: data_fine
+        in: query
+        required: false
+        description: Ultima data dell'intervallo, inclusa (ISO `AAAA-MM-GG`). Se omessa, la ricerca vale per il solo
+          giorno di `data`. «Questa settimana» è `data` di lunedì e `data_fine` di domenica; «questo mese» è il primo
+          e l'ultimo giorno del mese. Un valore prima di `data` risponde 422.
+        schema:
+          type: string
+          format: date
       responses:
         '200':
           description: Eventi della Casa nella data richiesta.
@@ -445,6 +454,16 @@ paths:
                   type: string
                   format: uri
                   description: URL di riferimento (locandina, pagina social), facoltativo.
+                ricorrenza:
+                  type: string
+                  enum:
+                  - settimanale
+                  - bisettimanale
+                  - mensile
+                  - annuale
+                  description: 'Regola di ripetizione, facoltativa (NULL = evento singolo). «Ogni giovedì» è
+                    settimanale: le occorrenze si calcolano da `inizio`, e ogni giorno che cade in una ricerca
+                    compare come occorrenza sua. Non testo libero: il campo è a vocabolario chiuso.'
       responses:
         '201':
           description: Evento creato nella memoria della rete.
@@ -1085,6 +1104,7 @@ components:
       - orari_nota
       - fonte
       - url
+      - telefono
       - data_aggiornamento
       - fiducia
       - consultato_ts
@@ -1142,6 +1162,13 @@ components:
           format: uri
           nullable: true
           description: Collegamento alla fonte o al dato originale; `null` se non disponibile.
+        telefono:
+          type: string
+          nullable: true
+          description: 'Recapito telefonico **così com''è scritto dalla fonte** (per `esterna`: il tag OpenStreetMap
+            `phone`/`contact:phone`, anche con più numeri separati da `;`); `null` per la memoria della rete e per i
+            luoghi senza recapito nella fonte. Se `null`, di'' «Recapito telefonico non disponibile.» — mai un
+            numero da altre fonti o dalla memoria del modello.'
         data_aggiornamento:
           type: string
           format: date
@@ -1174,6 +1201,7 @@ components:
       - orari_testo
       - fonte
       - url
+      - telefono
       - data_aggiornamento
       - fiducia
       - badge
@@ -1199,14 +1227,17 @@ components:
           description: Indirizzo del luogo; stringa vuota se non noto.
         lat:
           type: number
+          nullable: true
           minimum: -90
           maximum: 90
-          description: Latitudine in gradi decimali (WGS84).
+          description: Latitudine in gradi decimali (WGS84); `null` se il luogo non ha una posizione in memoria.
+            Non inventarla, non stimarla; di' che la posizione non è disponibile.
         lon:
           type: number
+          nullable: true
           minimum: -180
           maximum: 180
-          description: Longitudine in gradi decimali (WGS84).
+          description: Longitudine in gradi decimali (WGS84); `null` come `lat`.
         orari_testo:
           type: string
           nullable: true
@@ -1219,6 +1250,12 @@ components:
           format: uri
           nullable: true
           description: Collegamento alla fonte; `null` se non disponibile.
+        telefono:
+          type: string
+          nullable: true
+          description: 'Recapito telefonico **della memoria della rete**; oggi sempre `null` (la memoria non
+            registra recapiti, per decisione). Se `null`, di'' «Recapito telefonico non disponibile.» Non
+            cercarlo altrove, non ricordarlo, non comporlo.'
         data_aggiornamento:
           type: string
           format: date
@@ -1253,7 +1290,9 @@ components:
           type: string
           enum:
           - kb
-          description: In questa risposta è sempre `kb`.
+          - esterna
+          description: '`kb` = memoria della rete (inserito dall''operatore o da una fonte della rete); `esterna` = arrivato
+            da un calendario esterno (iCal), non verificato dalla rete. Il badge lo dice con le stesse parole.'
         titolo:
           type: string
           description: Titolo dell'evento.
@@ -1292,6 +1331,23 @@ components:
         badge:
           type: string
           description: Etichetta di provenienza già formattata, da riportare così com'è.
+        ricorrenza:
+          type: string
+          nullable: true
+          enum:
+          - settimanale
+          - bisettimanale
+          - mensile
+          - annuale
+          - null
+          description: 'Regola di ripetizione dell''evento; `null` per un evento singolo. Un evento ricorrente compare
+            una volta per ogni giorno dell''intervallo in cui cade: non sono duplicati, sono occorrenze.'
+        occorrenza:
+          type: integer
+          nullable: true
+          minimum: 0
+          description: Numero progressivo dell''occorrenza (0 = la prima, alla `inizio` originale); `null` se non
+            calcolato.
     ItemWeb:
       type: object
       additionalProperties: false
@@ -1755,8 +1811,9 @@ components:
       required:
       - casa
       - data
+      - data_fine
       - eventi
-      description: Eventi di una Casa in una data.
+      description: Eventi di una Casa in una data o in un intervallo di date.
       properties:
         casa:
           type: string
@@ -1764,7 +1821,11 @@ components:
         data:
           type: string
           format: date
-          description: Data effettivamente interrogata.
+          description: Primo giorno effettivamente interrogato.
+        data_fine:
+          type: string
+          format: date
+          description: Ultimo giorno dell'intervallo, incluso. Senza `data_fine` nella richiesta coincide con `data`.
         eventi:
           type: array
           description: Eventi in programma quel giorno.

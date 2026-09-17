@@ -87,16 +87,46 @@ def test_nessuno_schema_prevede_campi_per_dati_personali(contratto):
     `consenso`, perché è la condizione che rende legittima la pubblicazione. `cognome`, `telefono` e
     `codice_fiscale` restano vietati ovunque, anche lì (il foglio 1.1 chiede «Nome Cognome» e lo shim lo
     raccoglie come un unico campo `nome`).
+
+    Seconda precisazione (P1.3, 17/09/2026): `telefono` compare **in lettura** e solo negli item di
+    `cerca_luogo` e `vicino_a` (`ItemLuogo`, `ItemVicinanza`), dove porta il recapito **della fonte** (tag
+    OpenStreetMap) o `null` — perché un campo assente lasciava il modello libero di inventare un numero.
+    Nessun corpo di richiesta lo accetta: il presidio riguarda ciò che lo shim **scrive**, e lì resta intero
+    (`test_nessun_corpo_di_richiesta_accetta_un_telefono`).
     """
     vietati = ("nome_cittadino", "cognome", "telefono", "codice_fiscale", "email_cittadino", "nome_persona")
+    in_lettura = {"#/components/schemas/ItemLuogo", "#/components/schemas/ItemVicinanza"}
 
     ammesse = {
         proprieta
-        for _, schema in _schemi_oggetto(contratto)
+        for percorso, schema in _schemi_oggetto(contratto)
         for proprieta in schema.get("properties", {})
+        if not (percorso in in_lettura and proprieta == "telefono")
     }
 
     assert ammesse.isdisjoint(vietati)
+
+    for percorso in in_lettura:
+        schema = contratto["components"]["schemas"][percorso.rsplit("/", 1)[1]]
+        assert schema["properties"]["telefono"].get("nullable") is True, f"{percorso}: telefono deve ammettere null"
+
+
+def test_nessun_corpo_di_richiesta_accetta_un_telefono(contratto):
+    """Il recapito si **legge** dalla fonte, non si **scrive** nella memoria: nessun `requestBody` — inline o per
+    riferimento — ha una proprietà `telefono`. È la metà del presidio che P1.3 non tocca (db/025)."""
+    schemi = contratto["components"]["schemas"]
+
+    def _risolvi(schema: dict[str, Any]) -> dict[str, Any]:
+        riferimento = schema.get("$ref")
+        return schemi[riferimento.rsplit("/", 1)[1]] if riferimento else schema
+
+    for operation_id, operazione in _operazioni(contratto).items():
+        corpo = operazione.get("requestBody")
+        if not corpo:
+            continue
+        for contenuto in corpo.get("content", {}).values():
+            for _, schema in _schemi_oggetto(_risolvi(contenuto.get("schema", {}))):
+                assert "telefono" not in schema.get("properties", {}), f"{operation_id}: il corpo accetta un telefono"
 
 
 def test_le_persone_esistono_solo_nello_schema_che_esige_consenso(contratto):

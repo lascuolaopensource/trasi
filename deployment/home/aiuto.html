@@ -5,12 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <title>Trasi — Aiuto</title>
-<meta name="description" content="Come funziona Trasi, come si leggono le fonti e cosa non entra nella chat.">
-<link rel="stylesheet" href="assets/struttura.css?v=3">
-<link rel="stylesheet" href="assets/veste.css?v=3">
-<link rel="stylesheet" href="assets/aiuto.css?v=3">
+<meta name="description" content="Aiuto per le pagine di Trasi: la domanda allo sportello, la mappa, l'Account della Casa.">
+<link rel="stylesheet" href="assets/struttura.css">
+<link rel="stylesheet" href="assets/veste.css">
 </head>
 <body>
+
+<!-- Il guscio: copiato da _shell.html (CONTRATTO-shell.md §2). L'Aiuto è pagina della shell
+     come le altre: stessa sidebar, stesso piede, stesso «Esci» — BOT-6 ne possiede solo il
+     contenuto di questo main (CONTRATTO-shell.md §1, riga `aiuto.html`). -->
 <a class="salta" href="#contenuto">Salta al contenuto</a>
 
 <div class="guscio">
@@ -22,7 +25,7 @@
     </div>
 
     <nav class="nav" aria-label="Destinazioni">
-      <a class="nav-voce" href="home.html">Chiedi</a>
+      <a class="nav-voce" href="index.html">Home</a>
       <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
       <a class="nav-voce" href="account.html">Account</a>
     </nav>
@@ -30,7 +33,7 @@
     <div class="pannello" id="shell-pannello" aria-label="Pannello contestuale"></div>
 
     <div class="sidebar-piede">
-      <a class="azione" href="aiuto.html" aria-current="page">Aiuto</a>
+      <a class="azione" href="aiuto.html">Aiuto</a>
       <button class="azione" type="button" id="shell-esci">Esci</button>
       <p class="privacy">Non conserva dati personali.</p>
     </div>
@@ -38,42 +41,56 @@
 
   <div class="area">
     <button class="menu-bottone" type="button" id="shell-menu" aria-expanded="false" aria-controls="sidebar">Menu</button>
+
     <main class="contenuto" id="contenuto">
-      <article class="blocco aiuto-lettura">
+      <h1 class="titolo-pagina">Aiuto</h1>
+
+      <div class="blocco filetto">
         <div class="blocco-testa">
-          <h1 class="titolo-pagina">Aiuto</h1>
-          <p>Una lettura breve per capire cosa mostra Trasi e come riconoscere le informazioni della rete.</p>
+          <h2>Le tre destinazioni</h2>
         </div>
+        <dl class="elenco">
+          <dt>Home</dt>
+          <dd>La domanda della persona allo sportello. Si scrive il bisogno e la zona: nomi, telefoni,
+              email e codici fiscali non sono ammessi. Le risposte dichiarano sempre la fonte.</dd>
+          <dt>Osservatorio</dt>
+          <dd>La mappa della rete: luoghi, eventi del giorno, la scheda di ogni luogo con orari e
+              provenienza del dato.</dd>
+          <dt>Account</dt>
+          <dd>I numeri della Casa, la coda delle proposte, il registro dei colloqui, l'attrezzoteca,
+              i messaggi e le impostazioni.</dd>
+        </dl>
+      </div>
 
-        <section class="aiuto-sezione" aria-labelledby="aiuto-cosa">
-          <h2 id="aiuto-cosa">Cosa fa Trasi</h2>
-          <p>Trasi è uno strumento per il lavoro allo sportello delle Case di Quartiere. La chat raccoglie una domanda sul bisogno e sulla zona, poi cerca una risposta nella memoria della rete. L'Osservatorio mostra i luoghi e le Case, con un elenco equivalente alla mappa. L'Account raccoglie i dati della Casa, le proposte e le altre funzioni della rete.</p>
-        </section>
+      <div class="blocco filetto">
+        <div class="blocco-testa">
+          <h2>L'attrezzoteca</h2>
+          <p>Gli oggetti condivisi della rete: dove si trovano, in che quantità e in che condizioni.</p>
+        </div>
+        <p>Un prestito si propone dalla Casa che tiene l'oggetto e diventa effettivo quando la Casa
+           che riceve lo conferma. Il rientro si dichiara quando l'oggetto torna.</p>
+      </div>
 
-        <section class="aiuto-sezione" aria-labelledby="aiuto-proposta">
-          <h2 id="aiuto-proposta">Proposte e decisioni</h2>
-          <p>Una proposta nasce quando un dato della rete deve cambiare o quando serve una nuova informazione. La memoria della rete non cambia da sola. La proposta resta visibile nella coda finché la decisione spetta alla Casa o a chi coordina la rete. La persona competente decide, poi il sistema applica la decisione prevista.</p>
-        </section>
+      <div class="blocco filetto">
+        <div class="blocco-testa">
+          <h2>La sessione</h2>
+        </div>
+        <p>L'accesso dura 12 ore e vale solo per la Casa scelta. Con «Esci», in fondo alla barra di
+           navigazione, la sessione si chiude subito.</p>
+      </div>
 
-        <section class="aiuto-sezione" aria-labelledby="aiuto-fonti">
-          <h2 id="aiuto-fonti">Etichette di provenienza</h2>
-          <p>Ogni risposta che arriva da una fonte porta una parola e un'etichetta. <span class="etichetta etichetta--kb">[KB · Rete delle Case di Quartiere]</span> indica un dato che la rete conosce. <span class="etichetta etichetta--esterna">[Esterna · OpenStreetMap]</span> indica un dato trovato fuori dalla rete e non verificato dalla rete. L'etichetta riporta la fonte e la data quando sono disponibili.</p>
-        </section>
-
-        <section class="aiuto-sezione" aria-labelledby="aiuto-dati">
-          <h2 id="aiuto-dati">Quando i dati non sono disponibili</h2>
-          <p>La frase «Dati non disponibili: la memoria della rete non risponde in questo momento» significa che la lettura non ha ricevuto una risposta. Non significa che il dato non esista. La pagina mantiene le informazioni già leggibili e dichiara ciò che non può mostrare. È un'informazione, non un guasto.</p>
-        </section>
-
-        <section class="aiuto-sezione" aria-labelledby="aiuto-chat">
-          <h2 id="aiuto-chat">Cosa non entra nella chat</h2>
-          <p>La chat non conserva dati personali. Non entrano nomi di persone, numeri di telefono, indirizzi email o codici fiscali. Restano sufficienti il bisogno, il servizio cercato e la zona. Quando una domanda contiene uno di questi dati, il sistema lo segnala e non la invia.</p>
-        </section>
-      </article>
+      <div class="blocco filetto">
+        <div class="blocco-testa">
+          <h2>La provenienza</h2>
+        </div>
+        <p>Ogni informazione porta la sua origine: l'etichetta [<abbr title="memoria della rete">KB</abbr> ·
+           fonte · data · affidabilità] è la memoria della rete; l'etichetta [Esterna · fonte · ora] è una
+           consultazione esterna, non verificata dalla rete.</p>
+      </div>
     </main>
   </div>
 </div>
 
-<script src="assets/shell.js?v=3"></script>
+<script src="assets/shell.js?v=2"></script>
 </body>
 </html>

@@ -162,8 +162,10 @@ def voce_luogo(riga: Any, *, adesso) -> dict[str, Any]:
         "casa_id": riga["casa_id"],
         "casa_slug": riga["casa_slug"],
         "casa_nome": riga["casa_nome"],
-        "lat": float(riga["lat"]),
-        "lon": float(riga["lon"]),
+        # Un luogo senza geometria non ha una posizione: `null`, non un 500 (`float(None)`) né una coordinata
+        # inventata. La mappa non disegna il pin; l'elenco lo mostra con «posizione non disponibile» (P1.2).
+        "lat": float(riga["lat"]) if riga["lat"] is not None else None,
+        "lon": float(riga["lon"]) if riga["lon"] is not None else None,
         "indirizzo": riga["indirizzo"] or "",
         "orari_testo": orari_testo,
         "orari_nota": None if orari_testo else NOTA_ORARI_ASSENTI,

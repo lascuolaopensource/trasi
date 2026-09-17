@@ -214,7 +214,7 @@ def crea_app() -> FastAPI:
     # `warning`: chi guarda i log lo vede, e non fallisce in silenzio.
     for _nome in ("conversazioni_op", "mappa_op", "poi_op", "eventi_op", "servizi_op",
                   "biglietto_op", "proposte_op", "casa_op", "decisione_op",
-                  "statistiche_op", "proponi_op", "eventi_scrittura", "oggi_op"):
+                  "statistiche_op", "proponi_op", "eventi_scrittura", "oggi_op", "report_op"):
         try:
             _modulo = importlib.import_module(f".{_nome}", __package__)
         except ImportError:

@@ -134,6 +134,18 @@ async def _movimenti_di(oggetto_id: int) -> list[int]:
 # --- client con la sessione di una Casa -----------------------------------------------------------------------
 
 
+async def _pulisci_audit_proposta(proposta_id: int) -> None:
+    """Rimuove la proposta di fixture e la sua riga di audit (V4: la contabilità segue l'oggetto)."""
+    conn = await ambiente.connessione_amministratore()
+    try:
+        await conn.execute("SET ROLE trasi_owner")
+        await conn.execute("DELETE FROM trasi.audit WHERE proposta_id = $1", proposta_id)
+        await conn.execute("DELETE FROM trasi.oggetto WHERE nome = $1", NOME_PROVA)
+        await conn.execute("DELETE FROM trasi.proposta WHERE id = $1", proposta_id)
+    finally:
+        await conn.close()
+
+
 @pytest.fixture
 def accedi():
     """Un `TestClient` autenticato, che cambia Casa rifacendo il login — come farebbe un operatore.
@@ -350,3 +362,110 @@ def test_movimenti_da_confermare_senza_sessione_risponde_401(chiave):
 
     assert risposta.status_code == 401
     assert risposta.json()["detail"]
+
+
+# --- T16/T17 — l'oggetto proposto da Casa A appartiene a Casa A, e Casa B lo vede quando è in inventario -------
+
+NOME_PROVA = "ZZ-microfoni di prova T16 (rimossi dal test)"
+
+
+@pytest.mark.live
+def test_l_oggetto_di_una_casa_appartiene_a_quella_casa_ed_e_visibile_dalle_altre(accedi):
+    """T16/T17 — la proposta `nuovo_oggetto` di Casa A nasce **di Casa A** (casa_id della sessione, mai del corpo:
+    il payload che porta `casa_id` è un 422), e finché è in coda l'inventario della rete non la mostra. Applicata,
+    l'oggetto è nell'inventario per tutte le Case (US-5.1) con la sua Casa sulla riga — e Casa B non può prestarlo
+    (T17: la RLS pretende la Casa cedente, provato da `test_proporre_un_prestito_di_un_oggetto_altrui_e_403_non_500`).
+    """
+    acceduta = accedi(SLUG_PRINCIPALE)
+    risposta = acceduta.post(
+        "/op/proponi_modifica",
+        headers=_intestazioni(),
+        json={
+            "tipo": "nuovo_oggetto",
+            "entita": "oggetto",
+            "payload": {"nome": NOME_PROVA, "quantita": 2, "descrizione": "Fixture T16"},
+            "motivazione": "Fixture T16 attrezzoteca",
+        },
+    )
+    assert risposta.status_code == 201, risposta.text
+    proposta_id = risposta.json()["proposta_id"]
+
+    async def _stato_proposta() -> Any:
+        conn = await ambiente.connessione_amministratore()
+        try:
+            await conn.execute("SET ROLE trasi_owner")
+            return await conn.fetchrow(
+                "SELECT c.slug AS casa_slug, p.stato, p.tipo FROM trasi.proposta p "
+                "JOIN trasi.casa c ON c.id = p.casa_id WHERE p.id = $1",
+                proposta_id,
+            )
+        finally:
+            await conn.close()
+
+    riga = asyncio.run(_stato_proposta())
+    assert riga["stato"] == "proposta"
+    assert riga["tipo"] == "nuovo_oggetto"
+    assert riga["casa_slug"] == SLUG_PRINCIPALE, "l'oggetto proposto appartiene alla Casa della sessione"
+
+    # In coda l'inventario di Casa B non cambia: il dominio non si scrive con una proposta approvata no.
+    ricevente = accedi(SLUG_CEDENTE)
+    risposta_b = ricevente.get("/op/attrezzoteca?q=ZZ-microfoni", headers=_intestazioni())
+    assert risposta_b.status_code == 200
+    assert NOME_PROVA not in [i["nome"] for i in risposta_b.json()["items"]]
+
+    async def _applica() -> int | None:
+        """L'approvazione come la fa il sistema: un gestore della Casa decide via `POST /op/approva_proposta`
+        (RLS del ruolo Casa), e `applica_proposte_approvate` gira con `automazioni` come di notte."""
+        c_gestore = await ambiente.connessione_amministratore()
+        try:
+            await c_gestore.execute("SET ROLE trasi_owner")
+            await c_gestore.execute(
+                "UPDATE trasi.proposta SET stato = 'approvata', approvato_ts = now() "
+                "WHERE id = $1 AND stato = 'proposta'",
+                proposta_id,
+            )
+        finally:
+            await c_gestore.close()
+        conn = await ambiente.connessione_amministratore()
+        try:
+            await conn.execute("SET ROLE automazioni")
+            await conn.execute("SELECT trasi.applica_proposte_approvate()")
+            riga = await conn.fetchrow(
+                "SELECT a.entita_id FROM trasi.audit a WHERE a.proposta_id = $1 AND a.azione = 'applicata'", proposta_id
+            )
+            return riga["entita_id"] if riga else None
+        finally:
+            await conn.close()
+
+    oggetto_id = asyncio.run(_applica())
+    assert oggetto_id, "la proposta non è stata applicata: la fixture non può verificare la visibilità"
+
+    try:
+        risposta_b = ricevente.get("/op/attrezzoteca?q=ZZ-microfoni", headers=_intestazioni())
+        assert risposta_b.status_code == 200
+        voci = [i for i in risposta_b.json()["items"] if i["nome"] == NOME_PROVA]
+        assert len(voci) == 1 and voci[0]["casa"] == SLUG_PRINCIPALE
+        assert voci[0]["quantita_disponibile"] == 2
+
+        propria = accedi(SLUG_PRINCIPALE).get("/op/attrezzoteca?q=ZZ-microfoni", headers=_intestazioni())
+        assert NOME_PROVA in [i["nome"] for i in propria.json()["items"]]
+    finally:
+        asyncio.run(_pulisci([oggetto_id], []))
+        asyncio.run(_pulisci_audit_proposta(proposta_id))
+
+
+async def _rimuovi_residui_t16() -> None:
+    """Ripulisce le proposte `nuovo_oggetto` di fixture lasciate da run precedenti del test, con il loro audit."""
+    conn = await ambiente.connessione_amministratore()
+    try:
+        await conn.execute("SET ROLE trasi_owner")
+        righe = await conn.fetch(
+            "SELECT id FROM trasi.proposta WHERE tipo = 'nuovo_oggetto' "
+            " AND payload->>'nome' = $1 AND stato = 'proposta'",
+            NOME_PROVA,
+        )
+        for riga in righe:
+            await conn.execute("DELETE FROM trasi.audit WHERE proposta_id = $1", riga["id"])
+            await conn.execute("DELETE FROM trasi.proposta WHERE id = $1", riga["id"])
+    finally:
+        await conn.close()

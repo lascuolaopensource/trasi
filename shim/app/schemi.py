@@ -41,11 +41,16 @@ class ItemLuogo(BaseModel):
     nome: str
     tipo: str
     indirizzo: str
-    lat: float = Field(ge=-90, le=90)
-    lon: float = Field(ge=-180, le=180)
+    # `None` = il luogo non ha una posizione in memoria (P1.2): il campo c'è sempre, il valore può mancare.
+    lat: float | None = Field(ge=-90, le=90)
+    lon: float | None = Field(ge=-180, le=180)
     orari_testo: str | None
     fonte: str
     url: str | None
+    # Recapito telefonico (P1.3): il campo c'è sempre, il valore è `None` finché la memoria della rete non ha un
+    # recapito **di servizio** verificato (db/025: oggi nessuna colonna lo porta, per decisione). Il LLM legge
+    # `null` e dice «Recapito telefonico non disponibile»: un campo assente lo lascerebbe libero di inventarlo.
+    telefono: str | None
     data_aggiornamento: date | None
     fiducia: int = Field(ge=1, le=3)
     badge: str
@@ -60,11 +65,17 @@ class RispostaCercaLuogo(BaseModel):
 
 
 class ItemEvento(BaseModel):
-    """`eventi_oggi`: un evento in programma in una Casa di Quartiere."""
+    """`eventi_oggi`: un'occorrenza di un evento in programma in una Casa di Quartiere.
+
+    Un evento ricorrente arriva come **una riga per occorrenza** (17/09/2026, db/030): `ricorrenza`
+    porta la regola («settimanale»…), `occorrenza` il numero progressivo (0 = la prima, che è
+    l'`inizio` originale). Un evento singolo ha `ricorrenza=None` e `occorrenza=0`: il consumatore
+    non deve saperne di più per non mostrare niente di più.
+    """
 
     model_config = TIPO_STRETTO
 
-    provenienza: Literal["kb"]
+    provenienza: Literal["kb", "esterna"]
     titolo: str
     dove: str
     data: date
@@ -75,15 +86,23 @@ class ItemEvento(BaseModel):
     url: str | None
     fiducia: int = Field(ge=1, le=3)
     badge: str
+    ricorrenza: Literal["settimanale", "bisettimanale", "mensile", "annuale"] | None = None
+    occorrenza: int | None = Field(default=None, ge=0)
 
 
 class RispostaEventiOggi(BaseModel):
-    """Eventi di una Casa in una data."""
+    """Eventi di una Casa in una data o in un intervallo di date.
+
+    `data_fine` è **sempre** presente in risposta (17/09/2026, US-1.2): senza la query string
+    coincide con `data` (un giorno), e il consumatore legge l'intervallo effettivo in un campo solo
+    invece di doverlo dedurre dall'assenza del campo.
+    """
 
     model_config = TIPO_STRETTO
 
     casa: str
     data: date
+    data_fine: date
     eventi: list[ItemEvento]
 
 
@@ -117,6 +136,9 @@ class ItemVicinanza(BaseModel):
     orari_nota: str | None
     fonte: str
     url: str | None
+    # Il recapito della **fonte** (tag OSM `phone`/`contact:phone`, verbatim) per `esterna`; `None` per `kb`
+    # (db/025) e per i POI senza tag. Mai composto, mai normalizzato dallo shim.
+    telefono: str | None
     data_aggiornamento: date | None
     fiducia: int = Field(ge=1, le=3)
     consultato_ts: datetime

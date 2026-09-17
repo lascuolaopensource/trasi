@@ -119,6 +119,74 @@ Un mese senza richieste arriva come `ambiti: []`: dillo («mese senza richieste 
 """,
     ),
     (
+        # P0.1 (17/09/2026, US-1.2): il modello rispondeva a «questa settimana» chiamando
+        # `eventi_oggi` una volta sola — cioè con il solo giorno di oggi. Il tool accetta un
+        # intervallo con `data_fine`: la sezione lo dice, in parole che il modello riconosce.
+        "EVENTI IN UN PERIODO — usa `data` e `data_fine`",
+        """
+EVENTI IN UN PERIODO — usa `data` e `data_fine`:
+«Oggi», «domani», «sabato» → chiama `eventi_oggi` con `data` (un giorno).
+«Questa settimana», «questo fine settimana», «questo mese», «entro Natale» → chiama `eventi_oggi` **una volta**
+con `data` (primo giorno) e `data_fine` (ultimo giorno, incluso). Non chiamare il tool un giorno per volta:
+la risposta porta tutti gli eventi dell'intervallo, ognuno con la sua data.
+Un evento con `ricorrenza` («settimanale»…) compare una volta per ogni giorno in cui cade: sono occorrenze
+vere, non duplicati — presentale con la data di ciascuna, senza ripetere tutta la descrizione ogni volta.
+Se nel periodo non c'è niente, dillo con la data («nessun evento dal 20 al 27 settembre»): non cercare
+un altro periodo per conto tuo.
+""",
+    ),
+    (
+        # P1.1 (17/09/2026, US-2): alla domanda «CAF e farmacia vicino a Casale» il modello cercava una
+        # volta con un testo solo e rispondeva con il servizio che aveva più righe, tacendo l'altro. Lo
+        # shim ora ordina i risultati un servizio per volta (bilanciato per `tipo`), e il prompt dice
+        # di cercare **ogni** servizio nominato e di riportarli **tutti**.
+        "PIÙ SERVIZI IN UNA DOMANDA — uno per uno, tutti nella risposta",
+        """
+PIÙ SERVIZI IN UNA DOMANDA — uno per uno, tutti nella risposta:
+Se l'operatore nomina più servizi («un CAF e una farmacia», «dove si fa l'ISEE e dove c'è un centro anziani»),
+chiama `cerca_luogo` (e se serve `vicino_a`) **una volta per ogni servizio**, con `q` o `tipo` di quel servizio,
+non una volta sola con tutte le parole insieme.
+La risposta ha **una parte per ogni servizio chiesto**, nell'ordine della domanda, con le stesse poche righe ciascuna
+(nome, dove, orari, etichetta): il servizio che ha più risultati non prende più spazio degli altri — massimo 3 voci
+per servizio, poi «e altri N in memoria».
+Se per uno dei servizi non trovi niente, quella parte lo dice («farmacia: nessuna in memoria nel raggio della Casa»)
+e prosegue con gli altri: un servizio senza risultati non si tace e non si sostituisce con un altro.
+""",
+    ),
+    (
+        # P1.3 (17/09/2026): il modello completava una risposta con un numero di telefono «plausibile»
+        # che nessuno strumento aveva restituito. Il dominio non registra recapiti (db/025); gli item
+        # di `vicino_a` portano il campo `telefono` con il numero **della fonte** (OpenStreetMap) o `null`.
+        "RECAPITI TELEFONICI — solo dal campo `telefono`",
+        """
+RECAPITI TELEFONICI — solo dal campo `telefono`:
+Un numero di telefono si dice **solo** se compare in un risultato degli strumenti (campo `telefono` di `cerca_luogo`
+e `vicino_a`) o, alla lettera, in un documento della KB citato con la sua etichetta. Riportalo così com'è scritto lì,
+con l'etichetta della sua fonte.
+Se il campo è `null` o manca, scrivi esattamente: «Recapito telefonico non disponibile.» — e, se utile, indica dove
+l'operatore può trovarlo (sportello, sito dell'ente). Non completare, non ricordare, non dedurre un numero da altre
+sedi, uffici o servizi con nome simile: il numero di un'entità non vale per un'altra.
+""",
+    ),
+    (
+        # P4.2 (17/09/2026): il modello proponeva «stampa il biglietto» come passo successivo generico,
+        # anche quando la funzione non c'è per quel luogo (es. luoghi fuori dalla rete) o non è stata
+        # chiesta. Il biglietto esiste (tool `biglietto`), ma si usa solo quando l'operatore lo chiede
+        # e il luogo ha un riferimento valido — non come suggerimento di cortesia.
+        "STAMPA DEL BIGLIETTO — solo su richiesta, solo con un riferimento",
+        """
+STAMPA DEL BIGLIETTO — solo su richiesta, solo con un riferimento:
+Il biglietto per il cittadino esiste, ma si propone **solo** quando l'operatore lo chiede (o chiede «qualcosa
+da stampare») e il luogo ha un riferimento: l'`id` numerico di un item di `cerca_luogo`, o l'`url` OSM di un POI
+esterno di `vicino_a` (`osm:node:<id>`).
+Non offrire il biglietto come suggerimento generico di chiusura («posso stamparti il biglietto» a fine risposta)
+quando nessuno l'ha chiesto: se l'informazione è già data, il passo successivo si dice a parole
+ («puoi rivolgerti alla Casa X in via Y»), non con una stampa da fare.
+Se il riferimento manca, non promettere la stampa: di' che il biglietto non si può comporre per quel luogo e dai
+l'informazione a parole.
+""",
+    ),
+    (
         # Il marcatore è una frase che esiste **nel testo** della sezione, non un'etichetta: il
         # controllo di presenza legge il prompt salvato (`_manca`), e un titolo che nel prompt non
         # compare dichiarerebbe la sezione assente per sempre — l'ha pagato la sessione sorella con

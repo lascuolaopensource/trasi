@@ -18,7 +18,7 @@ di sessione (`casa_id` in `trasi.sessione`), ed è la ragione per cui questo ind
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -50,6 +50,9 @@ class EventoIn(BaseModel):
     luogo_testo: str | None = Field(default=None, max_length=200, description="Dove si tiene, in parole.")
     descrizione: str | None = Field(default=None, max_length=2000)
     url: str | None = Field(default=None, max_length=500)
+    ricorrenza: Literal["settimanale", "bisettimanale", "mensile", "annuale"] | None = Field(
+        default=None, description="Regola di ripetizione; assente = evento singolo."
+    )
 
 
 @router.post(
@@ -88,6 +91,7 @@ async def op_eventi_crea(
             fine=corpo.fine,  # type: ignore[arg-type]
             luogo_testo=corpo.luogo_testo,
             url=corpo.url,
+            ricorrenza=corpo.ricorrenza,
         )
     except ValueError as exc:
         # L'unico validatore che `CreaEventoIn` può far scattare è `fine` prima di `inizio`, e il suo

@@ -28,18 +28,24 @@ BEGIN
   -- La pulizia preventiva gira **prima** di indossare il ruolo: `automazioni` non ha DELETE su `report`
   -- (e non deve averlo — è la regola di Processi). Serve a rendere il file rieseguibile anche fuori dalla
   -- batteria, dove la transazione di `run.sh` non c'è.
+  --
+  -- Il mese della fixture è il **mese appena chiuso**, non il corrente: il ciclo mensile (`P2.1`)
+  -- rendiconta il mese chiuso, e la batteria deve provare ciò che il flusso scrive davvero. Il
+  -- report reale del mese chiuso (scritto dal ciclo, non da qui) si sposta via in una transazione
+  -- che `run.sh` riepilogherà in ROLLBACK.
   DELETE FROM trasi.report
    WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='san-bao')
-     AND mese = date_trunc('month', current_date)::date;
+     AND mese = date_trunc('month', current_date - interval '1 month')::date;
 
   EXECUTE 'SET LOCAL ROLE automazioni';
   INSERT INTO trasi.report (casa_id, mese, ambito, contenuti, csv)
-  SELECT (SELECT id FROM trasi.casa WHERE slug='san-bao'), date_trunc('month', current_date)::date,
+  SELECT (SELECT id FROM trasi.casa WHERE slug='san-bao'), date_trunc('month', current_date - interval '1 month')::date,
          'casa', jsonb_build_object('richieste', 12, 'senza_risposta', 2), 'casa,categoria,esito,n';
   EXECUTE 'RESET ROLE';
   SELECT count(*) INTO n FROM trasi.report
    WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='san-bao')
-     AND mese = date_trunc('month', current_date)::date;
+     AND mese = date_trunc('month', current_date - interval '1 month')::date;
+
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL R00 — fixture: atteso 1 report, trovati %', n; END IF;
 END $$;
 
@@ -135,7 +141,8 @@ BEGIN
   INSERT INTO trasi.commento (entita, entita_id, casa_id, testo)
   SELECT 'report', id, trasi.casa_corrente(), 'R06: i numeri tornano con il registro di sportello'
     FROM trasi.report
-   WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='san-bao') AND ambito='casa';
+   WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='san-bao') AND ambito='casa'
+     AND mese = date_trunc('month', current_date - interval '1 month')::date;
   GET DIAGNOSTICS n = ROW_COUNT;
   EXECUTE 'RESET ROLE';
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL R06 — commento = % righe, attesa 1', n; END IF;

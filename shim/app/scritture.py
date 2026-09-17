@@ -361,6 +361,7 @@ class CreaEventoIn(BaseModel):
     fine: datetime | None = None
     luogo_testo: str | None = None
     url: str | None = None
+    ricorrenza: Literal["settimanale", "bisettimanale", "mensile", "annuale"] | None = None
 
     @model_validator(mode="after")
     def _fine_dopo_inizio(self) -> "CreaEventoIn":
@@ -392,8 +393,8 @@ async def crea_evento(
     try:
         evento_id = await sess.fetchval(
             """
-            INSERT INTO trasi.evento (casa_id, titolo, descrizione, inizio, fine, luogo_testo, url, affidabilita)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, 3)
+            INSERT INTO trasi.evento (casa_id, titolo, descrizione, inizio, fine, luogo_testo, url, ricorrenza, affidabilita)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 3)
             RETURNING id
             """,
             sess.casa_id,
@@ -403,6 +404,7 @@ async def crea_evento(
             corpo.fine,
             corpo.luogo_testo,
             corpo.url,
+            corpo.ricorrenza,
         )
     except Exception as exc:  # noqa: BLE001 — la traduzione è il compito di `_rifiuta_violazione`
         _rifiuta_violazione(exc)

@@ -113,9 +113,14 @@
     /* L'indirizzo dichiara l'assenza invece di stampare una riga vuota: nel seed nessuna Casa ha
      * un indirizzo, e «—» è l'informazione vera («non lo sappiamo»), non un difetto di resa. */
     lista.appendChild(rigaDato("Indirizzo", voce.indirizzo || "non dichiarato nella memoria"));
-    lista.appendChild(rigaDato("Distanza dalla Casa", voce.distanza_m === null || voce.distanza_m === undefined
-      ? "non calcolabile senza una Casa di riferimento"
-      : metri(voce.distanza_m) + " in linea d'aria"));
+    /* Due assenze diverse, due frasi: il luogo senza coordinate (P1.2) non ha una posizione in memoria —
+     * non è la Casa a mancare; la Casa manca solo per i ruoli senza Casa (`rete`, `ti`). */
+    var senzaPosizione = voce.lat === null || voce.lat === undefined || voce.lon === null || voce.lon === undefined;
+    lista.appendChild(rigaDato("Distanza dalla Casa", senzaPosizione
+      ? "posizione del luogo non disponibile in memoria"
+      : (voce.distanza_m === null || voce.distanza_m === undefined
+        ? "non calcolabile senza una Casa di riferimento"
+        : metri(voce.distanza_m) + " in linea d'aria")));
     /* «orari non disponibili» è testo **verbatim** del contratto (§7): si scrive così, non si
      * parafrasa, e il luogo **non si scarta** per questo. */
     lista.appendChild(rigaDato("Orari", voce.orari_testo || "orari non disponibili"));

@@ -22,6 +22,7 @@ un presidio.
 from __future__ import annotations
 
 import os
+import subprocess
 import re
 import socket
 import sys
@@ -238,6 +239,13 @@ def pulizia():
         if registro:
             esegui("DELETE FROM trasi.flusso_run")
             esegui("DELETE FROM trasi.fonte_run")
+            # I report scritti dai run di prova restano orfani del run che li ha generati: si tolgono
+            # solo quelli legati a un `flusso_run` inesistente (i report veri, generati da cicli
+            # passati, sono legati a run che esistono — e non si toccano).
+            esegui(
+                "DELETE FROM trasi.report WHERE flusso_run_id IS NOT NULL "
+                " AND NOT EXISTS (SELECT 1 FROM trasi.flusso_run f WHERE f.id = flusso_run_id)"
+            )
 
     return pulisci
 
@@ -388,3 +396,53 @@ def ics_personale() -> str:
         "END:VEVENT\n"
         "END:VCALENDAR\n"
     )
+
+
+def pulisci_report_consentito(mese: str) -> None:
+    """Rimuove le righe `trasi.report` di un mese di fixture (usato dai test del ciclo mensile).
+
+    `report` è oggetto di dominio a sola lettura per i ruoli Casa, ma è **output di flusso** per chi lo
+    genera: la pulizia dei test passa da qui, e solo per il mese marcato di fixture, mai sui report veri.
+    """
+    from comune import COMPOSE, DB_DEFAULT, SERVIZIO_DB
+    import os
+    import subprocess
+
+    def esegui(query: str) -> None:
+        comando = [
+            "docker", "compose", "-f", str(COMPOSE), "exec", "-T", SERVIZIO_DB,
+            "psql", "-U", "postgres", "-d", os.environ.get("TRASI_DB") or DB_DEFAULT,
+            "-X", "-q", "-v", "ON_ERROR_STOP=1", "-c", query,
+        ]
+        esito = subprocess.run(comando, capture_output=True, text=True, check=False)
+        if esito.returncode != 0:
+            raise RuntimeError(f"pulizia report fallita: {esito.stderr.strip()[:500]}")
+
+    esegui(f"DELETE FROM trasi.commento WHERE entita = 'report' AND entita_id IN (SELECT id FROM trasi.report WHERE mese = DATE '{mese}')")
+    esegui(f"DELETE FROM trasi.report WHERE mese = DATE '{mese}'")
+
+
+def _esegui_pulizia(*, registro: bool, proposte: bool) -> None:
+    """Il `pulisci` del fixture come chiamata diretta (fuori da pytest): i test del ciclo che girano
+    `subprocess` hanno bisogno di pulire il registro **dopo** l'esito, e la fixture è una chiusura.
+
+    La logica va replicata qui **per il solo registro**: chiamare la fixture direttamente è vietato da pytest,
+    e duplicare le due DELETE è ciò che il fixture stesso chiama «la seconda verità». La via è una: la funzione
+    di pulizia vive a livello di modulo e la fixture la riusa, non la duplica."""
+    import subprocess
+
+    from comune import COMPOSE, DB_DEFAULT, SERVIZIO_DB
+
+    def esegui(query: str) -> None:
+        comando = [
+            "docker", "compose", "-f", str(COMPOSE), "exec", "-T", SERVIZIO_DB,
+            "psql", "-U", "postgres", "-d", os.environ.get("TRASI_DB") or DB_DEFAULT,
+            "-X", "-q", "-v", "ON_ERROR_STOP=1", "-c", query,
+        ]
+        esito = subprocess.run(comando, capture_output=True, text=True, check=False)
+        if esito.returncode != 0:
+            raise RuntimeError(f"pulizia fallita: {esito.stderr.strip()[:500]}")
+
+    if registro:
+        esegui("DELETE FROM trasi.flusso_run")
+        esegui("DELETE FROM trasi.fonte_run")

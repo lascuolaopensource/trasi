@@ -90,3 +90,18 @@ def test_operazione_attesa_assente_dal_contratto_impedisce_lo_avvio(contratto_do
 
     with pytest.raises(RuntimeError, match="operationId assenti"):
         crea_app()
+
+
+def test_il_prompt_non_usa_la_stampa_comme_suggerimento_di_chiusura():
+    """T20 — la sezione del prompt che governa il biglietto pretende che la stampa sia **su richiesta** e solo
+    con un riferimento: nessuna frase del prompt può presentare «stampa il biglietto» come passo di cortesia
+    generico. Regressione del suggerimento offerto a fine risposta quando nessuno l'ha chiesto (P4.2)."""
+    import re
+    from pathlib import Path
+
+    testo = (Path(__file__).resolve().parents[2] / "ops" / "allinea_prompt_assistenti.py").read_text(encoding="utf-8")
+    assert "STAMPA DEL BIGLIETTO — solo su richiesta, solo con un riferimento" in testo
+    assert "Non offrire il biglietto come suggerimento generico di chiusura" in testo
+    # L'invito «posso stamparti il biglietto» come suggerimento generico non torna nel codice del prompt.
+    assert 'posso stamparti il biglietto"' not in testo.replace("«", '"').replace("»", '"') or \
+        "suggerimento generico di chiusura" in testo
