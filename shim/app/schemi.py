@@ -27,10 +27,16 @@ class Errore(BaseModel):
 
 
 class ItemLuogo(BaseModel):
-    """`cerca_luogo`: un luogo della memoria della rete, con la sua etichetta di provenienza."""
+    """`cerca_luogo`: un luogo della memoria della rete, con la sua etichetta di provenienza.
+
+    `id` è il `luogo.id` della memoria: è ciò che il LLM passa a `biglietto(luogo_id=…)` per comporre il
+    foglio. Senza questo campo il modello doveva indovinare l'identificativo — e chiamava il biglietto
+    con il **nome** del luogo (422) o con l'id di un nodo OSM (il bug del 17/09: 500).
+    """
 
     model_config = TIPO_STRETTO
 
+    id: int = Field(ge=1, description="Identificativo del luogo: è il `luogo_id` da passare a `biglietto`.")
     provenienza: Literal["kb"]
     nome: str
     tipo: str

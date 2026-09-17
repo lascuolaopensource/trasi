@@ -32,6 +32,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     # Il log applicativo di B3 registrerà solo ts, method, operationId, status, ms, ruolo.
     UVICORN_ACCESS_LOG=0
 
+# WeasyPrint (i fogli in PDF, `formato=pdf`) rende il testo con pango e legge le immagini con gdk-pixbuf:
+# sono binari di sistema, non wheel, e mancano nell'immagine base. `fontconfig` serve a pango per trovare
+# i font (il biglietto incorpora Commissioner); `--no-install-recommends` non porta nulla di superfluo.
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes \
+        libpango-1.0-0 libpangocairo-1.0-0 gdk-pixbuf-2.0-0 fontconfig \
+    && rm -rf /var/lib/apt/lists/*
+# WeasyPrint gira come `shim` (senza home): fontconfig scrive la cache sotto `$HOME/.cache` e, se
+# `$HOME` non è scrivibile, logga un errore per ogni font letto. `XDG_CACHE_HOME` basta a fontconfig
+# moderno; `/tmp` è scrivibile a tutti e lo stack non vi conserva nulla di personale.
+ENV XDG_CACHE_HOME=/tmp/fontconfig \
+    HOME=/tmp
+
 COPY --from=builder /opt/venv /opt/venv
 
 # Utente non root, senza shell di login: l'immagine non deve poter scrivere nel proprio codice.
