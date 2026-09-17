@@ -137,7 +137,8 @@ BEGIN
   INSERT INTO trasi.commento (entita, entita_id, casa_id, testo)
   SELECT 'report', id, trasi.casa_corrente(), 'R06: i numeri tornano con il registro di sportello'
     FROM trasi.report
-   WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='san-bao') AND ambito='casa';
+   WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='san-bao') AND ambito='casa'
+     AND mese = date_trunc('month', current_date)::date;
   GET DIAGNOSTICS n = ROW_COUNT;
   EXECUTE 'RESET ROLE';
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL R06 — commento = % righe, attesa 1', n; END IF;
