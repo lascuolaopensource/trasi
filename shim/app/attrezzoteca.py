@@ -23,6 +23,7 @@ dicono lo stesso numero.
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from typing import Any, Literal
 
@@ -156,10 +157,11 @@ async def op_attrezzoteca(
     testo = (q or "").strip() or None
     righe = await sess.fetch(
         """
-        SELECT oggetto_id, nome, casa_id, casa_slug, quantita, quantita_fuori, quantita_disponibile,
+        SELECT oggetto_id, nome, descrizione, casa_id, casa_slug, quantita, quantita_fuori, quantita_disponibile,
                condizione, fonte_nome, badge_fonte
           FROM trasi.v_inventario
-         WHERE ($1::text IS NULL OR nome ILIKE '%' || $1 || '%' OR COALESCE(badge_fonte, '') ILIKE '%' || $1 || '%')
+         WHERE ($1::text IS NULL OR nome ILIKE '%' || $1 || '%' OR COALESCE(descrizione, '') ILIKE '%' || $1 || '%'
+                OR casa_slug ILIKE '%' || $1 || '%')
          ORDER BY casa_slug, nome
         """,
         testo,
@@ -168,6 +170,7 @@ async def op_attrezzoteca(
         {
             "oggetto_id": r["oggetto_id"],
             "nome": r["nome"],
+            "descrizione": r["descrizione"],
             "casa": r["casa_slug"],
             "quantita": r["quantita"],
             "quantita_fuori": r["quantita_fuori"],
@@ -352,13 +355,228 @@ async def op_movimento_conferma(
     return {"movimento_id": movimento_id, "stato": azione if azione in ("conferma", "rifiuta", "rientro") else "aggiornato"}
 
 
+# --- Prenotazione anticipata (`POST /op/prenota`) — US-5.2, dialogo «proiettore il 30 settembre» ---
+
+class PrenotaIn(BaseModel):
+    """Il corpo di `POST /op/prenota`: l'oggetto, la Casa che lo riceve, e le due date.
+
+    Qui «prenotare» non è un dominio nuovo: è un `movimento` con `dal` nel futuro — la stessa riga,
+    lo stesso flusso di conferma (V6: la Casa ricevente decide), con la differenza che il conflitto di
+    periodo non è un NOTICE invisibile ma **una lista nel ritorno**: l'assistente deve poter dire
+    «c'è già chi lo vuole in quelle date», altrimenti promette ciò che non è.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    oggetto_id: int = Field(ge=1)
+    a_casa: str = Field(min_length=1, description="Slug della Casa che riceverà l'oggetto (es. bozzano).")
+    dal: date = Field(description="Data inizio prenotazione ISO AAAA-MM-GG (anche futura).")
+    al: date = Field(description="Data fine prenotazione ISO AAAA-MM-GG, uguale o successiva a dal.")
+    motivazione: str | None = Field(default=None, max_length=80, description="Uso dichiarato, facoltativo.")
+
+
+@router.post(
+    "/prenota",
+    operation_id="op_prenota",
+    status_code=201,
+    summary="Prenota un oggetto per un periodo futuro: nasce 'proposto' e va confermato dalla Casa che "
+    "lo riceve. Se nel periodo l'oggetto è già prenotato o in prestito, la risposta lo dice (campo "
+    "conflitti): la prenotazione si registra, la decisione resta alle Case (V6).",
+    tags=["op"],
+)
+async def op_prenota(corpo: PrenotaIn, sess: SessioneOperatore = Depends(sessione_corrente)) -> dict[str, Any]:
+    """POST /op/prenota — delega a `trasi.prenota_oggetto` (SECURITY DEFINER, db/026).
+
+    `dal`/`al` sono `date` e non stringhe per la stessa ragione di `op_movimento`: asyncpg le lega al
+    cast `$4::date` della funzione, e una stringa è un DataError a runtime invece di un 422 pydantic.
+    La risposta riporta **tutto** ciò che l'assistente deve leggere a voce alta: oggetto, Case, periodo,
+    stato, e i conflitti già formattati (movimento, Case, date) — così la frase in chat è veritiera
+    senza che il modello debita interrogare di nuovo.
+    """
+    pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
+    try:
+        riga = await sess.fetchval(
+            "SELECT trasi.prenota_oggetto($1, $2, $3::date, $4::date, $5)",
+            corpo.oggetto_id,
+            corpo.a_casa,
+            corpo.dal,
+            corpo.al,
+            sess.ruolo,
+        )
+    except RaiseError as exc:
+        raise errore(409, str(exc).strip()) from exc
+    except Exception as exc:  # noqa: BLE001 — la traduzione è compito di `_traduci_db`
+        _traduci_db(exc)
+    esito = json.loads(riga) if isinstance(riga, str) else riga
+    return esito
+
+
+# --- Rifiuto del prestito (`POST /op/movimento/{id}/rifiuta`) — US-5.3 -------------------------
+@router.post(
+    "/movimento/{movimento_id}/rifiuta",
+    operation_id="op_movimento_rifiuta",
+    summary="Rifiuta un prestito proposto. Decide chi riceve (destinataria): è la stessa regola della "
+    "conferma, e il rifiuto è terminale — un prestito rifiutato non torna proponibile.",
+    tags=["op"],
+)
+async def op_movimento_rifiuta(
+    movimento_id: int,
+    sess: SessioneOperatore = Depends(sessione_corrente),
+) -> dict[str, Any]:
+    """POST /op/movimento/{id}/rifiuta — delega a `trasi.rifiuta_movimento` (SECURITY DEFINER, db/026).
+
+    Il «no» della Casa ricevente: la transizione `proposto → rifiutato` esisteva nel dominio
+    (CHECK e trigger) ma nessuna funzione la raggiungeva — `conferma_movimento` non fa rifiuti, e il
+    rifiuto implicito («non confermo») lasciava il prestito per sempre in `proposto`, cioè nella lista
+    «da confermare» di due operatori. Un rifiuto è una decisione: va registrata come tale.
+    """
+    try:
+        await sess.execute("SELECT trasi.rifiuta_movimento($1, $2)", movimento_id, sess.ruolo)
+    except RaiseError as exc:
+        raise errore(409, str(exc).strip()) from exc
+    except Exception as exc:  # noqa: BLE001
+        _traduci_db(exc)
+    return {"movimento_id": movimento_id, "stato": "rifiutato"}
+
+
+# --- Rientro con condizione (`POST /op/movimento/{id}/rientro`) — US-5.3, dialogo «trapano TR04» ---
+
+
+class RientroIn(BaseModel):
+    """Il corpo di `POST /op/movimento/{id}/rientro`: come torna l'oggetto, e se si sospende.
+
+    `sospendi=true` toglie l'oggetto dall'inventario (attivo=false): è la risposta al dialogo
+    «il caricabatterie non funziona più» — l'oggetto danneggiato non resta prenotabile finché una
+    Casa non lo ripristina con una proposta `modifica_oggetto` (attivo=true), che è una modifica
+    decisa, non un effetto collaterale del rientro.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    condizione: Literal["integro", "danneggiato", "mancante_di_parti"]  # type: ignore[valid-type]
+    sospendi: bool = False
+
+
+@router.post(
+    "/movimento/{movimento_id}/rientro",
+    operation_id="op_movimento_rientro",
+    summary="Marca il rientro di un prestito confermato, con la condizione dell'oggetto al passaggio "
+    "(integro | danneggiato | mancante_di_parti). Con sospendi=true l'oggetto esce dall'inventario "
+    "finché una Casa non lo ripristina: è la sospensione del dialogo «il caricabatterie non funziona più».",
+    tags=["op"],
+)
+async def op_movimento_rientro(
+    movimento_id: int,
+    corpo: RientroIn,
+    sess: SessioneOperatore = Depends(sessione_corrente),
+) -> dict[str, Any]:
+    """POST /op/movimento/{id}/rientro — delega a `trasi.riporta_oggetto` (SECURITY DEFINER, db/026).
+
+    La condizione **si scrive sull'oggetto**, non solo sul movimento: è il suo stato d'ora in poi, e
+    `v_inventario` la mostra a tutta la rete al prossimo `GET /op/attrezzoteca`. Decidere il rientro
+    spetta alla Casa cedente (o alla rete), come per `conferma_movimento` — la regola sta nella
+    funzione, non qui.
+    """
+    pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
+    try:
+        riga = await sess.fetchval(
+            "SELECT trasi.riporta_oggetto($1, $2, $3, $4)",
+            movimento_id,
+            sess.ruolo,
+            corpo.condizione,
+            corpo.sospendi,
+        )
+    except RaiseError as exc:
+        raise errore(409, str(exc).strip()) from exc
+    except Exception as exc:  # noqa: BLE001
+        _traduci_db(exc)
+    esito = json.loads(riga) if isinstance(riga, str) else riga
+    return esito
+
+
+# --- Uso degli oggetti (`GET /op/uso_oggetti`) — US-5.4 ----------------------------------------
+
+
+@router.get(
+    "/uso_oggetti",
+    operation_id="op_uso_oggetti",
+    summary="Statistiche d'uso degli oggetti negli ultimi 12 mesi: fascia basso/medio/alto con le soglie "
+    "della rete. Gli oggetti poco usati sono candidati a cessione; quelli molto richiesti a un secondo "
+    "esemplare. Segnala anche i rientri in ritardo.",
+    tags=["op"],
+)
+async def op_uso_oggetti(sess: SessioneOperatore = Depends(sessione_corrente)) -> dict[str, Any]:
+    """GET /op/uso_oggetti — `v_uso_oggetti` (db/016) + i rientri in ritardo.
+
+    La fascia di uso (`basso`/`medio`/`alto`) è calcolata dalla vista con le soglie dei parametri
+    `[P] attrezzoteca_soglia_bassa/alta`: un solo posto per la regola, come per la disponibilità.
+    Il ritardo è qui e non in una vista: «non rientra nei tempi previsti» è un movimento `confermato`
+    con `al` passata — una query, non un'aggregazione (e la lista è brevissima quando va bene: vuota).
+    """
+    righe = await sess.fetch(
+        """
+        SELECT oggetto_id, nome, casa_slug, condizione, n_movimenti_12m, ultimo_movimento_ts, fascia_uso
+          FROM trasi.v_uso_oggetti
+         ORDER BY fascia_uso DESC, n_movimenti_12m DESC, nome
+        """
+    )
+    ritardi = await sess.fetch(
+        """
+        SELECT m.id AS movimento_id, m.oggetto_id, o.nome AS oggetto,
+               cda.slug AS da_casa, ca.slug AS a_casa, m.dal, m.al,
+               (current_date - m.al) AS giorni_ritardo
+          FROM trasi.movimento m
+          JOIN trasi.oggetto o ON o.id = m.oggetto_id
+          JOIN trasi.casa cda ON cda.id = m.da_casa_id
+          JOIN trasi.casa ca  ON ca.id  = m.a_casa_id
+         WHERE m.stato = 'confermato'
+           AND m.al IS NOT NULL
+           AND m.al < current_date
+         ORDER BY giorni_ritardo DESC, m.id
+        """
+    )
+    return {
+        "uso": [
+            {
+                "oggetto_id": r["oggetto_id"],
+                "nome": r["nome"],
+                "casa": r["casa_slug"],
+                "condizione": r["condizione"],
+                "n_movimenti_12m": r["n_movimenti_12m"],
+                "ultimo_movimento": r["ultimo_movimento_ts"].isoformat() if r["ultimo_movimento_ts"] else None,
+                "fascia_uso": r["fascia_uso"],
+            }
+            for r in righe
+        ],
+        "in_ritardo": [
+            {
+                "movimento_id": r["movimento_id"],
+                "oggetto_id": r["oggetto_id"],
+                "oggetto": r["oggetto"],
+                "da_casa": r["da_casa"],
+                "a_casa": r["a_casa"],
+                "dal": r["dal"].isoformat(),
+                "al": r["al"].isoformat(),
+                "giorni_ritardo": r["giorni_ritardo"],
+            }
+            for r in ritardi
+        ],
+    }
+
+
 __all__ = [
     "MovimentoIn",
+    "PrenotaIn",
     "RegistraRichiestaIn",
+    "RientroIn",
     "op_attrezzoteca",
     "op_movimenti_da_confermare",
     "op_movimento",
     "op_movimento_conferma",
+    "op_movimento_rifiuta",
+    "op_movimento_rientro",
+    "op_prenota",
     "op_registra_richiesta",
+    "op_uso_oggetti",
     "router",
 ]

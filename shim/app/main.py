@@ -51,6 +51,13 @@ FIRMA_OPERAZIONI: tuple[tuple[str, str], ...] = (
     ("oggi", "GET"),
     ("statistiche", "GET"),
     ("cerca_web", "GET"),
+    # La scheda !NEW 5 (attrezzoteca): ricerca inventario, prenotazione anticipata, spostamento e
+    # statistiche d'uso — il contratto cresce coi dialoghi di servizio, 2026-09-17.
+    ("attrezzoteca", "GET"),
+    ("prenota_oggetto", "POST"),
+    ("registra_movimento", "POST"),
+    ("conferma_movimento", "POST"),
+    ("uso_oggetti", "GET"),
 )
 
 
