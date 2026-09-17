@@ -1,0 +1,31 @@
+/* storico.css — il pannello della sidebar in Home (CONTRATTO-shell.md §3: classi di pagina,
+   prefisso proprio). Era in `chat.css`, che la chat Onyx ha reso superfluo: le voci dello
+   storico sono collegamenti a Onyx, non turni da disegnare. */
+
+.storico-nuova { width: 100%; }
+.storico-elenco { display: flex; flex-direction: column; gap: var(--s-4, 16px); }
+.storico-gruppo { display: flex; flex-direction: column; gap: var(--s-1, 4px); }
+.storico-gruppo-testa {
+  font-size: var(--t-minuto, 0.9375rem); font-weight: 700; letter-spacing: 0.05em;
+  color: var(--testo-tenue);
+}
+.storico-voci { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1, 4px); }
+.storico-voce {
+  display: flex; flex-direction: column; gap: 2px; padding: var(--s-2, 8px);
+  border-radius: var(--raggio, 10px); color: var(--testo); text-decoration: none;
+  min-height: var(--shell-bersaglio, 44px); justify-content: center;
+}
+.storico-titolo { font-size: 1rem; line-height: 1.35; }
+.storico-voce:hover { background: var(--azione-sfondo-hover); }
+.storico-ora { font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+.storico-piede { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+.storico-vuoto { margin: 0; color: var(--testo-tenue); }
+
+/* La nota nel pannello contestuale («L'assistente Trasi Casa apre in una scheda nuova.»):
+   la stessa voce tipografica della zona in testata. */
+.pannello-nota { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+
+/* Il pannello centrale della Home: il riquadro che dichiara l'assistente e lo apre. */
+.onyx-apri { max-width: var(--misura-testo, 36rem); display: flex; flex-direction: column; gap: var(--s-3, 12px); }
+.onyx-sotto { margin: 0; }
+.onyx-nota { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }

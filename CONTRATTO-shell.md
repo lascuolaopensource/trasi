@@ -19,9 +19,9 @@ o lo **caricano**, non lo modificano.
 | `assets/veste.css` | BOT-1 | ciò che X sostituisce. Importa i token di `design/tokens/` |
 | `assets/shell.js` | BOT-1 | sessione (`GET /me`), apertura/chiusura sidebar, «Menu», «Esci», popolamento del pannello |
 | `index.html` | BOT-1 | **Accesso** (se non c'è sessione) **e** Home: due viste dello stesso file |
-| `home.html` | BOT-2 | la chat: stato vuoto, suggerimenti, turni, compositore |
-| `assets/chat.js` | BOT-2 | la macchina a stati della chat (§4.1 del piano) |
-| `assets/storico.js` | BOT-2 | il pannello storico nella sidebar |
+| `home.html` | BOT-2 | il pannello dell'assistente: **la chat è Onyx** (`agentId=2`, scheda nuova) |
+| `assets/storico.js` | BOT-2 | il pannello storico nella sidebar: registro delle conversazioni, ogni voce apre Onyx |
+| `assets/storico.css` | BOT-2 | le classi `storico-` e il pannello dell'assistente |
 | `osservatorio.html` | BOT-3 | mappa, elenco, scheda (tre viste dello stesso file) |
 | `assets/mappa.js` | BOT-3 | Leaflet, pin, legenda, sincronizzazione con l'elenco |
 | `account.html` | BOT-4 | la **pagina singola**: carica le 8 sezioni e ne mostra una |
@@ -107,7 +107,8 @@ condivise e non si toccano fra bot.
 | Pagina | Cosa deve esserci in `#shell-pannello` | Chi lo scrive |
 |---|---|---|
 | `index.html` / `home.html` | `.pannello-testa` con `<button>` «Nuova conversazione» + `<div id="storico-lista">` | `storico.js` (BOT-2) |
-| `osservatorio.html`, `account.html` | `.pannello-testa` con `<a href="home.html?c=<id>">Apri nella Home</a>` + `<div id="chat-compatta">` | `shell.js` chiama `home-api.js` (BOT-2) |
+| `osservatorio.html` | `.pannello-testa` con `<a>` «Apri l'assistente» (Onyx, `agentId=2`, scheda nuova) | `mappa.js` (BOT-3) |
+| `account.html` | idem | `account.js` (BOT-4) |
 
 `shell.js` espone un solo aggancio, e nient'altro:
 
