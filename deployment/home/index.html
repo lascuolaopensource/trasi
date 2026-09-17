@@ -84,6 +84,9 @@
     <p class="casa-zona">
       La sessione resta aperta su questo computer finché non si esce. Non conserva dati personali.
     </p>
+    <p class="casa-zona">
+      Il blocco dura 10 minuti. La parola d'ordine è custodita dalla Casa; quando non è disponibile, la richiesta passa alla persona responsabile della Casa.
+    </p>
   </div>
 
 </main>
@@ -143,7 +146,7 @@
          * la pagina dice il fatto in parole proprie, senza esporlo. Mai un codice. */
         var dettaglio = corpo && corpo.detail ? String(corpo.detail) : "";
         errore.textContent = dettaglio.indexOf("troppi tentativi") >= 0
-          ? "Accesso bloccato per qualche minuto: sono stati fatti troppi tentativi su questa Casa."
+          ? "Accesso bloccato per 10 minuti: sono stati fatti troppi tentativi su questa Casa."
           : "Parola d'ordine non riconosciuta per " + scelta + ".";
         errore.hidden = false;
       });
