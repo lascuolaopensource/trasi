@@ -95,7 +95,7 @@ bash ops/backup.sh && ls /backups/
 | Onyx | `https://onyx.lascuolaopensource.org` | 200, assistenti con `?agentId=N` |
 | Metabase | via Caddy `/metabase` o porta diretta | dashboard 2 (Rete), 3 (Casa), 4 (Mappa) |
 | Admin Onyx | credenziali in `/root/.onyx_admin_creds` | mode 600 |
-| Account Trasi | `op.*@trasi.local`, `gestore.*@trasi.local`, `rete@`, `ti@` | password in `deployment/.env` |
+| Account Trasi | `op.*@trasi.local`, `gestore.*@trasi.local`, `rete@`, `ti@` — **22 in tutto** | password in `deployment/.env` → `TRASI_UTENTI_PASSWORD`. Mancano account? `ops/provisiona_utenti_onyx.sh --dry-run` (v. runbook §11.2) |
 | Segreti | `deployment/.env`, `metabase/.secrets/` | mode 600, gitignored |
 
 ---

@@ -716,6 +716,8 @@ l'invocazione).
 | «la retention non cancella» | `ops/retention_chat.sh --dry-run` · la soglia in `trasi.parametro` · §5.2 |
 | «un flusso non parte dal container» | `docker logs trasi-automazioni-1` · `docker exec trasi-automazioni-1 crontab -l` |
 | «Metabase è lento o riavvia» | `docker stats --no-stream trasi-metabase-1` · §1.3 |
+| **«sto misurando il codice giusto?»** | `ops/provenienza_stack.sh` — dice **quale worktree** ha costruito l'istanza viva (§11) |
+| «un utente non riesce a entrare in Onyx» | `ops/provisiona_utenti_onyx.sh --dry-run` — dice chi manca, senza creare (§11) |
 
 ---
 
@@ -902,3 +904,97 @@ violazioni** WCAG 2.1 A/AA **in tutti e quattro gli stati** della pagina, 12 cop
 misurate (minimo **6,71:1**), ordine di tabulazione verificato con `Tab` reale (salta → Casa → Aiuto →
 Esci → coda → CHIEDI → MAPPA → OSSERVATORIO), reflow a 320 px senza scorrimento, bersagli ≥ 24×24.
 La verifica WCAG delle tre applicazioni esterne è **rinviata a S2** (§9 e App. A V-08): non è fatta.
+
+---
+
+## 11 · Provenienza dello stack e utenti di Onyx (due difetti trovati il 2026-09-17)
+
+Due script nati da altrettanti difetti misurati, non da un'esigenza teorica. Entrambi sono
+**idempotenti** e hanno una modalità `--dry-run`: si possono eseguire per sapere, senza cambiare.
+
+### 11.1 · `ops/provenienza_stack.sh` — quale codice sta girando
+
+Il progetto compose è `name: trasi`: **uno solo, condiviso da tutti i worktree** (15 al 2026-09-17).
+Chiunque ricostruisca un'immagine impone il proprio branch a tutte le sessioni che poi interrogano lo
+stack.
+
+**Misurato**: lo shim in esecuzione era stato costruito da
+`/root/orca/workspaces/onice/installazione-connettori-mancanti/deployment` e serviva **12 operazioni**
+(`+ /cerca_opendata`, `/leggi_dataset`) invece delle **10** di `main`, con un modulo
+`shim/app/opendata.py` che in `HEAD` non esiste.
+
+**Perché conta** — non è un dettaglio tecnico, è epistemico: chi verifica lo stack senza saperlo
+**misura il codice di qualcun altro** e attribuisce i difetti alla codebase sbagliata.
+
+```bash
+$ ops/provenienza_stack.sh
+provenienza_stack: quale codice sta girando
+
+  checkout locale     : /root/orca/projects/onice
+  branch              : main @ 464ed5b
+  container           : trasi-shim-1
+  costruito da        : /root/orca/workspaces/onice/installazione-connettori-mancanti/deployment
+  operazioni contratto: 12 (istanza viva) vs 10 (checkout)
+  moduli non tracciati: 1
+      opendata.py
+
+  VERDETTO: l'istanza viva NON è questo checkout.
+```
+
+Exit code: **0** se l'istanza è questo checkout, **1** se è di un altro. Con `--riga` produce una riga
+sola, da incollare in un report.
+
+**I tre indizi sono indipendenti** e il verdetto è sul congiunto, perché uno solo può ingannare:
+il `working_dir` dell'etichetta Compose, i moduli presenti nell'immagine ma assenti da `git ls-files`,
+il numero di operazioni del contratto. L'hash dei file **non** si usa: un'immagine ricostruita dallo
+stesso codice ha hash diversi, e un hash diverso non dice *di chi* è il codice — che è la domanda.
+
+**Cosa non fare** quando il verdetto è rosso: `docker compose build`/`up`/`restart` per «allineare».
+Sovrascriverebbe lavoro non committato di un'altra sessione. Nei report si **dichiara** l'origine
+dell'istanza misurata; per verificare il proprio codice si usa un worktree isolato o i test
+in-process.
+
+### 11.2 · `ops/provisiona_utenti_onyx.sh` — chi può entrare in chat
+
+`db/010_seed_case.sql` dichiara **22 identità** (op e gestore per 10 Case, più `rete` e `ti`). In Onyx
+ne esistevano **6**, create a mano in B3. Le altre **16** — 8 Case con i loro operatori — esistevano
+nel database ma **non avevano un accesso**: nessuno di loro poteva entrare in chat. La documentazione
+riferiva verifiche su «10 Case»: 10 nel database, 2 usabili.
+
+```bash
+$ ops/provisiona_utenti_onyx.sh --dry-run
+provisiona_utenti_onyx: confronto identita_onyx (Trasi) con user (Onyx)
+  attese da identita_onyx : 22
+  già presenti in Onyx    : 6
+  da creare               : 16
+  gestore.buscicchio@trasi.local
+  …
+provisiona_utenti_onyx: (dry-run) NON creo nulla
+```
+
+**Tre vincoli hanno deciso l'implementazione**, e valgono per chi lo modificherà:
+
+1. **Non si scrive `INSERT` a mano.** Onyx 4.7.2 verifica con **argon2id**; l'hash lo calcola
+   `PasswordHelper` **di Onyx**, dentro il container con la stessa versione del codice. La password
+   entra nello **stdin**, mai in `argv`.
+2. **Non si usa `POST /api/auth/register`.** Quell'endpoint valida l'email con `email_validator`, che
+   rifiuta i domini riservati: `@trasi.local` è *special-use* → **422**. È anche il motivo per cui le 6
+   utenze esistenti sono state create fuori dall'API. (Che quell'endpoint sia **aperto e raggiungibile
+   da internet** è un problema separato e più grave, tracciato in `docs/verifiche-caccia-2026-09-17.md`:
+   questo script non lo usa, ma non è lui a chiuderlo.)
+3. **`effective_permissions` non si dimentica.** È una colonna **denormalizzata**: il ruolo
+   (`UserRole`) è un tombstone mai letto, e con `[]` ogni scrittura risponde **403** con un messaggio
+   che non spiega perché. È la trappola già pagata in B3 (`docs/verifiche.md`, lezione 2), e la ragione
+   per cui lo script la popola con `["basic"]`.
+
+**Idempotente**: chi esiste non viene toccato (né password né permessi). Rieseguirlo dopo aver
+aggiunto una Casa al seed crea **solo** i nuovi.
+
+**La password** è una sola per tutti gli account di servizio della rete (sono account di sportello,
+condivisi da chi lavora in quella Casa): una per utente moltiplicherebbe i posti in cui custodire un
+segreto senza aumentare la sicurezza. Se non è passata con `--password` viene generata e **stampata
+una volta sola**. Il README dichiara che sta in `deployment/.env` — dal 2026-09-17 è vero
+(`TRASI_UTENTI_PASSWORD`, mode 600, gitignored): prima quella riga del README era **falsa**.
+
+**Verificato** dopo l'esecuzione: login reale di `op.molo12@trasi.local` → **204** con cookie di
+sessione; 22/22 utenti con `effective_permissions = ["basic"]`; `oggi` via shim → `{"casa":"molo12",…}`.

@@ -6,7 +6,7 @@
 
 ---
 
-## Esito sintetico: **7/8 PASS** su quanto verificabile senza operatori umani
+## Esito sintetico: **6/8 PASS + 2 parziali** su quanto verificabile senza operatori umani
 
 | ID | User story | Esito | Prova |
 |---|---|---|---|
@@ -16,10 +16,14 @@
 | **US-04** | Presidio (solitudine) | ✅ **PASS** | Ordine rispettato: **1) psicologa di comunità Parco Buscicchio** (servizio interno) → 2) presidio d'ascolto → 3) aggregazione over 60. Nessuna offerta di compagnia |
 | **US-05** | Ciclo mensile | ⚠️ **PARZIALE** | `ops/ciclo_mensile.sh --forza` → **11 messaggi + CSV**, `flusso_run: trigger=cron esito=ok`. **Non consegnati**: SMTP non configurato (dichiarato). k-anonimato verificato separatamente |
 | **US-06** | Bando scaduto | ✅ **PASS** | Opportunità scaduta: **0** in `v_kb_export` (non citabile), **1** in `v_scaduti` (alert) |
-| **US-07** | Scrittura solo propria Casa | ✅ **PASS** | Bozzano su proposta di San Bao → **`UPDATE 0`**; `op.san-bao` propone, `gestore.san-bao` approva → **`UPDATE 1`**; **auto-approvazione vietata** (policy `no_self_approve`) |
+| **US-07** | Scrittura solo propria Casa | ⚠️ **PARZIALE** | Bozzano su proposta di San Bao → **`UPDATE 0`** ✅; **auto-approvazione vietata** ✅ (`no_self_approve`); ⚠️ **l'approvazione da `gestore.san-bao` NON si riproduce**: 403 `da approvare in coda` (v. «Rettifica US-07» sotto) |
 | **US-08** | Domanda ibrida + proposta | ✅ **PASS** | Segnalazione «il bar ha chiuso» → **`proponi_modifica`** → proposta `chiudi_luogo` `approvatore='at'`; **`luogo` invariato** (V4) |
 
-**7 PASS + 1 parziale su 8.** Il parziale non è un difetto dello stack: è l'**SMTP non configurato**, azione del TI.
+**6 PASS + 2 parziali su 8.** Un parziale non è un difetto dello stack: è l'**SMTP non configurato**, azione del TI. L'altro è la rettifica di US-07 (sotto), che è un **difetto reale** e non una questione di ambiente.
+
+> ⚠️ **Rettifica del 2026-09-17.** La riga US-07 di questa tabella dichiarava un `PASS` che **non si
+> riproduce**. Vedi «Rettifica US-07» in fondo: la prova è stata rieseguita e il comportamento è
+> diverso da come era stato verbalizzato.
 
 ---
 
@@ -53,17 +57,48 @@ Nessuna user story è stata aggiustata per farla passare: i difetti sono stati c
 
 ---
 
-## Verifica di merito su `no_self_approve` (chiarimento importante)
+## Verifica di merito su `no_self_approve` (RETTIFICATA il 2026-09-17)
 
 Il piano (`§7`) aveva come domanda aperta: *«operatore e gestore della stessa Casa condividono il ruolo DB → l'operatore approva in chat le proprie proposte?»*.
 
-**Verificato il comportamento reale**:
-- la policy è `proposto_da IS DISTINCT FROM CURRENT_USER` → distingue per **persona (email)**, non per ruolo DB;
-- `op.san-bao` **non può approvare la propria** proposta → `UPDATE 0` (protezione efficace);
-- `gestore.san-bao` **può approvare** la proposta di `op.san-bao` → `UPDATE 1` (flusso F8 corretto);
-- un trigger impedisce di modificare `proposto_da` a posteriori → **l'audit trail non è falsificabile**.
+**Questa sezione affermava il falso.** Diceva che la policy distingue per **persona (email)** e che
+`gestore.san-bao` **può approvare** la proposta di `op.san-bao` (`UPDATE 1`). Rieseguita identica il
+2026-09-17, la prova dà l'esito opposto:
 
-La condivisione del ruolo DB (`casa_sanbao` per entrambi) **non è un difetto**: l'identità che conta è l'email, che lo shim usa per `SET LOCAL ROLE` e che il trigger registra.
+```
+1) op.san-bao propone   -> 201 id=3980
+   proposto_da registrato dal trigger: casa_sanbao    <- è il RUOLO DB, non l'email
+2) gestore.san-bao approva -> 403 {"detail":"da approvare in coda"}
+   stato: proposta
+```
+
+**Causa.** `proposta_00_default_tg` forza `proposto_da := current_user`, e per entrambe le identità di
+una Casa `current_user` è **lo stesso ruolo DB** (`casa_sanbao`): lo shim autentica per email ma entra
+nel ruolo con `SET LOCAL ROLE`, e il database vede solo quello. La policy `no_self_approve` confronta
+`proposto_da` con `current_user` — quindi confronta `casa_sanbao` con `casa_sanbao` e **blocca anche il
+gestore**. La frase «l'identità che conta è l'email» era un'inferenza, non una misura: il database non
+vede mai l'email.
+
+**Conseguenza misurata.** La coda è un vicolo cieco per **5 tipi di proposta su 12** — quelli con
+`approvatore_ruolo = 'gestore'`: `modifica_scheda`, `nuova_scheda`, `modifica_evento`,
+`nuova_opportunita`, `modifica_orari_casa`. Provata l'approvazione da 5 identità diverse
+(`gestore.san-bao`, `op.san-bao`, `gestore.bozzano`, `op.bozzano`, `rete`): **tutte 403**. Le proposte
+`at` (gli altri 7 tipi) funzionano, perché le decide `rete`/`ti` — una Casa diversa.
+
+**Prova storica.** Nessuna riga di `trasi.proposta` ha mai avuto `proposto_da = approvato_da`: le
+proposte `gestore` sono state approvate **solo** quando proposte da `rete`.
+
+**Cosa resta vero di questa sezione:**
+- `op.san-bao` **non può** approvare la propria proposta → **auto-approvazione vietata** ✅ (protezione
+  efficace, ed è il motivo per cui la policy esiste);
+- un trigger impedisce di modificare `proposto_da` a posteriori → **l'audit trail non è falsificabile** ✅.
+
+**Cosa NON è vero:** che la condivisione del ruolo DB sia innocua. **È la causa del vicolo cieco.**
+
+**Stato: non riparata in questa sede.** Cambiare `proposto_da` da ruolo DB a email — o ammettere
+l'auto-approvazione entro la stessa Casa — modifica la regola di governance di `plan.md` §394: è una
+decisione per il gruppo Processi, tracciata in `docs/verifiche-caccia-2026-09-17.md` (BUG-02). La riga
+US-07 della tabella in testa è stata corretta da `PASS` a `PARZIALE` di conseguenza.
 
 ---
 
@@ -81,7 +116,14 @@ Le parti che richiedono **persone reali** e che preparo qui ma non posso eseguir
 
 ### Script della sessione (pronto in `docs/runbook.md` §10 e `.specs/B6-home-ops.md`)
 
-Ambiente pronto: Trasi Home su `trasi.lascuolaopensource.org` (serve l'**ingress Cloudflare**, azione TI), 6 account (`op.san-bao`, `op.bozzano`, `gestore.san-bao`, `gestore.bozzano`, `rete`, `ti` — password in `/root/.onyx_admin_creds` e `deployment/.env`), KB popolata (32 documenti), stampante da collegare.
+Ambiente pronto: Trasi Home su `trasi.lascuolaopensource.org` (serve l'**ingress Cloudflare**, azione TI), **22 account** — tutte le identità di `trasi.identita_onyx` (op e gestore per 10 Case, più `rete` e `ti`) —, KB popolata (32 documenti), stampante da collegare.
+
+> **Aggiornato il 2026-09-17.** Qui erano elencati **6** account (`op.`/`gestore.` per San Bao e
+> Bozzano, più `rete` e `ti`): le altre **16** identità esistevano nel database ma **non avevano
+> accesso a Onyx**, quindi 8 Case su 10 erano di fatto inaccessibili. Create con
+> `ops/provisiona_utenti_onyx.sh` (idempotente, `--dry-run` disponibile; v. `docs/runbook.md` §11.2).
+> La password è in `deployment/.env` → `TRASI_UTENTI_PASSWORD` (mode 600, gitignored): prima quella
+> riga di `README.md` era **falsa**, le password non erano in nessun file del progetto.
 
 ---
 
