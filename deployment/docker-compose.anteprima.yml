@@ -49,7 +49,8 @@ services:
       shim-ux:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:2019/config/"]
+      # L'anteprima deve rifiutare gli stessi marcatori di conflitto del rilascio.
+      test: ["CMD-SHELL", "wget --quiet --spider http://127.0.0.1:2019/config/ && ! grep -R -I -n -E '^(<<<<<<<|=======|>>>>>>>)' /srv/home"]
       interval: 20s
       timeout: 5s
       retries: 5
