@@ -602,9 +602,10 @@ paths:
       operationId: biglietto
       tags:
       - kb
-      summary: 'Restituisce il biglietto stampabile (una pagina HTML A6) del luogo scelto: nome, indirizzo, orari, come arrivare,
-        fonte, data e badge. Usalo quando la persona ha deciso dove andare, subito prima di registrare la richiesta. Il biglietto
-        non contiene dati personali: mostralo all''operatore per la stampa.'
+      summary: 'Restituisce il biglietto stampabile (una pagina A6) del luogo scelto: nome, indirizzo, orari, come arrivare,
+        fonte, data e badge. Usalo quando la persona ha deciso dove andare, subito prima di registrare la richiesta.
+        Con `formato=pdf` risponde un file PDF pronto da inviare o salvare; senza, una pagina HTML da stampare.
+        Il biglietto non contiene dati personali.'
       parameters:
       - name: luogo_id
         in: query
@@ -624,14 +625,29 @@ paths:
         schema:
           type: string
           minLength: 1
+      - name: formato
+        in: query
+        required: false
+        description: 'Il formato della risposta: `html` (default, pagina HTML da mandare alla stampante) oppure `pdf`
+          (file PDF pronto da scaricare e inviare). Il contenuto del foglio è lo stesso.'
+        schema:
+          type: string
+          enum:
+          - html
+          - pdf
+          default: html
       responses:
         '200':
-          description: 'Biglietto HTML A6 stampabile (§4.4, B3-SHM-07). È l''unica risposta non JSON del contratto: `text/html`,
-            non `application/json`.'
+          description: 'Biglietto stampabile (§4.4, B3-SHM-07): `text/html` per default, `application/pdf` con
+            `formato=pdf`. Un foglio A6, senza dati personali.'
           content:
             text/html:
               schema:
                 type: string
+            application/pdf:
+              schema:
+                type: string
+                format: binary
         '401':
           $ref: '#/components/responses/ChiaveShimNonValida'
         '403':
@@ -917,6 +933,7 @@ components:
       type: object
       additionalProperties: false
       required:
+      - id
       - provenienza
       - nome
       - tipo
@@ -929,8 +946,12 @@ components:
       - data_aggiornamento
       - fiducia
       - badge
-      description: Un luogo della memoria della rete con la sua etichetta di provenienza.
+      description: Un luogo della memoria della rete con la sua etichetta di provenienza e il suo `id`, da passare a `biglietto`.
       properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Identificativo del luogo nella memoria della rete. È il valore di `luogo_id` per `biglietto`.
         provenienza:
           type: string
           enum:

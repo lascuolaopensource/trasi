@@ -188,9 +188,10 @@ async def eventi_oggi(
 
 
 def _item_luogo(riga) -> ItemLuogo:
-    """Una riga di `trasi.luogo` → `ItemLuogo` del contratto, con il badge già composto (V3)."""
+    """Una riga di `trasi.luogo` → `ItemLuogo` del contratto, con il badge già composto (V3) e l'`id` per il biglietto."""
     fonte = nome_fonte(riga["fonte_autorita"], riga["fonte_nome"])
     return ItemLuogo(
+        id=riga["id"],
         provenienza="kb",
         nome=riga["nome"],
         tipo=riga["tipo"],
@@ -336,25 +337,6 @@ async def statistiche(
             for r in righe
         ],
         testo=testo,
-    )
-
-
-def _item_luogo(riga) -> ItemLuogo:
-    """Una riga di `trasi.luogo` → `ItemLuogo` del contratto, con il badge già composto (V3)."""
-    fonte = nome_fonte(riga["fonte_autorita"], riga["fonte_nome"])
-    return ItemLuogo(
-        provenienza="kb",
-        nome=riga["nome"],
-        tipo=riga["tipo"],
-        indirizzo=riga["indirizzo"],
-        lat=float(riga["lat"]),
-        lon=float(riga["lon"]),
-        orari_testo=riga["orari_testo"],
-        fonte=fonte,
-        url=riga["url"],
-        data_aggiornamento=riga["data_aggiornamento"],
-        fiducia=riga["affidabilita"],
-        badge=badge_kb(fonte, riga["data_aggiornamento"], riga["affidabilita"]),
     )
 
 

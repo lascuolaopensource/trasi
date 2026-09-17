@@ -227,14 +227,22 @@ def _pdf_dall_html(html_foglio: str, nome_file: str) -> Response:
     La conversione è sincrona e blocca l'event loop per l'intera resa: su un foglio A6/A5 è decine di
     millisecondi (misurato sull'immagine), e la complessità di un thread dedicato non compra nulla —
     la richiesta successiva può attendere una resa di decine di ms.
+
+    Il nome file è **ASCII**: l'header non può portare l'em dash di «Bar interno — Centro di Aggregazione
+    Bozzano» (`UnicodeEncodeError` al bind della risposta) e i nomi dei luoghi portano caratteri fuori
+    ASCII. La RFC 6266 prevede `filename*=UTF-8''…` per i non-ASCII: qui il nome visibile resta quello
+    esteso nel PDF, e sul disco basta una forma ripulita — i caratteri fuori ASCII diventano `_`.
     """
     import weasyprint  # import locale: l'immagine lo porta, l'host di sviluppo può non averlo
 
     pdf = weasyprint.HTML(string=html_foglio).write_pdf()
+    nome_ascii = (
+        nome_file.encode("ascii", "replace").decode("ascii").replace('"', "").replace("/", "-").strip()
+    ) or "biglietto"
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{nome_file}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{nome_ascii}.pdf"'},
     )
 
 
