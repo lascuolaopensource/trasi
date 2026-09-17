@@ -6,8 +6,8 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — accesso della Casa</title>
 <meta name="description" content="Trasi: accesso dell'operatore con le credenziali della Casa di Quartiere.">
-<link rel="stylesheet" href="assets/struttura.css">
-<link rel="stylesheet" href="assets/veste.css">
+<link rel="stylesheet" href="assets/struttura.css?v=3">
+<link rel="stylesheet" href="assets/veste.css?v=3">
 <style>
   /* Veste locale della sola schermata di accesso: non è shell (qui non c'è ancora una sessione,
      quindi non c'è sidebar). Tre regole, e stanno qui perché non servono a nessun'altra pagina. */
@@ -26,7 +26,6 @@
   .messaggio[hidden] { display: none; }
   .esito { font-weight: 600; }
 </style>
->>>>>>> 463fcd1 (feat(ux): il wireframe funzionante a tre pagine — Home, Osservatorio, Account)
 </head>
 <body>
 <!-- ============================================================================
@@ -84,6 +83,9 @@
 
     <p class="casa-zona">
       La sessione resta aperta su questo computer finché non si esce. Non conserva dati personali.
+    </p>
+    <p class="casa-zona">
+      Il blocco dura 10 minuti. La parola d'ordine è custodita dalla Casa; quando non è disponibile, la richiesta passa alla persona responsabile della Casa.
     </p>
   </div>
 
@@ -144,7 +146,7 @@
          * la pagina dice il fatto in parole proprie, senza esporlo. Mai un codice. */
         var dettaglio = corpo && corpo.detail ? String(corpo.detail) : "";
         errore.textContent = dettaglio.indexOf("troppi tentativi") >= 0
-          ? "Accesso bloccato per qualche minuto: sono stati fatti troppi tentativi su questa Casa."
+          ? "Accesso bloccato per 10 minuti: sono stati fatti troppi tentativi su questa Casa."
           : "Parola d'ordine non riconosciuta per " + scelta + ".";
         errore.hidden = false;
       });

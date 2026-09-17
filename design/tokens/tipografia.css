@@ -1,18 +1,9 @@
 /* Tipografia — Trasi.
-   Il carattere di interfaccia è Commissioner, distribuito localmente e con stack
-   di sistema come fallback. Il monospaziato resta riservato alle etichette di
-   provenienza, che si citano verbatim. Il logo «Case di Quartiere» è un'immagine.
+   Il carattere dell'interfaccia usa lo stack di sistema. Il monospaziato resta riservato alle etichette
+   di provenienza, che si citano verbatim. Il logo «Case di Quartiere» è un'immagine.
    Base 16 px: nessuna misura scende sotto 1rem per il testo corrente. */
-@font-face {
-  font-family: "Commissioner";
-  src: url("../assets/CommissionerVF.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-}
-
 :root {
-  --font-sistema: "Commissioner", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sistema: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
   --font-corpo: var(--font-sistema);

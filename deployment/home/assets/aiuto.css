@@ -1,0 +1,4 @@
+/* aiuto.css — misura di lettura della pagina Aiuto. */
+.aiuto-lettura { max-width: var(--shell-testo); }
+.aiuto-sezione { display: flex; flex-direction: column; gap: var(--s-3, 12px); }
+.aiuto-sezione h2, .aiuto-sezione p { margin: 0; }

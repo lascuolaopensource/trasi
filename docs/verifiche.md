@@ -789,3 +789,114 @@ I tre bug hanno una cosa in comune: **nessuno si vedeva dalle suite esistenti**,
 Sono emersi da verifiche *laterali* — un caso limite (scadenza), un confronto fra due fonti di verità
 (KB vs vista), una ripetizione (due notti). Le suite verificavano che il sistema facesse ciò che era
 stato chiesto; questi erano casi in cui faceva qualcosa che **non** era stato chiesto.
+
+
+## Caccia ai bug (2026-09-17) — BUG 4: il biglietto per una destinazione esterna rispondeva **500**
+
+**Come l'ho trovato**: nel registro chat di Onyx, sessione `350a77a1` (ore 12:31), assistente `Trasi Casa`:
+*«Il **biglietto stampabile** non riesco a generarlo in questo momento: lo strumento risponde con un errore interno
+(ho riprovato due volte)»*. L'operatore di Molo 12 chiedeva «come arrivo alla sfizioteca» (POI OSM
+`Antosquare La sfizioteca`, nodo `6042688692`) e non ha avuto il biglietto.
+
+**Causa** (`shim/app/testi.py`): il LLM, davanti a un item **esterno** di `vicino_a`, ha chiamato `biglietto` con
+l'id del **nodo OSM** (che sta nell'`url` dell'item, `…/node/6042688692`) come se fosse un `luogo.id` della memoria.
+La colonna `luogo.id` è `integer` (int4): il bind `asyncpg` è esploso con `OverflowError: value out of int32 range`
+prima di toccare il database → 500 `errore interno dello shim` (il contratto dichiara il 422 per `luogo_id`
+malformato). La forma giusta esisteva già (`osm:node:<id>`, testata: **200**, foglio A6 generato) ma il contratto
+dichiara `luogo_id` come `type: integer`, quindi il modello non poteva saperlo: l'`url` dell'item porta l'id del
+nodo, e il modello lo passa come numero.
+
+**Prova della causa** (container `onyx-api_server-1`, chiave dello shim):
+
+```
+biglietto?luogo_id=6042688692        → 500 {"detail":"errore interno dello shim"}   (riprodotto il bug)
+biglietto?luogo_id=osm:node:6042688692 → 200  HTML A6, badge [Esterna …]            (la forma documentata)
+```
+
+**Fix** (due difese, una sola idea: il chiamante deve capire l'errore e sapersi correggere):
+
+1. **Contratto** (`shim/openapi.yaml`): `biglietto.luogo_id` → `type: string` con descrizione che insegna le due
+   forme («per un luogo della memoria il numero; per un POI esterno `osm:node:<id>`, l'id sta nell'URL dell'item,
+   NON il numero da solo»). Il codice accettava già la forma testuale: era il **documento** a dire l'intero.
+   Il runtime non cambia: FastAPI validava `luogo_id: str`, il valore arrivava identico.
+2. **Guardia runtime** (`shim/app/testi.py`): un intero oltre il int32 (lo stesso valore che asyncpg rifiuterebbe)
+   → **422 leggibile** che insegna la forma `osm:node:<id>`, invece del 500 opaco. Il limite è quello della
+   colonna `luogo.id`, non una preferenza.
+
+**Verifica** (container ricostruito e ri-deployato, `trasi-shim-1` healthy):
+
+```
+luogo_id=6042688692          → 422 «…usa la forma «osm:node:<id>»…»      (era 500)
+luogo_id=osm:node:6042688692 → 200  HTML A6 (2030 byte)                  (percorso esterno)
+luogo_id=21 (CAF ACLI KB)    → 200  HTML A6                              (percorso memoria, nessuna regressione)
+```
+
+Log shim: `biglietto status=422` / `status=200`, **0 occorrenze di 500**.
+
+**Test di regressione** in `shim/tests/test_output.py` (2 nuovi): nodo OSM come numero → 422 con «osm:node» nel
+detail; int32 massimo → 404 (la guardia respinge solo ciò che `asyncpg` rifiuterebbe).
+**Suite**: `pytest shim/tests` → **191 passed, 0 failed** (era 189: +2). Contratto: `tests/test_openapi_contract.py`
+→ **11 passed** (Onyx validator incluso).
+
+**Nota operativa**: la prima ricostruzione dell'immagine è partita dal compose del workspace (senza `.env`), che ha
+ricreato il container con `TRASI_SHIM_KEY=""` → **401** su ogni chiamata da Onyx. Il progetto in esercizio usa il
+compose di `/root/orca/projects/onice/deployment/` (con `.env`): ri-deployato da lì, chiavi Caddy/shim/Onyx di nuovo
+allineate. Lezione: ricostruire i container **solo** dalla directory del compose attivo.
+
+**Contratto aggiornato (segnalazione, come da precedente «Contratto aggiornato» in B3)**: il `type` di `luogo_id`
+passa da `integer` a `string` — non è una rottura: ogni valore intero ammesso prima resta ammesso (come stringa).
+**Tool Onyx già allineato**: verificato per confronto semantico fra `shim/openapi.yaml` e `tool.openapi_schema`
+del tool `trasi_shim` (id 12) su `onyx-relational_db` — il documento registrato è **identico** al file corretto
+(parametro `luogo_id` compreso), quindi il modello già legge la descrizione che insegna la forma `osm:node:<id>`.
+
+---
+
+## Biglietto e scheda evento in **PDF** (2026-09-17) — `formato=pdf`
+
+**Richiesta**: l'operatore riceveva il biglietto come HTML in chat; voleva **il file PDF**. Decisione con il PM:
+PDF sia dal tool dell'assistente sia dal browser; conversione lato shim (WeasyPrint), non lato PC dell'operatore.
+Supera il «zero dipendenze PDF» di `confronto-sistema-nuove-funzionalita.md` (era una scelta di tempi, non un vincolo).
+
+**Cosa cambia**
+
+| Dove | Cambiamento |
+|---|---|
+| `shim/openapi.yaml` | `biglietto` ha `formato` (`html` default, `pdf`); risposta `text/html` **o** `application/pdf`. `ItemLuogo` espone **`id`** (era assente: il modello chiamava `biglietto` col **nome** → 422). |
+| `shim/app/testi.py` | `_pdf_dall_html`: la **stessa** pagina di `_foglio` → PDF (un solo costruttore, i divieti valgono per entrambi). Font Commissioner **incorporato** base64 (nel PDF `/assets/…` non esiste). Pulsante «Scarica il PDF» nell'HTML, `no-print`. `/op/scheda_evento?formato=pdf` (A5). |
+| `shim/app/schemi.py`, `routes_lettura.py` | `ItemLuogo.id`; rimosso un `_item_luogo` **duplicato** in coda al modulo che oscurava il primo (il secondo `def` vince: la modifica al primo non arrivava mai). |
+| `shim/Dockerfile`, `requirements.txt` | `weasyprint==70.0`; apt `libpango-1.0-0 libpangocairo-1.0-0 gdk-pixbuf-2.0-0 fontconfig`; `XDG_CACHE_HOME=/tmp/fontconfig` (l'utente `shim` non ha home: senza, «No writable cache directories» a ogni resa). |
+| Font | `CommissionerVF.ttf` aveva una tabella **`BASE` malformata**: il browser la ignora, `fontTools` (subsetter di WeasyPrint) esplode (`struct.error … BaseScriptList`). Rimossa la tabella con chirurgia sfnt; stesso file in `shim/app/assets/` e `deployment/home/assets/` (md5 `3d170d96…`). |
+| Prompt (4 assistenti) | riga «Stampa per il cittadino»: `luogo_id` = campo `id` di `cerca_luogo` (numero) o `osm:node:<id>` dall'`url`; **mai il nome**; `formato=pdf` se serve il file. Applicata via `ops/allinea_prompt_assistenti.py` (sostituzione idempotente). |
+
+**Verifica live** (`trasi-shim-1` ricostruito dal compose attivo, healthy):
+
+```
+cerca_luogo?q=CAF                       → items[0].id = 21
+biglietto?luogo_id=21                   → 200 text/html, pulsante «Scarica il PDF», font incorporato
+biglietto?luogo_id=21&formato=pdf       → 200 application/pdf 13 229 byte, %PDF-1.7,
+                                          Content-Disposition: attachment; filename="biglietto - CAF ACLI La Rosa.pdf"
+                                          MediaBox 0 0 297.64 419.53  (= 105 × 148 mm = A6, 1 pagina)
+biglietto?luogo_id=osm:node:6042688692&formato=pdf → 200 application/pdf (POI esterno, badge [Esterna …])
+/op/scheda_evento?evento_id=2868&formato=pdf → 200 application/pdf (A5), filename="scheda evento - Prova numeri.pdf"
+biglietto?formato=docx                  → 422
+```
+
+**End-to-end in chat** (`/op/chat`, Casa bozzano, «mi prepari il biglietto in PDF per il CAF ACLI La Rosa?»):
+`cerca_luogo` → `{"id": 21, …}` → `biglietto(luogo_id="21", formato="pdf")` → `%PDF-1.7`; risposta dell'assistente
+con badge `[KB · ACLI — patronato · agg. 17/09/2026 · affidabilità 1]` e chiusura del colloquio. **Prima** di
+esporre `id`, lo stesso prompt finiva in `biglietto(luogo_id="CAF ACLI La Rosa")` → 422, due volte.
+
+**Tool Onyx** (`trasi_shim`, id 12): ri-registrato via `PUT /admin/tool/custom/12` → 200; verificato in DB
+`ItemLuogo.id` e `biglietto.formato` presenti nello schema registrato.
+
+**Suite**: `pytest shim/tests` → **194 passed** (+3: PDF file/1 pagina, formato sconosciuto 422, pulsante+font).
+Nell'albero live 7 test **falliscono per lockout**: girano sul DB reale col login della Casa e il presidio
+anti-forza (`>4 fallimenti/10 min`) è scattato durante le prove — non dipendono da questa modifica.
+
+**Limite noto**: in chat il PDF arriva come `tool_result` testuale (`%PDF-…`) — Onyx non allega file binari
+da un tool custom. Il file scaricabile è quello del pulsante nell'HTML o dell'URL con `formato=pdf`
+aperto dal browser (area operatore, cookie di sessione, `/api/shim/op/scheda_evento`).
+
+**Nota operativa**: due cloni dello stesso repo (`workspaces/onice/Debug_Print` per il lavoro, `projects/onice`
+è il compose attivo). Il primo `git add shim/` nel clone live ha inglobato lavoro non committato di un'altra
+sessione (monitoraggio PA): commit ritirato con `reset --soft` e rifatto sui soli 14 file di questa modifica.

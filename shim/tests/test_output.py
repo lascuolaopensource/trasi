@@ -519,6 +519,113 @@ def test_biglietto_luogo_id_non_numerico_ne_osm_422(app_cliente):
     assert risposta.status_code == 422
 
 
+
+def test_biglietto_id_nodo_osm_come_numero_422_non_500(app_cliente):
+    """Un id di nodo OSM passato come numero (es. `6042688692`) è 422, non un 500.
+
+    Il bug reale del 17/09/2026: il LLM, davanti a un item esterno di `vicino_a`, chiamava `biglietto` con
+    l'id del **nodo** (che sta nell'`url` dell'item) come se fosse un `luogo.id`. Il valore oltre il int32
+    esplodeva in `asyncpg` (OverflowError → 500 «errore interno dello shim») e l'assistente dichiarava
+    «lo strumento risponde con un errore interno», lasciando l'operatore senza biglietto. La risposta giusta
+    è un 422 che insegna la forma corretta: la colonna `luogo.id` è `integer` e il nodo OSM non è un luogo.
+    """
+    client = app_cliente(SessioneFinta(luogo=None))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
+        headers=_intestazioni(),
+        params={"luogo_id": 6042688692},
+    )
+
+    assert risposta.status_code == 422
+    assert "osm:node" in risposta.json()["detail"]
+
+
+def test_biglietto_id_int32_massimo_passa_la_guardia(app_cliente):
+    """La guardia respinge solo ciò che asyncpg rifiuterebbe: al limite del int32 si arriva al 404 del database."""
+    client = app_cliente(SessioneFinta(luogo=None))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
+        headers=_intestazioni(),
+        params={"luogo_id": 2147483647},
+    )
+
+    assert risposta.status_code == 404
+
+
+def test_biglietto_formato_pdf_rende_un_file(app_cliente):
+    """`formato=pdf` risponde `application/pdf` con lo stesso contenuto del foglio, pronto al download.
+
+    La verifica è sulla forma della risposta (magic number `%PDF`, `Content-Disposition` con il nome del
+    luogo) e sul fatto che il PDF sia **una pagina** — un biglietto di due pagine è un difetto di stampa,
+    non un dettaglio. La conversione usa lo stesso `_foglio` dell'HTML: un contenuto diverso sarebbe un
+    secondo foglio da tenere allineato.
+    """
+    client = app_cliente(SessioneFinta(luogo=LUOGO_BOZZANO, casa_id=5))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
+        headers=_intestazioni(),
+        params={"luogo_id": 6, "formato": "pdf"},
+    )
+
+    assert risposta.status_code == 200
+    assert risposta.headers["content-type"].startswith("application/pdf")
+    assert risposta.content[:5] == b"%PDF-"
+    # Il nome file è ASCII (l'header non può portare l'em dash): i caratteri fuori ASCII diventano `?`
+    # (`encode('ascii', 'replace')`).
+    assert 'filename="biglietto - Bar interno ? Centro di Aggregazione Bozzano.pdf"' in risposta.headers["content-disposition"]
+    # Una pagina A6: il conteggio pagine sta nel dizionario del PDF (`/Count N`), che weasyprint
+    # scrive dentro un object stream compresso — si decomprimono i flussi e si prende il `/Count`.
+    import re
+    import zlib
+
+    conteggio = 0
+    for blocco in re.finditer(rb"stream\r?\n(.*?)endstream", risposta.content, re.S):
+        try:
+            decompresso = zlib.decompress(blocco.group(1))
+        except Exception:
+            continue
+        for trovato in re.finditer(rb"/Count (\d+)", decompresso):
+            conteggio = max(conteggio, int(trovato.group(1)))
+    assert conteggio == 1
+
+
+def test_biglietto_formato_sconosciuto_422(app_cliente):
+    """`formato=docx` non è un formato del contratto: 422, prima di toccare il database."""
+    client = app_cliente(SessioneFinta(luogo=LUOGO_BOZZANO, casa_id=5))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
+        headers=_intestazioni(),
+        params={"luogo_id": 6, "formato": "docx"},
+    )
+
+    assert risposta.status_code == 422
+
+
+def test_biglietto_html_porta_il_pulsante_pdf_e_il_font_incorporato(app_cliente):
+    """La pagina HTML offre il download del PDF (`?formato=pdf`) e incorpora Commissioner in base64.
+
+    Il font incorporato non è estetica: nel PDF WeasyPrint non segue l'URL `/assets/…` (che nel browser
+    puntava alla Home statica) e senza incorporazione il foglio cade su un font sostituito — oppure, peggio,
+    la resa fallisce. Il pulsante è `no-print`: l'HTML resta il foglio, il pulsante è azione del browser.
+    """
+    client = app_cliente(SessioneFinta(luogo=LUOGO_BOZZANO, casa_id=5))
+
+    risposta = client.get(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
+        headers=_intestazioni(),
+        params={"luogo_id": 6},
+    )
+
+    corpo = risposta.text
+    assert "formato=pdf" in corpo
+    assert "data:font/ttf;base64," in corpo
+    assert 'url("/assets/CommissionerVF.ttf")' not in corpo
+
+
 @respx.mock
 def test_biglietto_accetta_osm_node_e_mostra_badge_esterna(app_cliente):
     """Un POI esterno (`osm:node:<id>`) produce un biglietto con badge `[Esterna …]`, senza scrivere nulla in memoria.
