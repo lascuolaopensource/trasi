@@ -169,6 +169,24 @@ sedi, uffici o servizi con nome simile: il numero di un'entità non vale per un'
 """,
     ),
     (
+        # P4.2 (17/09/2026): il modello proponeva «stampa il biglietto» come passo successivo generico,
+        # anche quando la funzione non c'è per quel luogo (es. luoghi fuori dalla rete) o non è stata
+        # chiesta. Il biglietto esiste (tool `biglietto`), ma si usa solo quando l'operatore lo chiede
+        # e il luogo ha un riferimento valido — non come suggerimento di cortesia.
+        "STAMPA DEL BIGLIETTO — solo su richiesta, solo con un riferimento",
+        """
+STAMPA DEL BIGLIETTO — solo su richiesta, solo con un riferimento:
+Il biglietto per il cittadino esiste, ma si propone **solo** quando l'operatore lo chiede (o chiede «qualcosa
+da stampare») e il luogo ha un riferimento: l'`id` numerico di un item di `cerca_luogo`, o l'`url` OSM di un POI
+esterno di `vicino_a` (`osm:node:<id>`).
+Non offrire il biglietto come suggerimento generico di chiusura («posso stamparti il biglietto» a fine risposta)
+quando nessuno l'ha chiesto: se l'informazione è già data, il passo successivo si dice a parole
+ («puoi rivolgerti alla Casa X in via Y»), non con una stampa da fare.
+Se il riferimento manca, non promettere la stampa: di' che il biglietto non si può comporre per quel luogo e dai
+l'informazione a parole.
+""",
+    ),
+    (
         # Il marcatore è una frase che esiste **nel testo** della sezione, non un'etichetta: il
         # controllo di presenza legge il prompt salvato (`_manca`), e un titolo che nel prompt non
         # compare dichiarerebbe la sezione assente per sempre — l'ha pagato la sessione sorella con
