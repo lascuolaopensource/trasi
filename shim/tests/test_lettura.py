@@ -132,6 +132,62 @@ def test_cerca_luogo_con_tipo_fuori_vocabolario_non_restringe(client, db_vivo):
 
 
 @pytest.mark.live
+def test_luogo_senza_coordinate_e_dichiarato_non_geolocalizzato_e_non_rompe_la_ricerca(client, db_vivo):
+    """T09/T10 — un luogo **con** coordinate esce con `lat`/`lon` numerici (T09); uno **senza** `geom` esce con
+    `lat`/`lon` `null` (T10) e non fa saltare la risposta con un 500. La coordinata non si inventa: la posizione
+    manca e lo si dice. Stessa regola su `GET /op/mappa` (mappa dell'Osservatorio).
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    nome = "Sportello di prova T10 senza posizione (rimosso dal test)"
+
+    async def inserisci() -> int:
+        import asyncpg
+
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            return await conn.fetchval(
+                """
+                INSERT INTO trasi.luogo (nome, tipo, descrizione, geom, fonte_id, affidabilita, casa_id)
+                SELECT $1, 'caf', 'Fixture di test: nessuna posizione in memoria', NULL, f.id, 3, c.id
+                  FROM trasi.fonte f, trasi.casa c WHERE f.nome = 'Rete-kb-3' AND c.slug = 'san-bao'
+                RETURNING id
+                """,
+                nome,
+            )
+        finally:
+            await conn.close()
+
+    async def rimuovi(identificativo: int) -> None:
+        import asyncpg
+
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            await conn.execute("DELETE FROM trasi.luogo WHERE id = $1", identificativo)
+        finally:
+            await conn.close()
+
+    identificativo = asyncio.run(inserisci())
+    try:
+        senza = _cerca(client, "q=prova%20T10")
+        con = _cerca(client, "q=CAF")
+    finally:
+        asyncio.run(rimuovi(identificativo))
+
+    assert senza.status_code == 200, senza.text
+    voci = [i for i in senza.json()["items"] if i["nome"] == nome]
+    assert len(voci) == 1
+    assert voci[0]["lat"] is None and voci[0]["lon"] is None
+
+    # T09: i CAF del seed hanno coordinate vere, e restano numeri.
+    assert con.status_code == 200
+    con_posizione = [i for i in con.json()["items"] if i["lat"] is not None]
+    assert con_posizione, "nessun CAF geolocalizzato nel seed"
+    assert all(-90 <= i["lat"] <= 90 and -180 <= i["lon"] <= 180 for i in con_posizione)
+
+
+@pytest.mark.live
 def test_eventi_oggi_di_una_casa_senza_eventi_risponde_200_con_lista_vuota(client, db_vivo):
     """Una Casa esistente senza eventi in una data è 200 con `eventi: []`: la Casa c'è, la giornata è vuota.
 
@@ -239,6 +295,196 @@ def test_eventi_oggi_restituisce_gli_eventi_della_data_richiesta(client, db_vivo
     assert evento["badge"].startswith("[KB · ")
     assert evento["dove"] == "Sala di prova"
 
+
+@pytest.mark.live
+def test_eventi_oggi_con_data_fine_copre_l_intervallo_e_gli_eventi_futuri(client, db_vivo):
+    """T01/T02 — `data_fine` rende l'intervallo **inclusivo**: un evento a +40 giorni compare in una finestra
+    che lo contiene e non in una che lo precede. Il tool non forza più «oggi»: chi chiede il mese, ha il mese.
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    giorno = date.today() + timedelta(days=40)
+    titolo = "Evento futuro di prova T02 (rimosso dal test)"
+
+    async def inserisci() -> int:
+        import asyncpg
+
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            return await conn.fetchval(
+                """
+                INSERT INTO trasi.evento (casa_id, titolo, inizio, affidabilita)
+                SELECT c.id, $1, $2, 3 FROM trasi.casa c WHERE c.slug = 'san-bao' RETURNING id
+                """,
+                titolo,
+                datetime.combine(giorno, time(10, 0), tzinfo=FUSO_LOCALE),
+            )
+        finally:
+            await conn.close()
+
+    async def rimuovi(identificativo: int) -> None:
+        import asyncpg
+
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            await conn.execute("DELETE FROM trasi.evento WHERE id = $1", identificativo)
+        finally:
+            await conn.close()
+
+    base = URL.format(email=EMAIL_OP_SANBAO)
+    identificativo = asyncio.run(inserisci())
+    try:
+        # La finestra che lo contiene (oggi → +45): l'evento futuro c'è.
+        dentro = client.get(
+            f"{base}/eventi_oggi?casa=san-bao&data={date.today().isoformat()}"
+            f"&data_fine={(date.today() + timedelta(days=45)).isoformat()}"
+        )
+        # La finestra che lo precede (oggi → +10): non c'è.
+        prima = client.get(
+            f"{base}/eventi_oggi?casa=san-bao&data={date.today().isoformat()}"
+            f"&data_fine={(date.today() + timedelta(days=10)).isoformat()}"
+        )
+        # Senza `data_fine`: un giorno solo, e la risposta lo dichiara con `data_fine == data`.
+        solo_oggi = client.get(f"{base}/eventi_oggi?casa=san-bao&data={giorno.isoformat()}")
+        invertita = client.get(
+            f"{base}/eventi_oggi?casa=san-bao&data={giorno.isoformat()}"
+            f"&data_fine={(giorno - timedelta(days=1)).isoformat()}"
+        )
+    finally:
+        asyncio.run(rimuovi(identificativo))
+
+    assert dentro.status_code == 200
+    assert titolo in [e["titolo"] for e in dentro.json()["eventi"]]
+    assert dentro.json()["data_fine"] == (date.today() + timedelta(days=45)).isoformat()
+    assert titolo not in [e["titolo"] for e in prima.json()["eventi"]]
+    assert solo_oggi.json()["data"] == solo_oggi.json()["data_fine"] == giorno.isoformat()
+    assert invertita.status_code == 422
+
+
+@pytest.mark.live
+def test_evento_ricorrente_compare_a_ogni_occorrenza_dell_intervallo(client, db_vivo):
+    """T05 — un evento `settimanale` è **una** riga in tabella e N occorrenze nella ricerca (db/030):
+    quattro settimane di finestra → quattro occorrenze, la prima alla `inizio`, con `occorrenza` 0..3.
+    Le settimane successive non ripetono la riga di tabella: `id` è lo stesso su tutte.
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    primo = date.today() + timedelta(days=60)
+    titolo = "Laboratorio ricorrente di prova T05 (rimosso dal test)"
+
+    async def inserisci() -> int:
+        import asyncpg
+
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            return await conn.fetchval(
+                """
+                INSERT INTO trasi.evento (casa_id, titolo, inizio, ricorrenza, affidabilita)
+                SELECT c.id, $1, $2, 'settimanale', 3 FROM trasi.casa c WHERE c.slug = 'san-bao' RETURNING id
+                """,
+                titolo,
+                datetime.combine(primo, time(17, 0), tzinfo=FUSO_LOCALE),
+            )
+        finally:
+            await conn.close()
+
+    async def rimuovi(identificativo: int) -> None:
+        import asyncpg
+
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            await conn.execute("DELETE FROM trasi.evento WHERE id = $1", identificativo)
+        finally:
+            await conn.close()
+
+    base = URL.format(email=EMAIL_OP_SANBAO)
+    identificativo = asyncio.run(inserisci())
+    try:
+        risposta = client.get(
+            f"{base}/eventi_oggi?casa=san-bao&data={primo.isoformat()}"
+            f"&data_fine={(primo + timedelta(days=27)).isoformat()}"
+        )
+        # Il giorno singolo della terza settimana: la sola occorrenza n. 2, alla stessa ora.
+        terza = client.get(f"{base}/eventi_oggi?casa=san-bao&data={(primo + timedelta(days=14)).isoformat()}")
+    finally:
+        asyncio.run(rimuovi(identificativo))
+
+    assert risposta.status_code == 200
+    occorrenze = [e for e in risposta.json()["eventi"] if e["titolo"] == titolo]
+    assert [e["data"] for e in occorrenze] == [(primo + timedelta(days=7 * n)).isoformat() for n in range(4)]
+    assert [e["occorrenza"] for e in occorrenze] == [0, 1, 2, 3]
+    assert {e["ricorrenza"] for e in occorrenze} == {"settimanale"}
+    assert {e["ora_inizio"] for e in occorrenze} == {"17:00"}
+
+    nella_terza = [e for e in terza.json()["eventi"] if e["titolo"] == titolo]
+    assert len(nella_terza) == 1 and nella_terza[0]["occorrenza"] == 2
+
+@pytest.mark.live
+def test_evento_da_calendario_esterno_e_dichiarato_esterna_con_il_suo_badge(client, db_vivo):
+    """T03 — un evento arrivato da iCal (fonte `Google Calendar-ical-2`, `tipo_accesso='ical'`) è **distinguibile**
+    da quelli della rete: `provenienza="esterna"` e badge `[Esterna · … · non verificata dalla rete]`, mentre
+    l'evento inserito a mano lo stesso giorno resta `kb`. Prima, entrambi uscivano `kb`: difetto V3.
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    giorno = date.today() + timedelta(days=50)
+    esterno = "Evento da calendario esterno di prova T03 (rimosso dal test)"
+    interno = "Evento della rete di prova T03 (rimosso dal test)"
+
+    async def inserisci() -> list[int]:
+        import asyncpg
+
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            quando = datetime.combine(giorno, time(11, 0), tzinfo=FUSO_LOCALE)
+            a = await conn.fetchval(
+                """
+                INSERT INTO trasi.evento (casa_id, titolo, inizio, uid_ical, fonte_id, affidabilita)
+                SELECT c.id, $1, $2, 'prova-t03@trasi.local', f.id, 2
+                  FROM trasi.casa c, trasi.fonte f
+                 WHERE c.slug = 'san-bao' AND f.nome = 'Google Calendar-ical-2'
+                RETURNING id
+                """,
+                esterno,
+                quando,
+            )
+            b = await conn.fetchval(
+                """
+                INSERT INTO trasi.evento (casa_id, titolo, inizio, affidabilita)
+                SELECT c.id, $1, $2, 3 FROM trasi.casa c WHERE c.slug = 'san-bao' RETURNING id
+                """,
+                interno,
+                quando,
+            )
+            return [a, b]
+        finally:
+            await conn.close()
+
+    async def rimuovi(ids: list[int]) -> None:
+        import asyncpg
+
+        conn = await asyncpg.connect(_dsn_admin())
+        try:
+            await conn.execute("DELETE FROM trasi.evento WHERE id = ANY($1::int[])", ids)
+        finally:
+            await conn.close()
+
+    ids = asyncio.run(inserisci())
+    try:
+        risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?casa=san-bao&data={giorno.isoformat()}")
+    finally:
+        asyncio.run(rimuovi(ids))
+
+    assert risposta.status_code == 200
+    per_titolo = {e["titolo"]: e for e in risposta.json()["eventi"]}
+    assert per_titolo[esterno]["provenienza"] == "esterna"
+    assert per_titolo[esterno]["badge"].startswith("[Esterna · ")
+    assert "non verificata dalla rete" in per_titolo[esterno]["badge"]
+    assert per_titolo[interno]["provenienza"] == "kb"
+    assert per_titolo[interno]["badge"].startswith("[KB · ")
 
 @pytest.mark.live
 def test_l_operatore_della_rete_vede_gli_eventi_di_ogni_casa(client, db_vivo):

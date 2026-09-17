@@ -76,21 +76,12 @@
     });
   }
 
-  /* Il messaggio d'errore, con il testo che il contratto §3.4 prescrive per il dato personale.
-     Il `detail` dello shim è `dato_personale_sospetto` più i nomi dei campi: tecnico, e non si
-     mostra. La frase è quella del design system, verbatim. */
+  /* La frase per l'operatore la compone `shell.js` (`Trasi.spiega`): un solo traduttore per tutto il
+     sito, mai il `detail` tecnico dello shim (`dato_personale_sospetto — campi: …`, «errore 422»).
+     Il ripiego locale vale solo se la shell non c'è. */
   function messaggioErrore(e) {
-    if (e && e.sessioneScaduta) {
-      return "Sessione non più valida: la pagina di accesso è a un passo.";
-    }
-    if (e && e.stato === 422 && e.message && e.message.indexOf("dato_personale_sospetto") >= 0) {
-      return "Il testo sembra contenere un dato personale — telefono, email, codice fiscale — e non è " +
-             "stato inviato. Si può riscrivere senza quel dato.";
-    }
-    if (e && e.stato === 503) {
-      return "Dati non disponibili: la memoria della rete non risponde in questo momento";
-    }
-    return e && e.message ? e.message : "Invio non riuscito.";
+    if (window.Trasi && window.Trasi.spiega) return window.Trasi.spiega(e);
+    return e && e.sessioneScaduta ? "Sessione non più valida: la pagina di accesso è a un passo." : "Invio non riuscito.";
   }
 
   /* ---------------------------------------------------------------- richiesta */
@@ -153,15 +144,25 @@
       var fine = $("acc-registra-evento-fine").value;
       var luogo = $("acc-registra-evento-luogo").value.trim();
       var descrizione = $("acc-registra-evento-descrizione").value.trim();
+      var ricorrenzaEl = $("acc-registra-evento-ricorrenza");
+      var ricorrenza = ricorrenzaEl ? ricorrenzaEl.value : "";
       if (fine) corpo.fine = fine;
       if (luogo) corpo.luogo_testo = luogo;
       if (descrizione) corpo.descrizione = descrizione;
+      /* Vuoto = evento singolo: il campo non si manda, lo shim lo legge come `null`. */
+      if (ricorrenza) corpo.ricorrenza = ricorrenza;
 
-      chiama("/op/eventi", { method: "POST", body: corpo }).then(function (dati) {
+      /* L'esito in parole: il numero interno dell'evento non dice niente a chi sta allo sportello;
+         la ripetizione sì — è ciò che l'operatore ha appena dichiarato e vuole vedersi confermare. */
+      var RIPETIZIONE = {
+        settimanale: "ogni settimana", bisettimanale: "ogni due settimane",
+        mensile: "ogni mese", annuale: "ogni anno"
+      };
+      chiama("/op/eventi", { method: "POST", body: corpo }).then(function () {
         mostra(
           $("acc-registra-esito-evento"),
           "Evento aggiunto al calendario della Casa" +
-            (dati && dati.evento_id ? " (numero " + dati.evento_id + ")" : "") + "."
+            (ricorrenza && RIPETIZIONE[ricorrenza] ? ", si ripete " + RIPETIZIONE[ricorrenza] : "") + "."
         );
         modulo.reset();
       }).catch(function (e) {

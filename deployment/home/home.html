@@ -76,6 +76,19 @@
         </p>
       </div>
 
+      <!-- ======================================================== EVENTI DEL MESE ==============
+           Il palinsesto della rete da oggi a fine mese, tutte le Case, per giorno. Le occorrenze
+           degli eventi ricorrenti arrivano espanse dallo shim (db/030). Lo riempie `eventi-home.js`
+           con `GET /op/eventi?dal&al`: la policy `evento_sel` concede la lettura a tutta la rete. -->
+      <section class="blocco filetto filetto--oggi eventi" id="eventi" aria-labelledby="eventi-titolo">
+        <div class="blocco-testa">
+          <h2 id="eventi-titolo">Eventi del mese nella rete</h2>
+          <p>Da oggi alla fine del mese, in tutte le Case. Ogni riga dice dove e da quale fonte.</p>
+        </div>
+        <p class="eventi-stato" id="eventi-stato" role="status">Lettura del palinsesto in corso…</p>
+        <div class="eventi-lista" id="eventi-lista"></div>
+      </section>
+
     </main>
   </div>
 </div>
@@ -84,5 +97,6 @@
      `storico.js` non può funzionare. L'ordine è contratto, non preferenza. -->
 <script src="assets/shell.js?v=2"></script>
 <script src="assets/storico.js?v=2"></script>
+<script src="assets/eventi-home.js?v=1"></script>
 </body>
 </html>

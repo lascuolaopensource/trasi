@@ -119,6 +119,23 @@ Un mese senza richieste arriva come `ambiti: []`: dillo («mese senza richieste 
 """,
     ),
     (
+        # P0.1 (17/09/2026, US-1.2): il modello rispondeva a «questa settimana» chiamando
+        # `eventi_oggi` una volta sola — cioè con il solo giorno di oggi. Il tool accetta un
+        # intervallo con `data_fine`: la sezione lo dice, in parole che il modello riconosce.
+        "EVENTI IN UN PERIODO — usa `data` e `data_fine`",
+        """
+EVENTI IN UN PERIODO — usa `data` e `data_fine`:
+«Oggi», «domani», «sabato» → chiama `eventi_oggi` con `data` (un giorno).
+«Questa settimana», «questo fine settimana», «questo mese», «entro Natale» → chiama `eventi_oggi` **una volta**
+con `data` (primo giorno) e `data_fine` (ultimo giorno, incluso). Non chiamare il tool un giorno per volta:
+la risposta porta tutti gli eventi dell'intervallo, ognuno con la sua data.
+Un evento con `ricorrenza` («settimanale»…) compare una volta per ogni giorno in cui cade: sono occorrenze
+vere, non duplicati — presentale con la data di ciascuna, senza ripetere tutta la descrizione ogni volta.
+Se nel periodo non c'è niente, dillo con la data («nessun evento dal 20 al 27 settembre»): non cercare
+un altro periodo per conto tuo.
+""",
+    ),
+    (
         # Il marcatore è una frase che esiste **nel testo** della sezione, non un'etichetta: il
         # controllo di presenza legge il prompt salvato (`_manca`), e un titolo che nel prompt non
         # compare dichiarerebbe la sezione assente per sempre — l'ha pagato la sessione sorella con

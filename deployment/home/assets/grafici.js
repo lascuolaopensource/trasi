@@ -350,13 +350,11 @@
           errore("Sessione non più valida: la pagina di accesso è a un passo.");
           return;
         }
-        /* Un 422 è una richiesta sbagliata e il `detail` dello shim lo dice in italiano; un 503 o una
-           rete assente si dichiarano con il testo del contratto §3.4. */
-        errore(
-          e && e.message && e.message.indexOf("periodo") >= 0
-            ? e.message
-            : "Dati non disponibili: la memoria della rete non risponde in questo momento"
-        );
+        /* La frase la compone `Trasi.spiega`: il periodo invertito e la rete assente hanno la loro,
+           tutto il resto la generica — mai il `detail` dello shim così com'è. */
+        errore(window.Trasi && window.Trasi.spiega
+          ? window.Trasi.spiega(e)
+          : "Dati non disponibili: la memoria della rete non risponde in questo momento");
       });
   }
 

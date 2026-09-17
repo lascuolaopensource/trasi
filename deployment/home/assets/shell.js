@@ -50,6 +50,60 @@
     });
   }
 
+  /* ---------------------------------------------------------------- spiega */
+
+  /* Il `detail` dello shim è una diagnosi per chi legge il log («dato_personale_sospetto — campi con
+     dati personali: descrizione», «parametri non ammessi — al: …», «errore 503»): tecnico per
+     costruzione. Chi sta allo sportello legge invece una frase. La traduzione è **una** — qui, e i
+     moduli la chiamano — perché otto copie in otto file (misurate il 17/09) divergono alla prima
+     modifica, e il giorno in cui una dice «errore 422» e l'altra «testo non ammesso» l'operatore
+     non sa più a chi credere.
+
+     Le famiglie sono quelle dei `DETAIL_*` dello shim e dei suoi 4xx/5xx; tutto ciò che non si
+     riconosce diventa la frase generica — mai il codice, mai il testo grezzo. */
+  var TESTO_SESSIONE = "Sessione non più valida: la pagina di accesso è a un passo.";
+  var TESTO_NON_DISPONIBILE = "Dati non disponibili: la memoria della rete non risponde in questo momento";
+  var TESTO_GENERICO = "Operazione non riuscita. Si può riprovare fra qualche istante.";
+
+  function spiega(errore) {
+    if (!errore) return TESTO_GENERICO;
+    if (errore.sessioneScaduta) return TESTO_SESSIONE;
+    var d = String(errore.message || "");
+    var stato = errore.stato || 0;
+
+    if (d.indexOf("dato_personale_sospetto") >= 0) {
+      return "Il testo sembra contenere un dato personale — telefono, email, codice fiscale — e non è " +
+             "stato inviato. Si può riscrivere senza quel dato.";
+    }
+    if (d.indexOf("da approvare in coda") >= 0) {
+      return "Questa decisione spetta a chi approva in coda: la proposta è registrata e aspetta lì.";
+    }
+    if (d.indexOf("Casa destinataria sconosciuta") >= 0) {
+      return "La Casa indicata non è fra quelle della rete. Il nome va scritto come nell'elenco (es. bozzano, san-bao).";
+    }
+    if (d.indexOf("non appartiene alla Casa") >= 0 || d.indexOf("non consentita al ruolo") >= 0 ||
+        d.indexOf("senza accesso operativo") >= 0) {
+      return "Questa operazione non è fra quelle della Casa di questa sessione.";
+    }
+    if (d.indexOf("precede quella di inizio") >= 0 || d.indexOf("periodo invertito") >= 0) {
+      return "La data di fine viene prima di quella di inizio: le due date vanno invertite.";
+    }
+    if (d.indexOf("non presente nella memoria") >= 0 || d.indexOf("non trovat") >= 0) {
+      return "Non c'è nulla con questo riferimento nella memoria della rete.";
+    }
+    if (d.indexOf("non raggiungibile") >= 0 || d.indexOf("non ha risposto") >= 0 || stato === 503 || stato === 504) {
+      return TESTO_NON_DISPONIBILE;
+    }
+    if (stato === 409) {
+      return "C'è già qualcosa che si sovrappone: la memoria della rete non ha accettato la scrittura.";
+    }
+    if (stato === 422) {
+      return "Uno dei campi non è nella forma attesa: si può controllare e reinviare.";
+    }
+    if (stato >= 500) return TESTO_NON_DISPONIBILE;
+    return TESTO_GENERICO;
+  }
+
   /* ---------------------------------------------------------------- accesso */
 
   var VOCI = { "index.html": null, "home.html": null, "osservatorio.html": null, "account.html": null, "aiuto.html": null };
@@ -150,6 +204,7 @@
   var Trasi = {
     casa: null,
     api: api,
+    spiega: spiega,
     montaPannello: montaPannello,
     voceCorrente: paginaCorrente(),
     /* La Casa come la mostra la testata: serve a chi scrive i testi («Oggi a …», «… a San Bao»). */

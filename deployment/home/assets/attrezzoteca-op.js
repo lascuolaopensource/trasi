@@ -72,10 +72,11 @@
     });
   }
 
+  /* La frase per l'operatore la compone `shell.js` (`Trasi.spiega`): un solo traduttore per tutto il
+     sito, mai il `detail` tecnico dello shim. Il ripiego locale vale solo se la shell non c'è. */
   function messaggioErrore(e) {
-    if (e && e.sessioneScaduta) return "Sessione non più valida: la pagina di accesso è a un passo.";
-    if (e && e.stato === 503) return "Dati non disponibili: la memoria della rete non risponde in questo momento";
-    return e && e.message ? e.message : "Operazione non riuscita.";
+    if (window.Trasi && window.Trasi.spiega) return window.Trasi.spiega(e);
+    return e && e.sessioneScaduta ? "Sessione non più valida: la pagina di accesso è a un passo." : "Operazione non riuscita.";
   }
 
   function casaCorrente() {

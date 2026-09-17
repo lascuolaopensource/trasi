@@ -54,17 +54,19 @@ NOME_FONTE_CALENDARIO = "calendario della Casa"
 # Ordinamento dichiarato: per inizio, e a parità per id — così due richieste identiche danno lo stesso ordine, e la
 # pagina non ha un secondo ordinamento da tenere allineato.
 SQL_EVENTI = """
-SELECT e.id, e.titolo, e.descrizione, e.inizio, e.fine, e.luogo_testo, e.url,
-       e.casa_id, e.casa_slug, e.casa_nome,
-       e.fonte_nome, e.affidabilita, e.giorni_all_inizio,
-       f.autorita AS fonte_autorita, f.tipo_accesso AS fonte_tipo,
-       (e.inizio::date - $1::date) AS giorni_dal
-  FROM trasi.v_eventi e
-  LEFT JOIN trasi.fonte f ON f.nome = e.fonte_nome
- WHERE e.inizio::date >= $1::date
-   AND e.inizio::date <= $2::date
-   AND ($3::integer IS NULL OR e.casa_id = $3)
- ORDER BY e.inizio, e.id
+SELECT o.evento_id AS id, o.titolo, e.descrizione, o.inizio, o.fine, o.luogo_testo, o.url,
+       o.casa_id, o.casa_slug, o.casa_nome,
+       o.fonte_nome, o.affidabilita, o.giorni_all_inizio,
+       f.autorita AS fonte_autorita, o.fonte_tipo AS fonte_tipo,
+       (o.inizio::date - $1::date) AS giorni_dal,
+       o.ricorrenza, o.n_occorrenza
+  FROM trasi.v_eventi_occorgenze o
+  LEFT JOIN trasi.evento e ON e.id = o.evento_id
+  LEFT JOIN trasi.fonte f ON f.nome = o.fonte_nome
+ WHERE o.inizio::date >= $1::date
+   AND o.inizio::date <= $2::date
+   AND ($3::integer IS NULL OR o.casa_id = $3)
+ ORDER BY o.inizio, o.evento_id, o.n_occorrenza
 """
 
 # Il filtro «leggibile da questa Casa» quando il chiamante indica una Casa diversa dalla propria. `scheda_sel` e
@@ -131,6 +133,8 @@ def voce_evento(riga: Any) -> dict[str, Any]:
         "fonte": nome,
         "fiducia": riga["affidabilita"],
         "badge": badge,
+        "ricorrenza": riga["ricorrenza"],
+        "occorrenza": riga["n_occorrenza"],
     }
 
 

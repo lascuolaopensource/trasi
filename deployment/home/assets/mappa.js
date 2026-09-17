@@ -129,6 +129,9 @@
     pin = {};
 
     voci.forEach(function (voce) {
+      /* Un luogo senza coordinate (P1.2) non ha un pin: `L.marker([null, null])` farebbe saltare l'intero
+       * disegno per una voce sola. Resta nell'elenco, con «posizione non disponibile» (elenco.js). */
+      if (voce.lat === null || voce.lat === undefined || voce.lon === null || voce.lon === undefined) { return; }
       var marcatore = L.marker([voce.lat, voce.lon], {
         icon: icona(voce.livello),
         title: voce.nome,
@@ -161,7 +164,9 @@
       elemento.classList.toggle("mappa-pin--scelto", altra === chiave);
     });
     var voce = stato.perChiave[chiave];
-    if (voce && centra && mappa) { mappa.panTo([voce.lat, voce.lon]); }
+    if (voce && centra && mappa && voce.lat !== null && voce.lat !== undefined && voce.lon !== null && voce.lon !== undefined) {
+      mappa.panTo([voce.lat, voce.lon]);
+    }
   }
 
   /* ------------------------------------------------------------------ i filtri */

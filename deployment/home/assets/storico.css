@@ -29,3 +29,23 @@
 .onyx-apri { max-width: var(--misura-testo, 36rem); display: flex; flex-direction: column; gap: var(--s-3, 12px); }
 .onyx-sotto { margin: 0; }
 .onyx-nota { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+
+/* «Eventi del mese»: il palinsesto per giorno. La riga è una frase — ora, titolo, dove, fonte —
+   e i numeri sono tabellari perché si scorrono in colonna. */
+.eventi { margin-top: var(--s-6, 24px); }
+.eventi-stato { margin: 0; color: var(--testo-tenue); }
+.eventi-stato[hidden] { display: none; }
+.eventi-lista { display: flex; flex-direction: column; gap: var(--s-4, 16px); }
+.eventi-giorno-testa {
+  margin: 0 0 var(--s-1, 4px); font-size: var(--t-minuto, 0.9375rem); font-weight: 700;
+  letter-spacing: 0.02em; color: var(--testo-tenue); text-transform: capitalize;
+}
+.eventi-voci { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2, 8px); }
+.eventi-voce { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s-3, 12px); line-height: 1.45; }
+.eventi-ora { min-width: 8ch; font-variant-numeric: tabular-nums; color: var(--testo-tenue); }
+.eventi-titolo { font-weight: 600; }
+.eventi-dove { color: var(--testo-tenue); }
+.eventi-dove::before { content: "\00b7\00a0"; color: var(--testo-tenue); }
+.eventi-ripete { color: var(--testo-tenue); font-size: var(--t-minuto, 0.9375rem); }
+.eventi-ripete::before { content: "\00b7\00a0"; }
+.eventi-voce .etichetta { flex-basis: 100%; margin-top: 2px; }

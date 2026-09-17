@@ -20,7 +20,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query
 
-from .badge import badge_kb, nome_fonte
+from .badge import badge_esterna, badge_kb, nome_fonte
 from .contratto import meta
 from .db import Sessione, dipendenza_sessione, parametri, risolvi_slug_casa, slug_casa_da_identita
 from .errori import errore
@@ -81,19 +81,21 @@ SQL_CASA_ESISTE = "SELECT id FROM trasi.casa WHERE slug = $1"
 # Il giorno si ritaglia nel fuso del database (`TimeZone` = Europe/Rome dal compose), non in UTC: l'evento delle
 # 21:30 di oggi appartiene a oggi, e confrontare un `timestamptz` con una data in UTC lo sposterebbe a domani.
 SQL_EVENTI = """
-SELECT e.id, e.titolo, e.inizio, e.fine, e.luogo_testo,
+SELECT e.id, e.titolo, o.inizio, o.fine, e.luogo_testo, e.ricorrenza, o.n_occorrenza,
        COALESCE(e.url, f.url) AS url,
        COALESCE(e.affidabilita, 2) AS affidabilita,
-       f.nome AS fonte_nome, f.autorita AS fonte_autorita,
+       f.nome AS fonte_nome, f.autorita AS fonte_autorita, f.tipo_accesso AS fonte_tipo,
        (e.uid_ical IS NULL AND e.fonte_id IS NULL) AS inserito_a_mano,
        c.nome AS casa_nome, c.slug AS casa_slug
 FROM trasi.evento e
 JOIN trasi.casa c ON c.id = e.casa_id
 LEFT JOIN trasi.fonte f ON f.id = e.fonte_id
+CROSS JOIN LATERAL trasi.evento_occorgenze(e, $2, $3) o
 WHERE c.slug = $1
   AND e.annullato = false
-  AND e.inizio::date = $2
-ORDER BY e.inizio
+  AND o.inizio::date >= $2
+  AND o.inizio::date <= $3
+ORDER BY o.inizio, e.id
 """
 
 
@@ -149,7 +151,6 @@ async def cerca_luogo(
 
     return RispostaCercaLuogo(items=[_item_luogo(riga) for riga in righe])
 
-
 @router.get("/eventi_oggi", response_model=RispostaEventiOggi, **meta("eventi_oggi"))
 async def eventi_oggi(
     casa: str | None = Query(
@@ -157,12 +158,22 @@ async def eventi_oggi(
         description="Slug della Casa di Quartiere. Se omesso si usa la Casa dell'operatore autenticato.",
     ),
     data: date | None = Query(default=None, description="Data ISO `AAAA-MM-GG`; se omessa, oggi."),
+    data_fine: date | None = Query(
+        default=None,
+        description="Ultima data dell'intervallo, inclusa (ISO `AAAA-MM-GG`). Se omessa, la ricerca vale "
+        "per il solo giorno di `data`: «questa settimana» è `data` di lunedì e `data_fine` di domenica.",
+    ),
     sess: Sessione = Depends(dipendenza_sessione),
 ) -> RispostaEventiOggi:
-    """Gli eventi di una Casa in una data (oggi se non indicata), dal calendario della rete.
+    """Gli eventi di una Casa in una data (oggi se non indicata) o in un intervallo di date.
 
     «Oggi» è calcolato nel fuso italiano: alle 00:30 di Roma gli eventi della sera prima non sono più «oggi», ed è
     il comportamento che l'operatore allo sportello si aspetta.
+
+    `data_fine` (17/09/2026, US-1.2): senza, l'endpoint vale **un giorno** come sempre — il contratto con chi
+    lo chiama non cambia. Con `data_fine`, la finestra è inclusiva su entrambi gli estremi (`data` … `data_fine`),
+    e «questa settimana» o «questo mese» diventano **una** chiamata invece di sette. `data_fine` prima di `data`
+    è un `422`, non un intervallo invertito.
 
     La Casa, se non indicata, è quella dell'operatore: l'assistente non deve conoscerla (v. `slug_casa_da_identita`).
     """
@@ -175,15 +186,18 @@ async def eventi_oggi(
         slug = await risolvi_slug_casa(sess, slug) or await slug_casa_da_identita(sess) or slug
 
     riferimento = data or oggi_locale()
-    # Il parametro è un `date`, non una stringa ISO: `$2::date` fa dedurre ad asyncpg il tipo del parametro, e una
+    fine = data_fine or riferimento
+    if fine < riferimento:
+        raise errore(422, "parametri non ammessi — data_fine: la data di fine precede quella di inizio")
+    # I parametri sono `date`, non stringhe ISO: `$2::date` fa dedurre ad asyncpg il tipo del parametro, e una
     # stringa lì è un `DataError` a runtime (verificato: `'str' object has no attribute 'toordinal'`).
-    righe = await sess.fetch(SQL_EVENTI, slug, riferimento)
+    righe = await sess.fetch(SQL_EVENTI, slug, riferimento, fine)
 
     if not righe and await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
         raise errore(404, f"casa non trovata: nessuna Casa di Quartiere con slug «{slug}»")
 
     return RispostaEventiOggi(
-        casa=slug, data=riferimento, eventi=[_item_evento(riga) for riga in righe]
+        casa=slug, data=riferimento, eventi=[_item_evento(riga) for riga in righe], data_fine=fine
     )
 
 
@@ -196,8 +210,8 @@ def _item_luogo(riga) -> ItemLuogo:
         nome=riga["nome"],
         tipo=riga["tipo"],
         indirizzo=riga["indirizzo"],
-        lat=float(riga["lat"]),
-        lon=float(riga["lon"]),
+        lat=float(riga["lat"]) if riga["lat"] is not None else None,
+        lon=float(riga["lon"]) if riga["lon"] is not None else None,
         orari_testo=riga["orari_testo"],
         fonte=fonte,
         url=riga["url"],
@@ -214,15 +228,25 @@ def _item_evento(riga) -> ItemEvento:
     `strftime('%H:%M')` diretto mostrerebbe l'evento delle 18:30 come «16:30» (verificato). Il badge porta la data
     locale dell'evento, che è il giorno in cui l'operatore lo vede in calendario.
     """
-    fonte = (
-        "inserito dall'operatore"
-        if riga["inserito_a_mano"]
-        else nome_fonte(riga["fonte_autorita"], riga["fonte_nome"])
-    )
+    # La provenienza (V3, P0.2): un evento arrivato da un **calendario esterno** (`ical`) non è memoria
+    # verificata della rete e va detto — `op_eventi` lo faceva già, `eventi_oggi` no, e la chat mostrava
+    # `[KB · …]` su eventi che nessuno della rete aveva confermato. Stesso criterio di `eventi_op.voce_evento`.
     inizio = riga["inizio"].astimezone(FUSO)
     fine = riga["fine"].astimezone(FUSO) if riga["fine"] else None
+    if riga["fonte_tipo"] == "ical":
+        provenienza = "esterna"
+        fonte = nome_fonte(riga["fonte_autorita"], riga["fonte_nome"] or "calendario della Casa")
+        badge = badge_esterna(fonte, inizio)
+    else:
+        provenienza = "kb"
+        fonte = (
+            "inserito dall'operatore"
+            if riga["inserito_a_mano"]
+            else nome_fonte(riga["fonte_autorita"], riga["fonte_nome"])
+        )
+        badge = badge_kb(fonte, inizio.date(), riga["affidabilita"])
     return ItemEvento(
-        provenienza="kb",
+        provenienza=provenienza,
         titolo=riga["titolo"],
         dove=riga["luogo_testo"] or riga["casa_nome"],
         data=inizio.date(),
@@ -232,7 +256,9 @@ def _item_evento(riga) -> ItemEvento:
         fonte=fonte,
         url=riga["url"],
         fiducia=riga["affidabilita"],
-        badge=badge_kb(fonte, inizio.date(), riga["affidabilita"]),
+        badge=badge,
+        ricorrenza=riga["ricorrenza"],
+        occorrenza=riga["n_occorrenza"],
     )
 
 SQL_STATISTICHE = """
