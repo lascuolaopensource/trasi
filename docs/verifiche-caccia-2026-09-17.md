@@ -1,7 +1,12 @@
-# Caccia ai bug (2026-09-16/17) — 5 difetti trovati, 1 riparato, 4 dichiarati
+# Caccia ai bug (2026-09-16/17) — 6 difetti trovati, 4 riparati, 1 dichiarato, 1 aperto
 
 Protocollo: `PROMPT-caccia-bug.md`, eseguito integralmente su questo host.
 `HEAD` all'inizio: `587f615`. Tutti i comandi e gli output citati sono reali.
+
+> **Aggiornamento del 2026-09-17.** Su richiesta dell'utente sono stati riparati i tre difetti non-S1
+> (BUG-03, BUG-04, BUG-05) più uno **nuovo** emerso durante la riparazione (BUG-06). BUG-02 resta
+> aperto per decisione di governance, come concordato. Ogni riparazione ha la sua prova di mutazione.
+> Vedi «Riparazioni del 2026-09-17» in fondo, prima della «Nota di metodo».
 
 ---
 
@@ -291,6 +296,122 @@ sessione:
 `flussi/evidenze/ciclo_mensile/trasi_rete_2026-09.csv` (sessione parallela), l'evento `2366` «PROVA —
 evento di oggi» (creato alle 19:36 da un percorso applicativo, non da me), lo stack condiviso (nessun
 rebuild), il branch `puria/*` di ogni worktree.
+
+---
+
+## Riparazioni del 2026-09-17
+
+Su richiesta dell'utente: riparati i tre difetti non-S1. **BUG-02 resta aperto** ed è escluso
+esplicitamente («per quello grave ti dico dopo io come risolverlo»).
+
+| ID | Difetto | Esito |
+|---|---|---|
+| BUG-03 | 16 identità su 22 senza accesso a Onyx | **RIPARATO** — 22/22, con script riusabile |
+| BUG-04 | l'istanza viva non è `main`, senza dichiarazione | **RIPARATO** — `ops/provenienza_stack.sh` |
+| BUG-05 | US-07 dichiarata `PASS`, non riproducibile | **RIPARATO** — report rettificato |
+| BUG-06 | test dei flussi dipendente da stato ambientale | **RIPARATO** — fixture condivisa, con mutazione |
+
+### BUG-03 — 16 identità senza accesso (RIPARATO)
+
+**Fix**: `ops/provisiona_utenti_onyx.sh` — nuovo script idempotente con `--dry-run`. Confronta le **due
+fonti di verità** (`trasi.identita_onyx` vs `user` di Onyx) e crea solo lo scarto. L'hash lo calcola
+`PasswordHelper` **di Onyx** dentro il container (`@trasi.local` è un dominio *special-use*, quindi
+`POST /api/auth/register` lo rifiuta con 422 — è il motivo per cui le 6 esistenti erano state create
+fuori dall'API). `effective_permissions = ["basic"]` è popolato esplicitamente: è la colonna
+denormalizzata che in B3 aveva prodotto 403 silenziose.
+
+```
+$ ops/provisiona_utenti_onyx.sh --dry-run
+  attese da identita_onyx : 22
+  già presenti in Onyx    : 6
+  da creare               : 16
+
+$ ops/provisiona_utenti_onyx.sh
+provisiona_utenti_onyx: OK — 22/22 identità hanno un utente Onyx
+```
+
+**Prova end-to-end** (non l'intenzione): login reale `op.molo12@trasi.local` → **204** con cookie;
+`GET /api/me` → 200 con l'email giusta; `oggi` via shim → `{"casa":"molo12",…}`; 22/22 utenti con
+`effective_permissions = ["basic"]`. **Idempotenza**: rieseguito, `niente da fare`.
+
+**Difetto collaterale della documentazione, corretto**: `README.md` dichiarava «password in
+`deployment/.env`» ed era **falso** — le password non erano in nessun file del progetto. Ora lo è
+(`TRASI_UTENTI_PASSWORD`, mode 600, gitignored).
+
+### BUG-04 — provenienza dello stack (RIPARATO)
+
+**Fix**: `ops/provenienza_stack.sh` — dichiara **quale worktree** ha costruito l'istanza viva, con tre
+indizi indipendenti (`working_dir` dell'etichetta Compose, moduli nell'immagine assenti da
+`git ls-files`, numero di operazioni del contratto) e un verdetto sul congiunto. Exit 0 = è questo
+checkout, 1 = è di un altro. `--riga` per i report.
+
+```
+$ ops/provenienza_stack.sh
+  costruito da        : /root/orca/workspaces/onice/installazione-connettori-mancanti/deployment
+  operazioni contratto: 12 (istanza viva) vs 10 (checkout)
+  moduli non tracciati: 1
+      opendata.py
+  VERDETTO: l'istanza viva NON è questo checkout.        [exit 1]
+```
+
+**Mutation test**: la logica del verdetto provata su 4 casi — tutto allineato → `0`; altro worktree →
+`1`; operazioni diverse → `1`; modulo estraneo → `1`. Il ramo verde è **raggiungibile** (verificato che
+il `working_dir` di `automazioni` coincide col checkout).
+
+**Documentato** in `docs/runbook.md` §11.1 e nella tabella di diagnosi §8.
+
+### BUG-05 — US-07 dichiarata PASS, non riproducibile (RIPARATO)
+
+**Fix**: `docs/B7-report.md` rettificato. La riga US-07 passa da `✅ PASS` a `⚠️ PARZIALE`, il
+conteggio da «7/8 PASS» a «6/8 PASS + 2 parziali», e la sezione «Verifica di merito su
+`no_self_approve`» — che affermava *«la policy distingue per persona (email)»* e *«`gestore.san-bao`
+può approvare → `UPDATE 1`»* — è sostituita dai fatti misurati il 2026-09-17:
+
+```
+1) op.san-bao propone      -> 201 id=3980
+   proposto_da registrato  : casa_sanbao     <- è il RUOLO DB, non l'email
+2) gestore.san-bao approva -> 403 {"detail":"da approvare in coda"}
+```
+
+La sezione rettificata conserva ciò che resta **vero** (auto-approvazione vietata, audit
+non falsificabile) e dichiara ciò che era **falso** (che la condivisione del ruolo DB fosse innocua:
+è la causa di BUG-02). Aggiornata anche la riga dei 6 account → 22, con nota datata.
+
+### BUG-06 — test dei flussi dipendente da stato ambientale (RIPARATO, nuovo)
+
+**Emerso durante la riparazione**, non nella caccia iniziale: rieseguendo la suite flussi a `HEAD`, il
+conteggio è sceso da **49 passed a 48 passed + 1 failed**.
+
+**Il rosso non segnalava un difetto del codice.** `test_v6_template.py::test_messaggi_proposte_rispettano_v6`
+chiamava `alert.messaggi_proposte(7)` — che filtra `giorni > 7` — **senza creare** una proposta vecchia,
+appoggiandosi a una riga più vecchia di 8 giorni rimasta nel database condiviso. Il 2026-09-17 la coda
+aveva una sola proposta aperta di **1 giorno**, quindi la funzione ha restituito `[]` e l'assert è
+caduto. Era verde per ragioni **ambientali**, non per merito di ciò che verifica; e sarebbe diventato
+rosso da solo, senza che nulla nel codice fosse cambiato.
+
+**Fix**: fixture condivisa `proposta_vecchia` in `flussi/tests/conftest.py` (crea una proposta a 8
+giorni dall'amministratore, perché `proposto_ts` non è grantato in INSERT a nessun ruolo client — il
+tempo che passa non ha un percorso applicativo). Il test ora usa la fixture invece di `pulizia`.
+`test_alert.py` aveva la stessa premessa in una copia privata: ora è **una sola**, in `conftest.py`,
+perché due copie significano due posti da aggiornare quando cambia la soglia.
+
+**Mutation test**: sostituita la fixture con `pulizia` (comportamento pre-fix) → il test torna
+**rosso** con `assert []`; ripristinato → verde.
+
+**Verifica**: suite flussi a `HEAD` con le mie modifiche → **49 passed / 1 skipped**, come la baseline.
+Nel working tree restano 5 rossi, che sono del `flussi/fixtures/fonti_http.json` modificato da una
+sessione parallela (categoria b, non toccato).
+
+### Stato finale delle suite
+
+| Suite | Baseline | Dopo le riparazioni |
+|---|---|---|
+| `db/tests/run.sh` | 132 PASS / 0 FAIL | **132 PASS / 0 FAIL** |
+| `shim` | 218 passed | **220 passed** (+2 test miei) |
+| `flussi` (a `HEAD`) | 49 passed / 1 skipped | **49 passed / 1 skipped** |
+
+**Igiene**: `v_scritture_senza_audit = 0` · 0 righe `B4TEST%` residue · 0 audit orfani · 22 utenti Onyx
+(nessun utente di prova) · 15 worktree (nessun temporaneo).
 
 ---
 

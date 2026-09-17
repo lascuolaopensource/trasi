@@ -38,13 +38,21 @@ def test_il_presidio_riconosce_i_verbi_vietati():
 
 
 @pytest.mark.live
-def test_messaggi_proposte_rispettano_v6(db_vivo, pulizia):
-    """I template delle proposte: nessun imperativo, e i quattro campi V6 presenti."""
-    if not db_vivo:
-        pytest.skip("database non raggiungibile: i messaggi si compongono su dati reali")
+def test_messaggi_proposte_rispettano_v6(db_vivo, proposta_vecchia):
+    """I template delle proposte: nessun imperativo, e i quattro campi V6 presenti.
 
+    La premessa (una proposta aperta **da 8 giorni**, oltre la soglia di §8 F6) la costruisce la
+    fixture `proposta_vecchia`, e non è un dettaglio: `messaggi_proposte(7)` filtra `giorni > 7`, quindi
+    senza quella riga la funzione restituisce zero messaggi e il test non verificherebbe **nessun**
+    template. Prima della fixture asseriva `assert messaggi` appoggiandosi a una proposta vecchia
+    rimasta nel database condiviso: verde per ragioni ambientali, e rosso — senza indicare alcun difetto
+    del codice — il giorno in cui quella riga non c'è più stata (misurato il 2026-09-17, coda con una
+    sola proposta di 1 giorno).
+    """
     messaggi = alert.messaggi_proposte(7)
-    assert messaggi, "con il seed ci sono proposte in attesa: atteso almeno un messaggio"
+    assert messaggi, (
+        "la fixture ha creato una proposta oltre la soglia: atteso almeno un messaggio"
+    )
 
     for messaggio in messaggi:
         corpo = messaggio.corpo()

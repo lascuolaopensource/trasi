@@ -242,6 +242,85 @@ def pulizia():
     return pulisci
 
 
+@pytest.fixture
+def proposta_vecchia(pulizia, db_vivo):
+    """Una proposta **aperta da 8 giorni**, così i messaggi di alert si possono comporre.
+
+    Perché serve, e perché è una fixture condivisa e non un pezzo di un solo test.
+
+    `alert.messaggi_proposte(7)` seleziona le proposte con `giorni > 7` (è la soglia di §8 F6), quindi
+    **con una coda fresca restituisce zero messaggi**. Il test `test_messaggi_proposte_rispettano_v6`
+    asseriva `assert messaggi` senza creare nulla: era verde finché nel database condiviso restava una
+    proposta aperta più vecchia di otto giorni — cioè per ragioni **ambientali**, non per merito del
+    codice che doveva verificare.
+
+    Misurato il 2026-09-17: la coda aveva una sola proposta aperta di **1 giorno**, il test è diventato
+    rosso (`assert []`) e il rosso non segnalava alcun difetto del codice: segnalava che era finito
+    l'invecchiamento di una riga altrui. Un test che dipende da quanto a lungo una proposta è rimasta
+    in coda è un test che si rompe da solo, e la sua rottura non dice niente su ciò che verifica.
+
+    L'invecchiamento di `proposto_ts` passa dall'amministratore: il campo **non è grantato in INSERT** a
+    nessun ruolo client — il tempo che passa non ha un percorso applicativo — quindi simulare il tempo
+    richiede quel passo. È dichiarato, non nascosto (stessa scelta di `flussi/fixtures/alert.sql` e di
+    `test_alert.py`).
+
+    La fixture vale per **tutti** i test che compongono messaggi: `test_alert.py` e `test_v6_template.py`
+    chiedono la stessa premessa, e averla in due copie significherebbe due posti da aggiornare quando
+    cambia la soglia.
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile: i messaggi si compongono su dati reali")
+
+    import subprocess
+
+    from comune import COMPOSE, DB_DEFAULT, SERVIZIO_DB
+
+    marca = "B4TEST: proposta vecchia"
+    sql = f"""
+\\set ON_ERROR_STOP on
+DELETE FROM trasi.audit WHERE proposta_id IN
+  (SELECT id FROM trasi.proposta WHERE motivazione = '{marca}');
+DELETE FROM trasi.proposta WHERE motivazione = '{marca}';
+
+SET ROLE rete;
+SET search_path = trasi, public, pg_temp;
+INSERT INTO trasi.proposta (origine, tipo, entita, casa_id, payload, motivazione)
+SELECT 'manuale', 'modifica_scheda', 'scheda_servizio', c.id,
+       jsonb_build_object('descrizione', 'aggiornata'), '{marca}'
+  FROM trasi.casa c WHERE c.slug = 'san-bao';
+RESET ROLE;
+
+-- Simulazione del tempo: 8 giorni di attesa. Come in `test_alert.py`, dall'amministratore.
+SET ROLE trasi_owner;
+UPDATE trasi.proposta SET proposto_ts = now() - interval '8 days' WHERE motivazione = '{marca}';
+RESET ROLE;
+
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM trasi.v_flusso_alert_proposte
+   WHERE proposta_id IN (SELECT id FROM trasi.proposta WHERE motivazione = '{marca}')
+     AND giorni > 7;
+  IF n < 1 THEN RAISE EXCEPTION 'fixture: la proposta vecchia non compare negli alert (giorni > 7)'; END IF;
+END $$;
+"""
+    comando = [
+        "docker", "compose", "-f", str(COMPOSE), "exec", "-T", SERVIZIO_DB,
+        "psql", "-U", "postgres", "-d", os.environ.get("TRASI_DB") or DB_DEFAULT,
+        "-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", "-",
+    ]
+    esito = subprocess.run(comando, input=sql, capture_output=True, text=True, check=False)
+    if esito.returncode != 0:
+        raise RuntimeError(f"fixture proposta_vecchia fallita: {esito.stderr.strip()[:600]}")
+
+    # La rimozione delle righe a fine test è affidata alla **stessa `pulizia`** che le altre fixture
+    # usano: `pulizia(proposte=True)` cancella `motivazione LIKE 'B4TEST:%'`, e il marcatore di questa
+    # fixture comincia per `B4TEST:`. Nessuna `DELETE` propria, quindi: una regola sola per lo sporco
+    # dei test, e se un giorno cambia il marcatore cambia in un posto.
+    yield {"marca": marca, "out": esito.stdout}
+    pulizia(registro=True, proposte=True)
+
+
 @pytest.fixture(scope="session")
 def fixture_ics():
     """La fixture ICS del blocco, scritta per il test in una cartella temporanea.
