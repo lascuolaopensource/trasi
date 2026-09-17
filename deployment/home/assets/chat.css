@@ -1,0 +1,264 @@
+/* chat.css — le classi della Home: `.turno`, `.compositore`, `.suggerimento` e i prefissi `chat-`/`storico-`.
+ *
+ * PERCHÉ QUESTO FILE ESISTE, separato da `struttura.css` e da `veste.css`.
+ * `CONTRATTO-shell.md` §3 elenca `.turno`, `.turno--operatore`, `.turno--assistente`, `.turno-chi`,
+ * `.turno-testo`, `.compositore` fra le classi «di BOT-2, dichiarate qui per l'elenco completo»: significa che
+ * le possiede questa pagina, non la shell. E la stessa §3 dà a ogni pagina il diritto a classi **proprie** con
+ * il prefisso della pagina. Metterle in `struttura.css` significherebbe scrivere in un file di Main; metterle in
+ * `veste.css` significherebbe dichiararle «veste», e X le sostituirebbe — perdendo l'aggancio del compositore,
+ * che è comportamento e non colore.
+ *
+ * Quindi: qui sta **solo** ciò che è della chat — dove va il compositore nei cinque stati, com'è fatta una riga
+ * di turno, quanto è largo un suggerimento. I colori vengono dai token di `veste.css` (`var(--…)`), mai scritti
+ * a mano: se X cambia la veste, questa pagina la segue senza essere toccata.
+ *
+ * Nessuna scelta vietata dalle regole di contenuto: niente rosso, niente ombre, niente animazioni d'ingresso.
+ * Il filetto di stato a sinistra del turno dell'assistente è il segno del sistema, non un'aggiunta.
+ */
+
+/* ============================================================ la pagina e i suoi stati */
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--s-5, 20px));
+  /* `min-height` e non `height`: lo stato vuoto **centra** il compositore, ma la chat cresce
+     con i turni e deve poter scorrere. Con `height` il compositore agganciato coprirebbe l'ultimo
+     turno; con `min-height` la colonna si allunga e lo `sticky` del compositore resta in fondo
+     al flusso, mai sopra il testo (regola 10 di §1.3). */
+  min-height: calc(100vh - 8rem);
+}
+
+/* S0 — VUOTO: titolo e compositore centrati, suggerimenti sotto. Il compositore **non** è
+   agganciato: `position: static` è il default, e qui si dichiara solo che lo stato vuoto non lo
+   aggancia (l'aggancio è di S1-S5).
+
+   S3 (422) e S4 (503) hanno lo **stesso layout** — è il diagramma di §4.1.1: l'errore riporta a
+   VUOTO con la domanda ancora scritta. La differenza è l'avviso sopra il compositore e il segno di
+   stato del filetto, mai la posizione: un compositore che salta da un posto all'altro mentre si
+   legge un errore è un'interfaccia che si muove sotto le mani. */
+.chat[data-stato="vuota"],
+.chat[data-stato="errore"],
+.chat[data-stato="guasto"] {
+  justify-content: center;
+}
+.chat[data-stato="vuota"] .chat-testa,
+.chat[data-stato="vuota"] .compositore,
+.chat[data-stato="errore"] .compositore,
+.chat[data-stato="guasto"] .compositore {
+  max-width: 36rem;          /* --misura-testo: la misura di lettura, non la larghezza della pagina */
+  margin-inline: auto;
+  width: 100%;
+}
+.chat[data-stato="vuota"] .chat-suggerimenti,
+.chat[data-stato="errore"] .chat-suggerimenti,
+.chat[data-stato="guasto"] .chat-suggerimenti {
+  max-width: 36rem;
+  margin-inline: auto;
+  width: 100%;
+}
+/* L'avviso, negli stati di errore, sta sopra il compositore e dentro la stessa misura. */
+.chat[data-stato="errore"] .chat-avviso,
+.chat[data-stato="guasto"] .chat-avviso {
+  max-width: 36rem;
+  margin-inline: auto;
+  width: 100%;
+}
+
+/* S1-S5 — il compositore scende in basso e si **aggancia**. `sticky` con `bottom: 0` dentro la
+   colonna: resta visibile mentre i turni scorrono, e non copre l'ultimo turno perché occupa
+   spazio nel flusso (è `sticky`, non `fixed`). 2-4 righe: `rows="3"` nel markup più `max-height`,
+   così un testo lungo scorre dentro il campo invece di mangiarsi la conversazione. */
+.chat[data-stato="attesa"] .compositore,
+.chat[data-stato="chat"] .compositore,
+.chat[data-stato="riaperta"] .compositore {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--sfondo);
+}
+
+/* Negli stati con conversazione, la testa e i suggerimenti escono: il compositore resta. La testa
+   della conversazione riaperta (`chat-aperta`) **resta** in S5: è la data del primo turno, e §4.1.1
+   la vuole in testa. Negli stati di errore i suggerimenti restano: è lì che l'operatore riparte. */
+.chat[data-stato="chat"] .chat-testa,
+.chat[data-stato="chat"] .chat-suggerimenti,
+.chat[data-stato="attesa"] .chat-testa,
+.chat[data-stato="attesa"] .chat-suggerimenti,
+.chat[data-stato="riaperta"] .chat-suggerimenti {
+  display: none;
+}
+
+/* ============================================================ testa e suggerimenti */
+.chat-testa { display: flex; flex-direction: column; gap: var(--s-2, 8px); }
+.chat-sotto { margin: 0; color: var(--testo-tenue); }
+
+.chat-suggerimenti { display: flex; flex-direction: column; gap: var(--s-3, 12px); }
+.chat-suggerimenti-testa { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+.chat-suggerimenti-elenco { display: flex; flex-wrap: wrap; gap: var(--s-2, 8px); }
+
+/* I suggerimenti sono bottoni: bersaglio ≥ 44 px, testo a sinistra perché è una frase da leggere
+   e non un'etichetta da centrare. Il contorno è quello dei controlli (`--bordo`). */
+.suggerimento {
+  min-height: var(--shell-bersaglio, 44px);
+  padding: var(--s-2, 8px) var(--s-4, 16px);
+  border: var(--contorno, 2px) solid var(--bordo);
+  border-radius: var(--raggio, 10px);
+  background: var(--superficie);
+  color: var(--azione);
+  font: inherit;
+  font-size: var(--t-corpo, 1rem);
+  text-align: left;
+  cursor: pointer;
+}
+.suggerimento:hover { background: var(--azione-sfondo-hover); border-color: var(--bordo-forte); }
+
+/* ============================================================ turni */
+.chat-turni { display: flex; flex-direction: column; gap: var(--s-4, 16px); }
+
+.turno {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2, 8px);
+  max-width: 42rem;
+  padding: var(--s-4, 16px);
+  border: var(--contorno, 2px) solid var(--bordo-tenue);
+  border-radius: var(--raggio, 10px);
+}
+/* Operatore: incassato e a destra. Assistente: superficie piena, a sinistra, col filetto di stato
+   in mare — lo stesso segno che il sistema usa per «questo è ciò che la rete sa». */
+.turno--operatore {
+  align-self: flex-end;
+  background: var(--superficie-incassata);
+}
+.turno--assistente {
+  align-self: flex-start;
+  background: var(--superficie-scheda);
+  border-left: var(--filetto-forte, 4px) solid var(--mare);
+}
+
+.turno-chi {
+  margin: 0;
+  font-size: var(--t-minuto, 0.9375rem);
+  font-weight: var(--peso-medio, 600);
+  color: var(--testo-tenue);
+}
+/* `pre-line`: le risposte dell'assistente hanno a capo veri (elenchi, «Orari: …»), e schiacciarli
+   in un paragrafo unico renderebbe illeggibile proprio ciò che l'operatore legge alla persona. */
+.turno-testo { margin: 0; white-space: pre-line; }
+
+/* L'etichetta di provenienza sta **sotto** la risposta, su una riga sua (MessaggioChat.prompt.md):
+   dentro la frase diventa rumore. `overflow-wrap` perché un badge lungo non deve allargare la
+   colonna oltre la misura di lettura. */
+.chat-provenienza { overflow-wrap: anywhere; }
+
+/* Il turno dell'assistente in attesa: testo attenuato e `aria-busy` nel DOM. Lo stato è anche una
+   **parola** («Ricerca nella memoria della rete in corso…»), non solo un colore. */
+.turno--attesa .turno-testo { color: var(--testo-tenue); }
+
+/* ============================================================ compositore */
+.compositore {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2, 8px);
+  padding: var(--s-4, 16px);
+  border: var(--contorno, 2px) solid var(--bordo);
+  border-radius: var(--raggio, 10px);
+  background: var(--superficie-scheda);
+}
+.chat-etichetta { font-weight: var(--peso-medio, 600); }
+.chat-campo {
+  width: 100%;
+  min-height: calc(var(--shell-bersaglio, 44px) * 2);
+  max-height: 8rem;                 /* ~4 righe: oltre, scorre dentro il campo */
+  padding: var(--s-3, 12px);
+  border: var(--contorno, 2px) solid var(--bordo);
+  border-radius: var(--raggio, 10px);
+  background: var(--superficie);
+  color: var(--testo);
+  font: inherit;
+  font-size: var(--t-corpo, 1rem);
+  resize: vertical;
+}
+.chat-aiuto { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+
+.chat-azioni { justify-content: space-between; }
+.chat-contatore {
+  margin: 0;
+  font-family: var(--font-etichette, ui-monospace, monospace);
+  font-size: var(--t-minuto, 0.9375rem);
+  color: var(--testo-tenue);
+}
+
+/* ============================================================ righe di stato */
+/* L'avviso di errore e la testa della conversazione riaperta. Il bordo sinistro è il filetto di
+   stato: giallo sole per l'attenzione (422), bordo tenue per il guasto (503) — mai rosso, in questo
+   progetto nulla è un allarme rivolto a una persona. La parola c'è sempre, accanto al colore. */
+.chat-avviso {
+  margin: 0;
+  padding: var(--s-3, 12px) var(--s-4, 16px);
+  border-left: var(--filetto-forte, 4px) solid var(--sole);
+  background: var(--attenzione-sfondo);
+  color: var(--attenzione-testo);
+  border-radius: var(--raggio-piccolo, 4px);
+}
+.chat-avviso--guasto {
+  border-left-color: var(--bordo-tenue);
+  background: var(--superficie-incassata);
+  color: var(--testo);
+}
+.chat-aperta {
+  margin: 0;
+  font-size: var(--t-minuto, 0.9375rem);
+  color: var(--testo-tenue);
+}
+
+/* ============================================================ storico (pannello della sidebar) */
+.storico-testa { display: flex; flex-direction: column; gap: var(--s-2, 8px); }
+.storico-nuova { width: 100%; }
+.storico-elenco { display: flex; flex-direction: column; gap: var(--s-4, 16px); }
+.storico-gruppo { display: flex; flex-direction: column; gap: var(--s-1, 4px); }
+.storico-gruppo-testa {
+  margin: 0;
+  font-size: var(--t-minuto, 0.9375rem);
+  font-weight: var(--peso-medio, 600);
+  color: var(--testo-tenue);
+  letter-spacing: 0.06em;
+}
+.storico-voci { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1, 4px); }
+/* Una voce: bottono a piena larghezza, titolo su una riga e ora accanto. Il bersaglio è ≥ 44 px
+   anche quando il titolo è corto. */
+.storico-voce {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2, 8px);
+  width: 100%;
+  min-height: var(--shell-bersaglio, 44px);
+  padding: var(--s-2, 8px) var(--s-3, 12px);
+  border: 0;
+  border-radius: var(--raggio-piccolo, 4px);
+  background: transparent;
+  color: var(--testo);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.storico-voce:hover { background: var(--azione-sfondo-hover); }
+.storico-voce[aria-current="true"] { background: var(--superficie-incassata); font-weight: var(--peso-medio, 600); }
+.storico-titolo { overflow-wrap: anywhere; }
+.storico-ora { font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); flex: none; }
+.storico-piede { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+.storico-vuoto { margin: 0; color: var(--testo-tenue); }
+
+/* ============================================================ chat compatta (Osservatorio, Account) */
+/* `window.TrasiChat.renderCompatta(el)` la disegna nel pannello delle altre due pagine: l'ultimo
+   scambio della conversazione corrente e il compositore compatto. Le classi sono `storico-`/`chat-`
+   come tutto ciò che possiede questa pagina. */
+.chat-compatta { display: flex; flex-direction: column; gap: var(--s-3, 12px); }
+.chat-compatta-scelta { margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+.chat-compatta-turni { display: flex; flex-direction: column; gap: var(--s-2, 8px); }
+.chat-compatta .turno { max-width: 100%; padding: var(--s-3, 12px); }
+.chat-compatta .compositore { padding: var(--s-3, 12px); }
+.chat-compatta .chat-campo { min-height: var(--shell-bersaglio, 44px); max-height: 6rem; }
+/* Nella colonna stretta della sidebar, i suggerimenti non entrano: la compatta ha un campo solo. */
+.chat-compatta .chat-aiuto { display: none; }

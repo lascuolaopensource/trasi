@@ -1,0 +1,126 @@
+# ANTEPRIMA DEL CANTIERE UX — copia del Caddyfile di progetto, con UNA differenza:
+# `/api/shim/*` va al **shim di sviluppo** (`shim-ux`, che serve il worktree con --reload) invece che
+# al container di esercizio. Tutto il resto è identico, così l'anteprima si comporta come il sito vero.
+# Il file si rigenera da quello di progetto: `cp deployment/caddy/Caddyfile deployment/caddy/Caddyfile.anteprima`
+# e poi la sostituzione di `shim:8000` → `shim-ux:8000`.
+
+# Caddy — ingresso unico Trasi (blocco B0; il sito statico Trasi Home è deliverable B6).
+#
+# Topologia (v. deployment/README.md, «Onyx: rete condivisa invece di host.docker.internal»):
+#   trasi.lascuolaopensource.org -> Trasi Home (statico) + NocoDB + Metabase
+#   onyx.lascuolaopensource.org  -> Onyx, raggiunto via rete Docker `onyx_default` (alias `nginx`)
+#
+# Tutto in HTTP: TLS e pubblicazione sono del tunnel Cloudflare, che inoltra a 127.0.0.1.
+
+{
+	# Admin API su loopback del container (usata dall'healthcheck del compose).
+	admin 127.0.0.1:2019
+
+	# **Niente TLS qui.** Il certificato e la terminazione sono del tunnel Cloudflare, che inoltra a
+	# `127.0.0.1:8088` in **HTTP** (v. README, «Binding: solo loopback»). Due conseguenze, entrambe
+	# misurate su questa macchina, e sono due difetti distinti:
+	#
+	# 1. senza `auto_https off` Caddy prova a ottenere un certificato Let's Encrypt e risponde
+	#    `308 → https://` su ogni richiesta HTTP: il tunnel, che parla HTTP, riceve un redirect a un
+	#    host senza certificato → **525** dall'edge Cloudflare;
+	# 2. senza lo schema `http://` nel nome del sito, un blocco `{$TRASI_DOMAIN}` ascolta **solo su
+	#    :443** (è il default di Caddy per un nome con hostname). Il tunnel inoltra su `:80` e la
+	#    connessione viene **azzerata** (`Recv failure: Connection reset by peer`), non reindirizzata.
+	#
+	# Per questo i blocchi qui sotto si chiamano `http://{$…_DOMAIN}`: il server HTTP è quello che
+	# serve, e `:8443` resta pubblicato solo come porta di diagnostica.
+	auto_https off
+
+	# Nessun log di accesso con IP degli operatori: qui passano solo richieste applicative.
+	log {
+		output file /data/access.log {
+			roll_size 10MiB
+			roll_keep 3
+		}
+		format console
+	}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+(trasi_headers) {
+	import security_headers
+	# NOTA — rate limit (plan §12 punto 6, «60 req/min/IP»): NON implementato qui.
+	# L'immagine ufficiale caddy:2-alpine non include il modulo `rate_limit`
+	# (verificato: `caddy list-modules` → 0 moduli rate*), che richiede un build
+	# custom con xcaddy + caddy-ratelimit. Il punto è comunque una domanda aperta
+	# TI+DPO nel piano: non lo si anticipa in B0 e la domanda resta tracciata
+	# nel README di deployment/.
+}
+
+# ------------------------------------------------------------------ Trasi: Home + NocoDB + Metabase -----
+http://{$TRASI_DOMAIN} {
+	import trasi_headers
+
+	# Coda proposte e CRM (NocoDB). `handle_path` toglie il prefisso: NocoDB è montato su /.
+	handle_path /nocodb/* {
+		reverse_proxy nocodb:8080 {
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Dashboard (Metabase). Stesso schema di prefisso.
+	handle_path /metabase/* {
+		reverse_proxy metabase:3000 {
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Shim Trasi, in sola lettura e per il solo scopo della riga «Oggi» della Home (B6).
+	#
+	# Perché passa da Caddy e non dal JS: la Home è un sito **statico senza autenticazione**, quindi
+	# una `X-Trasi-Key` scritta nel JS sarebbe pubblica — una chiave pubblica non è una chiave.
+	# Qui la chiave la aggiunge il proxy, lato server: il browser la vede solo come «la Home ha
+	# parlato con lo shim», mai come valore.
+	#
+	# `handle_path` toglie il prefisso: `/api/shim/v1/u/…` → `shim:8000/v1/u/…`. Il blocco `handle`
+	# della Home resta più generico e Caddy ordina per specificità, quindi non c'è conflitto.
+	handle_path /api/shim/* {
+		reverse_proxy shim-ux:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			# Sovrascrive, non aggiunge: `header_up` con un valore **sostituisce** l'header omonimo
+			# ricevuto dal client, quindi un `X-Trasi-Key` iniettato dal browser non può
+			# sovrapporsi a questo. La chiave è una sola, e la decide il proxy.
+			header_up X-Trasi-Key {env.TRASI_SHIM_KEY}
+		}
+	}
+
+	# Trasi Home: sito statico servito da ./home (popolato dal blocco B6/UX).
+	# `no-cache` non vieta di conservare: obbliga a **rivalidare** (l'ETag di file_server
+	# rende la rivalidazione un 304). Senza, Cloudflare e i browser tengono `.js`/`.css`
+	# per ore con la loro euristica, e una modifica alla Home compare a chi la ricarica
+	# forzando e non a chi la apre — che è chi la usa allo sportello.
+	handle {
+		root * /srv/home
+		header Cache-Control "no-cache"
+		file_server
+	}
+
+	encode gzip
+}
+
+# ------------------------------------------------------------------ Onyx (compose separato) -------------
+http://{$ONYX_DOMAIN} {
+	import security_headers
+
+	# Onyx non ha basePath (v. plan §0.3): sta su sottodominio, non su /chat.
+	# Raggiunto dall'alias di servizio `nginx` sulla rete Docker onyx_default.
+	# NON si usa host.docker.internal: onyx-nginx è pubblicato solo su 127.0.0.1 e
+	# non è raggiungibile dal gateway del bridge (verificato, v. README).
+	reverse_proxy nginx:80 {
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

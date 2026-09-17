@@ -1,0 +1,124 @@
+/* account-sezioni.css — la veste delle sezioni dell'Account che appartengono a questo bot.
+ *
+ * Perché un file separato invece che dentro `account.html`: quella pagina è di Main, e la regola del
+ * cantiere è «un file, un proprietario». `CONTRATTO-shell.md` §3 prevede esattamente questo caso —
+ * «ogni bot può aggiungere classi **proprie** con prefisso della pagina (`chat-`, `mappa-`, `acc-`,
+ * `storico-`) nel proprio file CSS». I prefissi qui sono `acc-casa-` e `acc-proposte-`, cioè
+ * `acc-<sezione>-`, la stessa forma degli id: due sezioni scritte da persone diverse non possono
+ * collidere, né sugli id né sulle classi.
+ *
+ * Il file si carica dal frammento con un `<link>`, e non è un dettaglio: `innerHTML` **non esegue**
+ * gli `<script>`, ma **applica** i `<link rel="stylesheet">` — quindi una sezione può portarsi dietro
+ * la propria veste senza che la pagina ospite debba conoscerla. È la stessa asimmetria che rende
+ * necessario `data-modulo` per il comportamento.
+ *
+ * Cosa NON c'è qui, di proposito: colori di marca nuovi, font, ombre, raggi. La veste è di X (D9) e i
+ * valori si prendono dai token già in `veste.css` (`--terra`, `--coda-*`, `--attenzione-*`,
+ * `--superficie-*`). Qui ci sono solo disposizione, spaziature e le poche regole che rendono leggibile
+ * il diff.
+ *
+ * Una regola che vale per tutto il file: **nessun rosso**. La coda delle proposte è una presenza, non
+ * un allarme: il filetto è terracotta (`--filetto--coda`, cioè `--coda-filetto` = `#CC7E5B`), e dove
+ * serve attenzione si usa il giallo sole (`--filetto--attenzione`), mai un colore di allarme. Il
+ * colore non è mai l'unico segnale — accanto c'è sempre la parola.
+ */
+
+/* ============================================================ comune alle sezioni */
+
+.acc-sezione { display: flex; flex-direction: column; gap: calc(var(--shell-passo) * 5); }
+
+.acc-casa-sottotitolo,
+.acc-proposte-sottotitolo {
+  margin: 0;
+  font-size: var(--t-titolo-s, 1.25rem);
+  color: var(--testo);
+}
+
+/* Le liste di definizioni dei dati della Casa: etichetta sopra, valore sotto, una coppia per riga.
+   `grid` a una colonna invece di `dl` affiancato: i valori sono frasi lunghe (il raggio può dire «non
+   dichiarato dalla Casa: si usa il valore della rete, 800 metri») e una colonna stretta le spezzerebbe
+   in tre righe. */
+.acc-casa-dati {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+  gap: calc(var(--shell-passo) * 2) calc(var(--shell-passo) * 4);
+  margin: calc(var(--shell-passo) * 3) 0 0;
+}
+.acc-casa-dati dt { color: var(--testo-tenue); font-size: var(--t-minuto, 0.9375rem); }
+.acc-casa-dati dd { margin: 0; }
+
+.acc-casa-nota,
+.acc-proposte-nota,
+.acc-proposte-attesa,
+.acc-proposte-motivazione { margin: 0; color: var(--testo-tenue); }
+
+.acc-casa-guasto { margin: 0; }
+.acc-casa-provvisorio { margin: 0; }
+
+@media (max-width: 40rem) {
+  /* Sotto 40 rem l'etichetta e il valore non stanno affiancati: si impilano. */
+  .acc-casa-dati { grid-template-columns: minmax(0, 1fr); gap: var(--shell-passo); }
+}
+
+/* ============================================================ la coda delle proposte */
+
+.acc-proposte-testa { margin-bottom: calc(var(--shell-passo) * 4); }
+.acc-proposte-titolo { margin: 0 0 calc(var(--shell-passo) * 2); font-size: var(--t-titolo-s, 1.25rem); }
+.acc-proposte-intro { margin: 0; max-width: var(--misura-testo, 36rem); color: var(--testo-tenue); }
+
+/* La riga di proposta: una scheda per proposta, con il filetto di stato a sinistra. Il filetto lo
+   danno le classi del contratto (`filetto--coda`, `filetto--attenzione`); qui la disposizione. */
+.acc-proposte-riga { list-style: none; }
+.acc-proposte-tipo { margin: 0; font-weight: var(--peso-medio, 600); }
+
+/* Il diff leggibile. `<pre>` non perché sia codice: gli a capo che il database compone («campo: prima
+   → dopo», una riga per campo) sono parte dell'informazione e il browser deve conservarli. */
+.acc-proposte-diff { margin-top: calc(var(--shell-passo) * 3); }
+.acc-proposte-diff-testo {
+  margin: calc(var(--shell-passo) * 2) 0 0;
+  padding: calc(var(--shell-passo) * 3);
+  background: var(--superficie-incassata, #EFEDE6);
+  border-radius: var(--raggio-piccolo, 4px);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--t-minuto, 0.9375rem);
+  /* Un `diff` può portare una descrizione lunga: va a capo invece di allargare la pagina (WCAG 1.4.10,
+     nessuno scorrimento orizzontale). */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.acc-proposte-fatti {
+  margin: calc(var(--shell-passo) * 3) 0 0;
+  color: var(--testo-tenue);
+  font-size: var(--t-minuto, 0.9375rem);
+}
+
+/* I comandi della decisione: etichetta, campo nota, aiuto, e i due bottoni. Bersagli ≥ 44 px — li
+   danno le classi `.bottone` del contratto. */
+.acc-proposte-comandi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--shell-passo) * 3);
+  margin-top: calc(var(--shell-passo) * 3);
+}
+.acc-proposte-nota-etichetta { flex-basis: 100%; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+.acc-proposte-nota-campo {
+  flex: 1 1 18rem;
+  min-height: var(--shell-bersaglio, 44px);
+  padding: 0 calc(var(--shell-passo) * 3);
+  border: var(--contorno, 2px) solid var(--bordo, #8A8377);
+  border-radius: var(--raggio, 10px);
+  font: inherit;
+  background: var(--superficie, #FFFFFF);
+  color: var(--testo);
+}
+.acc-proposte-nota-aiuto { flex-basis: 100%; margin: 0; font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+
+/* La nota che sostituisce i pulsanti quando la decisione è di un altro: è la parte più importante
+   della riga non decidibile, quindi non è grigio chiaro — è testo corrente, con il filetto del blocco
+   a dire lo stato. */
+.acc-proposte-nota { margin-top: calc(var(--shell-passo) * 3); }
+
+/* L'esito della decisione: riusa il filetto terracotta della coda. */
+.acc-proposte-esito { margin: 0; }

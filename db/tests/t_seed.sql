@@ -130,7 +130,7 @@ BEGIN
     ('ruolo_casa'),('identita_onyx'),('fonte'),('fonte_run'),('flusso_run'),
     -- le 6 delle schede !NEW: login operatore (db/013), attrezzoteca (db/014), chat interna (db/015)
     ('credenziale_casa'),('sessione'),('tentativo_login'),('oggetto'),('movimento'),('messaggio'),
-    ('scheda_servizio')
+    ('scheda_servizio'),('conversazione'),('turno')
   ) AS v(i)
   WHERE NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'trasi' AND tablename = v.i);
   IF mancanti IS NOT NULL THEN RAISE EXCEPTION 'FAIL O05 — tabelle attese mancanti in schema trasi: %', mancanti; END IF;

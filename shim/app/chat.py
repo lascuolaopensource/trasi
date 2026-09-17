@@ -49,6 +49,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -149,10 +150,19 @@ class ConfigurazioneChat:
 
 @dataclass(frozen=True)
 class Conversazione:
-    """Una risposta utilizzabile: il testo e il badge di provenienza (V3)."""
+    """Una risposta utilizzabile: il testo, il badge di provenienza (V3) e i riferimenti alle entità citate.
+
+    `sessione_id` e `messaggio_id` non servono a mostrare la risposta: servono a **continuare** la conversazione.
+    `sessione_id` è la `chat_session` di Onyx (una per conversazione, non una per messaggio), `messaggio_id` è il
+    `message_id` che Onyx assegna al turno dell'assistente ed è il `parent_message_id` del turno successivo: senza,
+    il secondo turno ripartirebbe da `-1` e il contesto non esisterebbe.
+    """
 
     testo: str
     fonte: str
+    riferimenti: list[dict[str, Any]]
+    sessione_id: str = ""
+    messaggio_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -282,6 +292,27 @@ def _fiducia_metadato(valore: Any) -> int | None:
         return None
 
 
+def _id_messaggio(corpo: Any) -> int | None:
+    """Il `message_id` del turno dell'assistente, o `None` se Onyx non ne ha dato uno utilizzabile.
+
+    È il `parent_message_id` del turno **successivo**: senza, la conversazione riparte da `-1` e il contesto si
+    perde. `None` e non `-1`: `-1` è una richiesta legittima («nessun padre»), mentre «non lo so» è un'altra cosa,
+    e chi legge il turno deve poterli distinguere. Arriva come intero nel JSON reale (verificato: `743`); una
+    stringa numerica si accetta perché il contratto di Onyx non lo dichiara, un valore di altro tipo si scarta.
+    """
+    if not isinstance(corpo, dict):
+        return None
+    valore = corpo.get("message_id")
+    if isinstance(valore, bool):
+        return None
+    if isinstance(valore, int):
+        return valore
+    try:
+        return int(str(valore).strip())
+    except (TypeError, ValueError):
+        return None
+
+
 def fonte_dal_corpo(corpo: Any, adesso: datetime) -> str:
     """Il badge di provenienza (V3) del **primo** documento citato da Onyx, composto dalle tre funzioni di `badge.py`.
 
@@ -318,24 +349,88 @@ def fonte_dal_corpo(corpo: Any, adesso: datetime) -> str:
     return FONTE_NON_DICHIARATA
 
 
-async def _conversa(
-    configurazione_chat: ConfigurazioneChat, messaggio: str, email: str
-) -> Conversazione | Guasto:
-    """Crea la sessione di chat e manda il messaggio: testo+fonte, oppure la diagnosi del guasto. Mai un'eccezione.
+# I prefissi di `document_id` che Trasi sa **risolvere** a un'entità del dominio. Tutto il resto si ignora in
+# silenzio, e non è una scorciatoia: Onyx cita anche documenti fuori dalla KB (verificato dal vivo: `MEDIAWIKI_…`
+# e un URL INPS), e un errore su quelli spegnerebbe la risposta per un documento che non ci riguarda.
+#
+# `trasi:casa_quartiere:` **e** `trasi:casa:` — la vista dell'export compone il primo (`db/004_views.sql:136`), il
+# piano scrive il secondo. Sono lo stesso tipo per il consumatore (`tipo: "casa"`), quindi si accettano entrambi:
+# riconoscere solo la forma citata dal piano significherebbe ignorare **tutte** le Case citate dalla KB.
+PREFISSI_RIFERIMENTO: tuple[tuple[str, str], ...] = (
+    ("trasi:luogo:", "luogo"),
+    ("trasi:casa_quartiere:", "casa"),
+    ("trasi:casa:", "casa"),
+    ("trasi:evento:", "evento"),
+)
 
-    Due chiamate, una sola connessione: `create-chat-session` (assistente `persona_id`) e `send-chat-message` con
-    `stream=false` — la risposta completa in JSON, che è quella di cui il proxy ha bisogno (con `stream=true` la
-    risposta sarebbe un event-stream da riassemblare per mostrare un testo che qui non serve a nessuno).
 
-    Il tempo è imposto **due volte**, e non è ridondanza: i timeout di `httpx` sono per fase (connessione, scrittura,
-    lettura), quindi un `timeout=N` può valere `2N` sommando una connessione lenta a una lettura lenta — la stessa
-    misura che in `vicinanza.py` ha portato a `asyncio.wait_for`. Il budget dichiarato (`ONYX_CHAT_TIMEOUT_S`) è
-    quello della **coppia** di chiamate, perché è il tempo che il chiamante aspetta davvero.
+def _riferimento(documento: dict[str, Any]) -> dict[str, Any] | None:
+    """Un documento di Onyx come `{tipo, id, nome}`, o `None` se non è un'entità del dominio.
 
-    Ogni guasto — timeout, errore HTTP, corpo non JSON — diventa un `Guasto`: la decisione sullo status è di chi
-    chiama, qui non si solleva nulla (§9.1, «mai eccezione al chiamante»).
+    L'id è memorizzato **URL-encoded** (`trasi%3Aluogo%3A21`): senza `unquote` il confronto col prefisso non trova
+    nulla e l'estrazione sembrerebbe «non ci sono riferimenti» invece di «il formato è cambiato». È la trappola
+    documentata in `README.md` §7.2 e già misurata una volta in questo progetto (`ops/retention_chat.py`).
+
+    Il confronto col prefisso si fa sulla forma **decodificata** e non su quella grezza: `trasi%3Aluogo%3A21` non
+    inizia per `trasi:luogo:`, quindi cercare il prefisso prima di decodificare non troverebbe mai nulla.
+
+    L'id numerico si legge **dopo** il prefisso e si scarta se non è un intero: un documento `trasi:luogo:abc` non
+    è risolvibile, e restituire una stringa al posto di un id romperebbe il consumatore (il biglietto vuole un
+    `luogo_id`).
     """
-    intestazioni = {
+    grezzo = documento.get("document_id")
+    if not isinstance(grezzo, str):
+        return None
+    decodificato = unquote(grezzo)
+    for prefisso, tipo in PREFISSI_RIFERIMENTO:
+        if not decodificato.startswith(prefisso):
+            continue
+        coda = decodificato[len(prefisso) :]
+        if not coda.isdigit():
+            return None
+        nome = documento.get("semantic_identifier")
+        return {"tipo": tipo, "id": int(coda), "nome": nome if isinstance(nome, str) else ""}
+    return None
+
+
+def riferimenti_dal_corpo(corpo: Any) -> list[dict[str, Any]]:
+    """I riferimenti alle entità citate, dai `top_documents` di Onyx: `[{tipo, id, nome}]`, nell'ordine di Onyx.
+
+    Deduplicati e nell'ordine in cui Onyx li ha ordinati per pertinenza: lo stesso documento può comparire due
+    volte (chunk diversi) e mostrare due volte lo stesso riferimento non aggiunge nulla. Una risposta senza
+    riferimenti è una lista vuota, mai `None`: chi legge non deve distinguere «assente» da «vuoto».
+
+    Serve alle **azioni sulla risposta** (§4.1.2): senza riferimenti non si mostrano, invece di mostrare un
+    pulsante che non sa dove andare.
+    """
+    documenti = corpo.get("top_documents") if isinstance(corpo, dict) else None
+    if not isinstance(documenti, list):
+        return []
+    visti: list[dict[str, Any]] = []
+    chiavi: set[tuple[str, int]] = set()
+    for documento in documenti:
+        if not isinstance(documento, dict):
+            continue
+        riferimento = _riferimento(documento)
+        if riferimento is None:
+            continue
+        chiave = (riferimento["tipo"], riferimento["id"])
+        if chiave in chiavi:
+            continue
+        chiavi.add(chiave)
+        visti.append(riferimento)
+    return visti
+
+
+def _intestazioni(configurazione_chat: ConfigurazioneChat, email: str) -> dict[str, str]:
+    """Le intestazioni verso Onyx: PAT, tipo di contenuto e identità dichiarata.
+
+    Una funzione e non tre righe ripetute perché la via a un colpo solo (`_conversa`) e l'apertura della sessione
+    di una conversazione (`apri_sessione`) devono presentarsi a Onyx **allo stesso modo**: due copie delle
+    intestazioni significherebbe che un giorno una delle due perde l'email, e la differenza non si vedrebbe finché
+    qualcuno non guarda il log di Onyx.
+    """
+    return {
         # Il PAT viaggia solo nell'header: mai in URL, mai nei log. `httpx` a INFO registra l'URL, e per questo
         # `main.py` lo zittisce — qui vale anche per l'email, che nell'URL non compare mai.
         "Authorization": f"Bearer {configurazione_chat.token}",
@@ -346,25 +441,92 @@ async def _conversa(
         "X-Onyx-User-Email": email,
     }
 
-    async def scambio() -> Conversazione | Guasto:
+
+async def apri_sessione(configurazione_chat: ConfigurazioneChat, email: str) -> str | Guasto:
+    """Apre **una** `chat_session` di Onyx e ne restituisce l'id; un `Guasto` se non ci riesce. Mai un'eccezione.
+
+    Sta qui e non in `conversazioni_op.py` perché è la stessa chiamata che `_conversa` fa quando non c'è ancora una
+    sessione, con le stesse intestazioni e lo stesso budget: la differenza è **quando** viene fatta. Una
+    conversazione la apre alla nascita (così il primo turno non paga due chiamate e la sessione è legata alla
+    conversazione), la chat a un colpo solo al primo — e unico — messaggio.
+    """
+    intestazioni = _intestazioni(configurazione_chat, email)
+
+    async def apertura() -> str | Guasto:
         async with httpx.AsyncClient(timeout=configurazione_chat.timeout_s, headers=intestazioni) as client:
             creazione = await client.post(
                 f"{configurazione_chat.base_url}/chat/create-chat-session",
                 json={"persona_id": configurazione_chat.persona_id, "description": None, "project_id": None},
             )
             creazione.raise_for_status()
-            session_id = (creazione.json() or {}).get("chat_session_id")
-            if not session_id:
-                return Guasto(DETAIL_RISPOSTA_NON_LEGGIBILE)
+            identificatore = (creazione.json() or {}).get("chat_session_id")
+        if not identificatore:
+            return Guasto(DETAIL_RISPOSTA_NON_LEGGIBILE)
+        return identificatore
+
+    try:
+        return await asyncio.wait_for(apertura(), timeout=configurazione_chat.timeout_s)
+    except (TimeoutError, httpx.TimeoutException):
+        logger.warning("chat: Onyx non ha aperto la sessione entro il tempo dichiarato")
+        return Guasto(DETAIL_CHAT_NON_DISPONIBILE)
+    except (httpx.HTTPError, ValueError):
+        logger.warning("chat: Onyx ha risposto con un errore o con un corpo non JSON")
+        return Guasto(DETAIL_CHAT_NON_DISPONIBILE)
+
+
+async def _conversa(
+    configurazione_chat: ConfigurazioneChat,
+    messaggio: str,
+    email: str,
+    *,
+    sessione_id: str | None = None,
+    parent_message_id: int | None = None,
+) -> Conversazione | Guasto:
+    """Manda il messaggio a Onyx: testo+fonte+riferimenti, oppure la diagnosi del guasto. Mai un'eccezione.
+
+    Una o due chiamate, una sola connessione: `create-chat-session` (assistente `persona_id`) **solo se la
+    conversazione non ha ancora una sessione**, e `send-chat-message` con `stream=false` — la risposta completa in
+    JSON, che è quella di cui il proxy ha bisogno (con `stream=true` la risposta sarebbe un event-stream da
+    riassemblare per mostrare un testo che qui non serve a nessuno).
+
+    **Il multi-turno vive in questi due parametri.** `sessione_id` è la sessione Onyx della conversazione: passandola
+    non se ne crea una seconda, e Onyx vede una conversazione sola. `parent_message_id` è il `message_id` del turno
+    dell'assistente precedente — la catena che dà il contesto. Con `sessione_id=None` (la chat a un colpo solo di
+    `POST /op/chat`) il padre è `-1`: nessun messaggio precedente, ed è la stessa cosa che la sessione appena nata
+    implica.
+
+    Il tempo è imposto **due volte**, e non è ridondanza: i timeout di `httpx` sono per fase (connessione, scrittura,
+    lettura), quindi un `timeout=N` può valere `2N` sommando una connessione lenta a una lettura lenta — la stessa
+    misura che in `vicinanza.py` ha portato a `asyncio.wait_for`. Il budget dichiarato (`ONYX_CHAT_TIMEOUT_S`) è
+    quello della **coppia** di chiamate, perché è il tempo che il chiamante aspetta davvero.
+
+    Ogni guasto — timeout, errore HTTP, corpo non JSON — diventa un `Guasto`: la decisione sullo status è di chi
+    chiama, qui non si solleva nulla (§9.1, «mai eccezione al chiamante»).
+    """
+    intestazioni = _intestazioni(configurazione_chat, email)
+
+    async def scambio() -> Conversazione | Guasto:
+        async with httpx.AsyncClient(timeout=configurazione_chat.timeout_s, headers=intestazioni) as client:
+            identificatore = sessione_id
+            if identificatore is None:
+                creazione = await client.post(
+                    f"{configurazione_chat.base_url}/chat/create-chat-session",
+                    json={"persona_id": configurazione_chat.persona_id, "description": None, "project_id": None},
+                )
+                creazione.raise_for_status()
+                identificatore = (creazione.json() or {}).get("chat_session_id")
+                if not identificatore:
+                    return Guasto(DETAIL_RISPOSTA_NON_LEGGIBILE)
 
             invio = await client.post(
                 f"{configurazione_chat.base_url}/chat/send-chat-message",
                 json={
-                    "chat_session_id": session_id,
+                    "chat_session_id": identificatore,
                     "message": messaggio,
                     "stream": False,
-                    # -1 = nessun messaggio padre: la sessione è appena nata, quindi la domanda è la prima.
-                    "parent_message_id": -1,
+                    # -1 = nessun messaggio padre: la prima domanda della conversazione. Nei turni successivi è il
+                    # `message_id` del turno dell'assistente precedente, ed è ciò che dà il contesto.
+                    "parent_message_id": parent_message_id if parent_message_id is not None else -1,
                 },
             )
             invio.raise_for_status()
@@ -373,7 +535,15 @@ async def _conversa(
         testo = _testo_della_risposta(corpo)
         if testo is None:
             return Guasto(DETAIL_RISPOSTA_NON_LEGGIBILE)
-        return Conversazione(testo, fonte_dal_corpo(corpo, datetime.now(tz=ZoneInfo(FUSO_ITALIANO))))
+        return Conversazione(
+            testo,
+            fonte_dal_corpo(corpo, datetime.now(tz=ZoneInfo(FUSO_ITALIANO))),
+            riferimenti_dal_corpo(corpo),
+            sessione_id=identificatore,
+            # Il `message_id` del turno **dell'assistente**: è il padre del turno successivo. Se Onyx non lo
+            # restituisce, si resta senza padre e il turno dopo riparte da -1 — degrada, non inventa un id.
+            messaggio_id=_id_messaggio(corpo),
+        )
 
     try:
         return await asyncio.wait_for(scambio(), timeout=configurazione_chat.timeout_s)
@@ -386,32 +556,21 @@ async def _conversa(
         return Guasto(DETAIL_CHAT_NON_DISPONIBILE)
 
 
-@router.post(
-    "/chat",
-    operation_id="op_chat",
-    summary="Pone una domanda all'assistente della rete e riceve la risposta con la sua fonte (V3). "
-    "L'operatore resta dentro Trasi: Onyx non vede il browser.",
-    tags=["op"],
-)
-async def op_chat(
-    corpo: MessaggioIn, sess: SessioneOperatore = Depends(sessione_corrente)
-) -> dict[str, Any]:
-    """POST /op/chat `{messaggio}` → 200 `{risposta, fonte}`; 401 senza sessione; 422 su dati personali; 503 se la chat non è configurata o Onyx non risponde.
+async def prepara_invio(sess: SessioneOperatore, messaggio: str) -> tuple[ConfigurazioneChat, str]:
+    """I tre controlli che **ogni** via della chat fa, nell'ordine dichiarato: PII → configurazione → identità.
 
-    L'ordine dei controlli è deliberato: **prima** ciò che dipende solo dalla richiesta (PII: un messaggio con un
-    telefono non deve arrivare al provider, e non deve nemmeno dipendere dalla configurazione), **poi** la
-    configurazione (token, identità della Casa), **infine** la rete. Un 503 su token mancante non deve nascondere un
-    422 su un dato personale — altrimenti l'operatore correggerebbe il testo solo dopo che qualcuno ha messo a posto
-    il PAT.
+    Esiste perché le due vie della chat (`POST /op/chat`, a un colpo solo, e `POST /op/conversazioni/{id}/messaggi`,
+    multi-turno) devono rifiutare le stesse cose nello stesso ordine: duplicare la sequenza significherebbe che un
+    giorno una delle due accetta un telefono, e il difetto starebbe in quale delle due copie è stata aggiornata.
 
-    I due guasti della chat sono distinti e lo restano: «Onyx non risponde» (rete, timeout, errore HTTP) e «Onyx ha
-    risposto qualcosa che non contiene un testo» sono due diagnosi diverse per chi legge il messaggio, e collassarle
-    in un solo `detail` renderebbe indistinguibile un container spento da una risposta vuota del modello.
+    **Prima** il PII, che dipende solo dalla richiesta: un messaggio con un telefono non deve arrivare al provider, e
+    non deve nemmeno dipendere dalla configurazione. **Poi** la configurazione (token, identità della Casa).
+    **Infine** — nel chiamante — la rete. Un 503 su token mancante non deve nascondere un 422 su un dato personale:
+    altrimenti l'operatore correggerebbe il testo solo dopo che qualcuno ha messo a posto il PAT.
 
-    Nessuna scrittura nel dominio: la chat legge un'identità e inoltra. L'audit non c'entra (V4 riguarda le scritture)
-    e il messaggio non viene conservato da Trasi: l'unica memoria è quella di Onyx, a retention dichiarata.
+    Solleva il `422`/`503` dichiarato; non tocca il database oltre la lettura dell'identità.
     """
-    pii.rifiuta_se_presente({"messaggio": corpo.messaggio})
+    pii.rifiuta_se_presente({"messaggio": messaggio})
 
     configurazione_chat = configurazione()
     if not configurazione_chat.token:
@@ -420,12 +579,41 @@ async def op_chat(
     email = await email_onyx_della_casa(sess.casa_id)
     if not email:
         raise errore(503, DETAIL_CASA_SENZA_IDENTITA)
+    return configurazione_chat, email
+
+
+@router.post(
+    "/chat",
+    operation_id="op_chat",
+    summary="Pone una domanda all'assistente della rete e riceve la risposta con la sua fonte (V3) e i "
+    "riferimenti alle entità citate. L'operatore resta dentro Trasi: Onyx non vede il browser.",
+    tags=["op"],
+)
+async def op_chat(
+    corpo: MessaggioIn, sess: SessioneOperatore = Depends(sessione_corrente)
+) -> dict[str, Any]:
+    """POST /op/chat `{messaggio}` → 200 `{risposta, fonte, riferimenti}`; 401 senza sessione; 422 su dati personali; 503 se la chat non è configurata o Onyx non risponde.
+
+    L'ordine dei controlli è quello di `prepara_invio` (PII → configurazione → identità), e la rete viene per ultima.
+
+    I due guasti della chat sono distinti e lo restano: «Onyx non risponde» (rete, timeout, errore HTTP) e «Onyx ha
+    risposto qualcosa che non contiene un testo» sono due diagnosi diverse per chi legge il messaggio, e collassarle
+    in un solo `detail` renderebbe indistinguibile un container spento da una risposta vuota del modello.
+
+    `riferimenti` è la lista delle entità citate dalla risposta (`[{tipo, id, nome}]`): la via a un colpo solo non ha
+    una conversazione in cui salvarli, ma chi la chiama li vuole — sono ciò che decide se mostrare le azioni sulla
+    risposta (§4.1.2). Lista vuota, mai `None`.
+
+    Nessuna scrittura nel dominio: la chat legge un'identità e inoltra. L'audit non c'entra (V4 riguarda le scritture)
+    e il messaggio non viene conservato da Trasi: l'unica memoria è quella di Onyx, a retention dichiarata.
+    """
+    configurazione_chat, email = await prepara_invio(sess, corpo.messaggio)
 
     esito = await _conversa(configurazione_chat, corpo.messaggio, email)
     if isinstance(esito, Guasto):
         raise errore(503, esito.detail)
 
-    return {"risposta": esito.testo, "fonte": esito.fonte}
+    return {"risposta": esito.testo, "fonte": esito.fonte, "riferimenti": esito.riferimenti}
 
 
 def monta(applicazione: FastAPI) -> None:
@@ -446,11 +634,18 @@ __all__ = [
     "DETAIL_CHAT_NON_DISPONIBILE",
     "DETAIL_RISPOSTA_NON_LEGGIBILE",
     "FONTE_NON_DICHIARATA",
+    "PREFISSI_RIFERIMENTO",
     "ConfigurazioneChat",
     "Conversazione",
     "Guasto",
     "MessaggioIn",
+    "_conversa",
+    "apri_sessione",
+    "configurazione",
+    "email_onyx_della_casa",
     "monta",
     "op_chat",
+    "prepara_invio",
+    "riferimenti_dal_corpo",
     "router",
 ]
