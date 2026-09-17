@@ -105,12 +105,29 @@ END $$;
 DO $$
 DECLARE n integer; owner text; colonne text; mancanti text;
 BEGIN
+  -- **Le tabelle ATTESE, non il numero totale.** Prima qui c'era `count(*) <> 20`, e il README §7
+  -- (lezione 6) dice esattamente perché è sbagliato: «i test che asseriscono conteggi esatti si
+  -- rompono quando un operatore migliora un dato … o diventano rossi che si impara a ignorare».
+  -- Misurato il 2026-09-17: una sessione sorella ha applicato `db/021_conversazioni.sql` (tabelle
+  -- `conversazione`, `turno`) al database CONDIVISO, e questo test è diventato rosso senza che **nulla**
+  -- dello schema atteso fosse cambiato — le 20 tabelle c'erano tutte, più 2. Un rosso che non segnala
+  -- un difetto è il rumore che fa ignorare il rosso vero.
+  --
+  -- L'asserzione giusta è che le tabelle del contratto **esistano** e che abbiano le colonne chiave
+  -- (il controllo già sotto, riga per riga). Così il test resta verde quando lo schema **cresce** —
+  -- che è l'evoluzione prevista, non una regressione — e rosso quando una tabella del contratto
+  -- **sparisce** o perde una colonna, che è la cosa che deve intercettare.
+  SELECT string_agg(v.i, ', ') INTO mancanti FROM (VALUES
+    ('casa'),('luogo'),('evento'),('opportunita'),('richiesta'),('proposta'),('audit'),('parametro'),
+    ('ruolo_casa'),('identita_onyx'),('fonte'),('fonte_run'),('flusso_run'),
+    -- le 6 delle schede !NEW: login operatore (db/013), attrezzoteca (db/014), chat interna (db/015)
+    ('credenziale_casa'),('sessione'),('tentativo_login'),('oggetto'),('movimento'),('messaggio'),
+    ('scheda_servizio')
+  ) AS v(i)
+  WHERE NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'trasi' AND tablename = v.i);
+  IF mancanti IS NOT NULL THEN RAISE EXCEPTION 'FAIL O05 — tabelle attese mancanti in schema trasi: %', mancanti; END IF;
+
   SELECT count(*) INTO n FROM pg_tables WHERE schemaname = 'trasi';
-  -- 20 tabelle: le 13 di B1, `flusso_run` (B4) e le 6 delle schede !NEW — credenziale_casa,
-  -- sessione, tentativo_login (login operatore, db/013), oggetto, movimento (attrezzoteca, db/014),
-  -- messaggio (chat interna, db/015). Il numero cresce con l'evoluzione del sistema: il test verifica
-  -- che lo schema sia quello atteso **oggi**, non che sia rimasto quello di B1.
-  IF n <> 20 THEN RAISE EXCEPTION 'FAIL O05 — tabelle in schema trasi: %, attese 20', n; END IF;
 
   SELECT pg_get_userbyid(nspowner) INTO owner FROM pg_namespace WHERE nspname = 'trasi';
   IF owner <> 'trasi_owner' THEN RAISE EXCEPTION 'FAIL O05 — owner dello schema trasi = %, atteso trasi_owner', owner; END IF;
@@ -145,7 +162,7 @@ BEGIN
   WHERE NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='trasi' AND indexname=v.i AND indexdef LIKE '%USING gist%');
   IF mancanti IS NOT NULL THEN RAISE EXCEPTION 'FAIL O05 — indici non GIST: %', mancanti; END IF;
 
-  RAISE NOTICE 'PASS O05 — schema trasi owner trasi_owner · 14 tabelle · colonne chiave presenti · richiesta senza campi per il cittadino · 6 indici (2 GIST)';
+  RAISE NOTICE 'PASS O05 — schema trasi owner trasi_owner · % tabelle (tutte le 20 attese presenti) · colonne chiave presenti · richiesta senza campi per il cittadino · 6 indici (2 GIST)', n;
 END $$;
 
 -- O06 · vincoli del dominio: vocabolario chiuso, CHECK esito/destinazione, motivazione ≤ 80, uid_ical ----
