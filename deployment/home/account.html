@@ -13,8 +13,8 @@
      `struttura.css`. Struttura dello scheletro: la sotto-navigazione è una fascia di parole, e la
      vista è una sola alla volta. */
   .acc-sottonav { display: flex; flex-wrap: wrap; gap: calc(var(--shell-passo) * 3); margin: calc(var(--shell-passo) * 5) 0; padding-bottom: calc(var(--shell-passo) * 3); border-bottom: 1px solid var(--bordo-tenue, #C9C3B6); }
-  .acc-sottonav a { display: inline-flex; align-items: center; min-height: var(--shell-bersaglio); color: var(--azione); }
-  .acc-sottonav a[aria-current="true"] { font-weight: 700; color: var(--mare-notte); }
+  .acc-sottonav a { display: inline-flex; align-items: center; min-height: var(--shell-bersaglio); padding: 0 calc(var(--shell-passo) * 3); color: var(--azione); }
+  .acc-sottonav a[aria-current="page"] { font-weight: 700; color: var(--mare-notte); background: var(--superficie-incassata); }
   .acc-coda { margin: calc(var(--shell-passo) * 5) 0; }
   .acc-vista { min-height: 12rem; }
   .acc-attesa, .acc-guasto { color: var(--testo-tenue); margin: 0; }
@@ -84,9 +84,9 @@
            mai rosso, nessun imperativo, nessuna scadenza. Distingue DUE fatti diversi, e la
            distinzione è il punto (gate G-05): le proposte che questa Casa può decidere, e quelle che
            la riguardano ma la cui decisione è di altri (l'AT). -->
-      <div class="acc-coda filetto" id="acc-coda" hidden></div>
+      <div class="acc-coda filetto" id="acc-coda" role="status" aria-live="polite" hidden></div>
 
-      <div class="acc-vista" id="acc-vista" aria-live="polite">
+      <div class="acc-vista" id="acc-vista">
         <p class="acc-attesa">Lettura in corso…</p>
       </div>
     </main>

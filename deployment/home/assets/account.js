@@ -32,7 +32,7 @@
     var voci = nav.querySelectorAll("a");
     for (var i = 0; i < voci.length; i++) {
       var suo = (voci[i].getAttribute("href") || "").replace(/^#/, "");
-      if (suo === nome) voci[i].setAttribute("aria-current", "true");
+      if (suo === nome) voci[i].setAttribute("aria-current", "page");
       else voci[i].removeAttribute("aria-current");
     }
   }
@@ -104,6 +104,11 @@
           var avvio = AVVII[nome];
           if (typeof avvio === "function") {
             try { avvio(vista); } catch (e) { /* un errore di una sezione non abbatte la pagina */ }
+          }
+          var titolo = vista.querySelector("h2");
+          if (titolo) {
+            titolo.setAttribute("tabindex", "-1");
+            titolo.focus();
           }
         });
       })
