@@ -26,8 +26,8 @@ all'accesso.
 ## Vincoli non negoziabili (valgono anche per il design)
 
 - **WCAG 2.1 AA**: contrasto testo ≥ 4,5:1, focus sempre visibile, tutto da tastiera, base ≥ 16 px.
-- **Zero dipendenze esterne**: nessun CDN, nessun font remoto, nessuna richiesta a domini terzi. Il font Commissioner è incluso nell'asset locale `assets/CommissionerVF.ttf`.
-- **Peso**: la pagina reale resta leggera nel codice; il font locale aggiunge circa 1 MB al primo caricamento e usa `font-display: swap`.
+- **Zero dipendenze esterne**: nessun CDN, nessun font remoto e nessun carattere aggiuntivo da scaricare; il testo usa lo stack di sistema.
+- **Peso**: la pagina reale resta leggera nel codice e non scarica un font dedicato.
 - **Nessun dato personale**: l'unica cosa conservata è lo slug della Casa nel browser.
 - **Italiano semplice**, nessun imperativo verso le persone.
 
@@ -100,7 +100,7 @@ vivono in filetti, fondi e marchio. Il testo usa le varianti profonde (`--mare-p
 (#06405A). **Un solo colore di sfondo** per la pagina e uno per la testata: non ce ne sono altri.
 Nessun rosso, da nessuna parte: in Trasi nulla è un allarme rivolto a una persona.
 
-**Tipografia.** Il carattere dell'interfaccia è **Commissioner**, incluso localmente come variabile (`assets/CommissionerVF.ttf`) e seguito da uno stack di sistema come fallback. Base 16 px, scala breve (15 · 16 · 17 · 18 · 20 · 22 · 28 · 36). Pesi 400 / 600 / 700, niente leggeri. Il monospaziato di sistema è riservato alle **etichette di provenienza**, perché sono stringhe da citare e si devono poter confrontare carattere per carattere. Il marchio «TRASI» è tipografico, con 0,12 em di spaziatura; il logo «Case di Quartiere» è in **Janna LT Bold** e resta un'immagine.
+**Tipografia.** Il carattere dell'interfaccia usa lo **stack di sistema**. Base 16 px, scala breve (15 · 16 · 17 · 18 · 20 · 22 · 28 · 36). Pesi 400 / 600 / 700, niente leggeri. Il monospaziato di sistema è riservato alle **etichette di provenienza**, perché sono stringhe da citare e si devono poter confrontare carattere per carattere. Il marchio «TRASI» è tipografico, con 0,12 em di spaziatura; il logo della rete resta un'immagine.
 
 **Sfondi.** Nessuna immagine di sfondo, nessun gradiente, nessuna texture, nessun pattern. La carta
 calda e il bianco fanno tutto il lavoro. L'unica immagine della pagina è il logo della rete.
@@ -237,7 +237,7 @@ colonna di lettura, fascia di stato, piede sulla privacy.
 
 ## Caveat
 
-- **Font del marchio.** «Case di Quartiere» è composto in **Janna LT Bold**, che il manuale distribuisce come file da installare e che non è disponibile come webfont libero. Il logo resta quindi un'immagine PNG estratta dal manuale. Il logotipo «TRASI» e il testo dell'interfaccia usano Commissioner, distribuito localmente; Janna resta confinato al logo immagine.
+- **Font del marchio.** «Case di Quartiere» è composto in **Janna LT Bold**, che il manuale distribuisce come file da installare e che non è disponibile come webfont libero. Il logo resta quindi un'immagine PNG estratta dal manuale. Il testo dell'interfaccia usa lo stack di sistema; Janna resta confinato al logo immagine.
 - **Loghi come PNG, non SVG.** Nel PDF i loghi sono immagini raster: l'estrazione conserva la
   massima risoluzione disponibile (795×331 per la versione a colori). Se esiste il file vettoriale
   originale, è meglio.
