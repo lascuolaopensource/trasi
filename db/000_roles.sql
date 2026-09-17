@@ -67,6 +67,12 @@ GRANT casa_santaspazio, casa_molo12, casa_erranti, casa_buscicchio, casa_sanbao,
   TO shim_rw;
 REVOKE ti FROM shim_rw;
 
+-- 3b) `automazioni`: membro di `rete` (NOINHERIT non serve a nulla qui: INHERIT=true — la membership
+-- serve allo stesso fine di `shim_rw`, cioè il `SET LOCAL ROLE` per **leggere** i report che ha scritto:
+-- la policy `rep_sel` di db/024 ammette `rete`, non `automazioni`; misurato il 17/09/2026: il ciclo
+-- mensile contava zero righe anche a INSERT riusciti).
+GRANT rete TO automazioni;
+
 -- 4) Privilegi di schema -----------------------------------------------------
 -- USAGE: tutti i ruoli client devono poter nominare gli oggetti dello schema.
 GRANT USAGE ON SCHEMA trasi TO
