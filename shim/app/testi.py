@@ -34,7 +34,7 @@ from fastapi.responses import HTMLResponse
 from .auth import SessioneOperatore, sessione_corrente
 from .badge import NOTA_ORARI_ASSENTI, badge_esterna, badge_kb, nome_fonte
 from .contratto import prefisso_path
-from .db import Sessione, parametri, parametro_int, sessione, slug_casa_da_identita
+from .db import Sessione, parametri, parametro_int, risolvi_slug_casa, sessione, slug_casa_da_identita
 from .errori import errore
 from .operazioni import dichiarazione
 from .settings import get_settings
@@ -142,9 +142,10 @@ async def oggi(
     # la nota nell'helper), e un 422 farebbe dichiarare all'assistente un guasto che non esiste.
     riga = await sess.fetchrow(SQL_OGGI, slug)
     if riga is None:
-        slug_identita = await slug_casa_da_identita(sess)
-        if slug_identita and slug_identita != slug:
-            riga = await sess.fetchrow(SQL_OGGI, slug_identita)
+        # Prima il nome della Casa come lo scrive il modello («San Bao»), poi la Casa dell'operatore.
+        alternativo = await risolvi_slug_casa(sess, slug) or await slug_casa_da_identita(sess)
+        if alternativo and alternativo != slug:
+            riga = await sess.fetchrow(SQL_OGGI, alternativo)
     if riga is None:
         raise errore(404, "Casa non presente fra quelle accessibili a questo ruolo")
 

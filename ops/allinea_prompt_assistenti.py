@@ -45,11 +45,17 @@ SEZIONI: list[tuple[str, str]] = [
     (
         # Difetto: l'assistente rispondeva «di quale Casa parliamo?» senza chiamare il tool,
         # perché non sapeva che la Casa è determinata dall'account.
+        # Secondo difetto (2026-09-17): la regola «NON indicare `casa`» gli impediva di leggere
+        # le altre Case — l'operatore di POP chiedeva gli eventi di San Bao e riceveva i propri.
         "IDENTITÀ E CASA",
         """
 IDENTITÀ E CASA — leggi prima di rispondere:
 La Casa di Quartiere è determinata dall'account con cui l'operatore ha fatto accesso: la conosci già, non devi chiederla.
-Quando chiami `vicino_a`, `eventi_oggi` e `oggi`, NON indicare il parametro `casa`: lo shim usa automaticamente quella dell'operatore.
+Quando chiami `vicino_a` e `eventi_oggi`, NON indicare il parametro `casa` se l'operatore parla della SUA Casa:
+lo shim la usa automaticamente e la risposta porta il suo nome in `casa` — **etichetta la risposta con quel campo**,
+non con il nome citato nella domanda.
+Se invece l'operatore chiede di un'ALTRA Casa (per nome o slug), chiama `eventi_oggi` con `casa=<slug>` (santa-spazio, molo12, erranti, buscicchio, san-bao, minimus, pop, bozzano, dream, tuturano):
+è ammesso e necessario — il tool legge il calendario di qualunque Casa della rete, l'auto-uso è solo un default.
 Non chiedere mai «di quale Casa parliamo?»: rispondi con i tuoi strumenti.
 """,
     ),
@@ -111,6 +117,25 @@ Riporta i numeri **solo** come li dà lo strumento: il campo `n_label` («375»,
 mascherati secondo le regole della rete — non calcolare, non sommare, non stimare nulla che il risultato non dica.
 Un mese senza richieste arriva come `ambiti: []`: dillo («mese senza richieste registrate»), non è un guasto.
 """,
+    ),
+]
+
+# Frasi di versioni precedenti delle sezioni, da sostituire: il marcatore della sezione c'è già,
+# quindi il controllo «manca la sezione» non le vedrebbe. Ogni voce: (testo vecchio, testo nuovo).
+SOSTITUZIONI: list[tuple[str, str]] = [
+    (
+        "Quando chiami `vicino_a`, `eventi_oggi` e `oggi`, NON indicare il parametro `casa`: lo shim usa automaticamente quella dell'operatore.",
+        "Quando chiami `vicino_a` e `eventi_oggi`, NON indicare il parametro `casa` se l'operatore parla della SUA Casa:\n"
+        "lo shim la usa automaticamente e la risposta porta il suo nome in `casa` — **etichetta la risposta con quel campo**,\n"
+        "non con il nome citato nella domanda.\n"
+        "Se invece l'operatore chiede di un'ALTRA Casa (per nome o slug), chiama `eventi_oggi` con `casa=<slug>` (santa-spazio, molo12, erranti, buscicchio, san-bao, minimus, pop, bozzano, dream, tuturano):\n"
+        "è ammesso e necessario — il tool legge il calendario di qualunque Casa della rete, l'auto-uso è solo un default.",
+    ),
+    (
+        # Il modello scriveva `casa=\"San Bao\"` (nome) e lo shim ripiegava sulla Casa dell'operatore:
+        # gli slug elencati tolgono l'ambiguità.
+        "chiama `eventi_oggi` con `casa=<slug>`:",
+        "chiama `eventi_oggi` con `casa=<slug>` (santa-spazio, molo12, erranti, buscicchio, san-bao, minimus, pop, bozzano, dream, tuturano):",
     ),
 ]
 
@@ -206,20 +231,23 @@ def main(argv: list[str] | None = None) -> int:
         prompt = persona.get("system_prompt") or ""
 
         assenti = [testo for marcatore, testo in SEZIONI if _manca(marcatore, prompt)]
-        if not assenti:
+        da_sostituire = [(v, n) for v, n in SOSTITUZIONI if v in prompt]
+        if not assenti and not da_sostituire:
             print(f"  {persona_id} {nome}: già completo ({len(prompt)} caratteri)")
             continue
 
-        mancanti_totali += len(assenti)
+        mancanti_totali += len(assenti) + len(da_sostituire)
         nuovi = ", ".join(t.strip().splitlines()[0][:40] for t in assenti)
         if opzioni.dry_run:
-            print(f"  {persona_id} {nome}: aggiungerebbe {len(assenti)} sezioni → {nuovi}")
+            print(f"  {persona_id} {nome}: aggiungerebbe {len(assenti)} sezioni → {nuovi}; sostituirebbe {len(da_sostituire)} frasi")
             continue
 
+        for vecchio, nuovo in da_sostituire:
+            prompt = prompt.replace(vecchio, nuovo)
         for testo in assenti:
             prompt = prompt.rstrip() + "\n" + testo
         _richiesta(f"/persona/{persona_id}", cookie, metodo="PATCH", corpo=_patch_body(persona, prompt.strip()))
-        print(f"  {persona_id} {nome}: aggiornato (+{len(assenti)} sezioni, {len(prompt)} caratteri)")
+        print(f"  {persona_id} {nome}: aggiornato (+{len(assenti)} sezioni, {len(da_sostituire)} frasi sostituite, {len(prompt)} caratteri)")
 
     # Verifica finale: rilegge dal server e dice se qualcosa manca ancora. Un aggiornamento
     # dichiarato riuscito ma non persistito è esattamente il difetto che questo script previene.

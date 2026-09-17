@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, Query
 
 from .badge import badge_kb, nome_fonte
 from .contratto import meta
-from .db import Sessione, dipendenza_sessione, parametri, slug_casa_da_identita
+from .db import Sessione, dipendenza_sessione, parametri, risolvi_slug_casa, slug_casa_da_identita
 from .errori import errore
 from .schemi import (
     ItemEvento,
@@ -169,11 +169,10 @@ async def eventi_oggi(
     slug = (casa or "").strip() or await slug_casa_da_identita(sess)
     if not slug:
         raise errore(422, "parametri non ammessi — casa: obbligatoria per un ruolo senza Casa (es. rete)")
-    # Uno slug inesistente non è un errore se l'operatore ha una Casa propria (v. `routes_geo`).
+    # Il modello scrive il nome («San Bao») più spesso dello slug: si prova a riconoscerlo. Solo se non è una
+    # Casa riconoscibile si ripiega su quella dell'operatore (v. `routes_geo`), com'era prima.
     if await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
-        slug_identita = await slug_casa_da_identita(sess)
-        if slug_identita:
-            slug = slug_identita
+        slug = await risolvi_slug_casa(sess, slug) or await slug_casa_da_identita(sess) or slug
 
     riferimento = data or oggi_locale()
     # Il parametro è un `date`, non una stringa ISO: `$2::date` fa dedurre ad asyncpg il tipo del parametro, e una

@@ -47,7 +47,7 @@ STRUMENTO = "trasi_shim"
 MARCATORE = "TRASI — strumenti della rete delle Case di Quartiere"
 SEZIONE = f"""
 {MARCATORE}:
-Sei dentro Trasi, la piattaforma della rete delle Case di Quartiere di Brindisi. Chi ti scrive è un operatore di una Casa; la sua Casa è determinata dall'account, non chiederla.
+Sei dentro Trasi, la piattaforma della rete delle Case di Quartiere di Brindisi. Chi ti scrive è un operatore di una Casa; la sua Casa è determinata dall'account, non chiederla. Per la SUA Casa non passare il parametro `casa`; se nomina UN'ALTRA Casa («gli eventi di San Bao»), passa `casa` con il suo slug: santa-spazio, molo12, erranti, buscicchio, san-bao, minimus, pop, bozzano, dream, tuturano. Le Case si leggono tutte; si scrive solo nella propria.
 Per eventi, luoghi, orari, servizi e proposte della rete usa SEMPRE gli strumenti `trasi_shim`: `eventi_oggi`, `vicino_a`, `cerca_luogo`, `oggi`, `crea_evento`, `proponi_modifica`, `approva_proposta`, `biglietto`.
 Se l'operatore ti chiede di aggiungere un evento della sua Casa (titolo, giorno, ora), chiama SUBITO `crea_evento`: non chiedere conferma prima, non «memorizzarlo nelle note», non inventare eventi. L'evento esiste solo se lo strumento risponde con un `evento_id`.
 Se ti dice che qualcosa è cambiato (chiusura, orario, servizio nuovo), chiama `proponi_modifica`.
@@ -100,12 +100,19 @@ def main(argv: list[str] | None = None) -> int:
     prompt_attuale: str | None = config.get("system_prompt")
     base = prompt_attuale if prompt_attuale is not None else config["default_system_prompt"]
 
+    # La sezione Trasi sta sempre in coda: se il marcatore c'è, tutto ciò che segue è la versione
+    # precedente e va sostituito per intero. Così un cambiamento del testo qui arriva al server,
+    # e una seconda esecuzione con lo stesso testo non scrive nulla.
+    indice = base.find(MARCATORE)
+    corpo_base = base[:indice].rstrip() if indice >= 0 else base.rstrip()
+    prompt_voluto = corpo_base + "\n" + SEZIONE
     manca_strumento = id_shim not in tool_ids
-    manca_sezione = MARCATORE not in base
+    manca_sezione = indice < 0
+    sezione_diversa = indice >= 0 and base.strip() != prompt_voluto.strip()
     print(f"strumento {STRUMENTO} (id {id_shim}): {'MANCA' if manca_strumento else 'presente'}")
-    print(f"sezione «{MARCATORE}»: {'MANCA' if manca_sezione else 'presente'}")
+    print(f"sezione «{MARCATORE}»: {'MANCA' if manca_sezione else ('DA AGGIORNARE' if sezione_diversa else 'presente')}")
 
-    if not (manca_strumento or manca_sezione):
+    if not (manca_strumento or manca_sezione or sezione_diversa):
         print("già allineato.")
         return 0
     if opzioni.dry_run:
@@ -115,14 +122,14 @@ def main(argv: list[str] | None = None) -> int:
     corpo: dict = {}
     if manca_strumento:
         corpo["tool_ids"] = tool_ids + [id_shim]
-    if manca_sezione:
-        corpo["system_prompt"] = base.rstrip() + "\n" + SEZIONE
+    if manca_sezione or sezione_diversa:
+        corpo["system_prompt"] = prompt_voluto
     _richiesta("/admin/default-assistant", chiave, metodo="PATCH", corpo=corpo)
 
     # Verifica riletta dal server: un PATCH accettato ma non persistito è il difetto da escludere.
     dopo = _richiesta("/admin/default-assistant/configuration", chiave)
     ok_strumento = id_shim in dopo["tool_ids"]
-    ok_sezione = MARCATORE in (dopo.get("system_prompt") or "")
+    ok_sezione = (dopo.get("system_prompt") or "").strip() == prompt_voluto.strip()
     print(f"verifica: strumento {'OK' if ok_strumento else 'ASSENTE'} · sezione {'OK' if ok_sezione else 'ASSENTE'}")
     if not (ok_strumento and ok_sezione):
         return 1

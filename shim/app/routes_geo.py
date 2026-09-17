@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, Query
 
 from .badge import nome_fonte
 from .contratto import meta
-from .db import Sessione, dipendenza_sessione, parametri, parametro_int, slug_casa_da_identita
+from .db import Sessione, dipendenza_sessione, parametri, parametro_int, risolvi_slug_casa, slug_casa_da_identita
 from .errori import errore
 from .schemi import FonteEsterna, ItemVicinanza, RispostaVicinoA
 from .settings import get_settings
@@ -153,15 +153,15 @@ async def vicino_a(
             "parametri non ammessi — casa: obbligatoria per un ruolo senza Casa (es. rete); indicare lo slug",
         )
 
-    # Una sola lettura della Casa. Se lo slug richiesto non esiste e l'operatore ha una Casa sua, si
-    # riprova con quella: così il controllo di esistenza è la query che serve alla risposta e non una
-    # seconda query da tenere allineata.
+    # Una sola lettura della Casa. Se lo slug richiesto non esiste, prima si prova a riconoscere la Casa dal
+    # nome («San Bao» → `san-bao`: è come la scrive il modello); solo se non è una Casa e l'operatore ne ha una
+    # sua, si riprova con quella. Così il controllo di esistenza è la query che serve alla risposta.
     riga_casa = await sess.fetchrow(SQL_CASA, slug)
     if riga_casa is None:
-        slug_identita = await slug_casa_da_identita(sess)
-        if slug_identita and slug_identita != slug:
-            riga_casa = await sess.fetchrow(SQL_CASA, slug_identita)
-            slug = slug_identita
+        alternativo = await risolvi_slug_casa(sess, slug) or await slug_casa_da_identita(sess)
+        if alternativo and alternativo != slug:
+            riga_casa = await sess.fetchrow(SQL_CASA, alternativo)
+            slug = alternativo
     if riga_casa is None:
         raise errore(422, f"parametri non ammessi — casa: nessuna Casa di Quartiere con slug «{slug}»")
 
