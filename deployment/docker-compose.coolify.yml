@@ -1,0 +1,82 @@
+# Trasi — override per deploy su Coolify (host «giorgio», broolify.lascuolaopensource.org).
+#
+# Perché esiste questo file
+#   Il compose principale è scritto per l'host onice (LXC Onyx): porta TUTTO in
+#   loopback (127.0.0.1:5432, :8001, :8081, …) perché lì il tunnel Cloudflare
+#   parla con Caddy sulle sue porte host. Su Coolify quel modello non vale:
+#   - Traefik (coolify-proxy) pubblica i servizi per label Docker; le porte host
+#     pubblicate su 127.0.0.1 collidono tra ambiente di produzione e anteprime PR
+#     (un solo host, più worktree → stesso HOST_PORT_DB due volte = errore).
+#   - Coolify instrada con i nomi DNS di rete (docker_compose_domains), non con
+#     le porte host.
+# Questo file **override** le sole chiavi che cambiano; il resto del contratto
+# (immagini, healthcheck, limiti di memoria, reti) resta quello del compose
+# principale, e le regole invarianti B0 restano valide lì dove si applica.
+#
+# Uso (Coolify lo fa da solo con docker_compose_custom_start_command):
+#   docker compose -f docker-compose.yml -f docker-compose.coolify.yml up -d
+#
+# Cosa cambia:
+#   1. NESSUNA `ports:` su host: l'ingresso passa solo da coolify-proxy (Traefik)
+#      via label; il tunnel Cloudflare arriva a Traefik su :80/:443.
+#   2. Il servizio `caddy` (ingresso unico B6) NON parte: su Coolify l'ingresso
+#      è Traefik, e Caddy sarebbe un secondo proxy in conflitto sulla rete.
+#      La Home statica resta servita, ma da Traefik → caddy è sostituito da un
+#      servizio `home` (nginx statico) con lo stesso contenuto di ./home.
+#   3. `onyx_net` diventa opzionale: su giorgio non c'è Onyx, e una rete
+#      `external` mancante blocca l'intero compose. L'export KB (F3) e la chat
+#      dello shim che parlano con Onyx funzionano solo dove Onyx c'è — è una
+#      dipendenza dichiarata, non un guasto (come ONYX_CHAT_TOKEN vuoto).
+#   4. Niente `include` di automazioni nel raw parsing di Coolify: lo start
+#      command esplicito decide cosa portare su.
+
+services:
+  # ---- dati: Postgres+PostGIS senza porta host (Traefik non la pubblica) ----
+  db_trasi:
+    ports: !reset []
+
+  # ---- shim: interno alla rete, raggiunto via Traefik → shim:8000 ----
+  shim:
+    ports: !reset []
+
+  # ---- nocodb: idem, via Traefik → nocodb:8080 ----
+  nocodb:
+    ports: !reset []
+
+  # ---- metabase: idem, via Traefik → metabase:3000 ----
+  metabase:
+    ports: !reset []
+
+  # ---- activepieces: idem, via Traefik → activepieces:80 ----
+  activepieces:
+    ports: !reset []
+
+  # ---- ingresso: su Coolify Traefik fa da proxy, Caddy non serve ----
+  caddy: !reset null
+
+  # ---- Home statica: servita da nginx (stesso contenuto di ./home) ----
+  home:
+    image: nginx:1.25.5-alpine
+    restart: unless-stopped
+    mem_limit: 64m
+    volumes:
+      - ./home:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [trasi_net]
+
+# La rete Onyx non esiste su giorgio: qui solo trasi_net (stessa firma del
+# compose principale, così l'unione resta deterministica).
+networks:
+  trasi_net:
+    name: trasi_net
+    driver: bridge
