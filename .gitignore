@@ -43,6 +43,7 @@ flussi/evidenze/alert/
 .omp/run/
 .omp/cache/
 .omp/agent/
+.orca/
 .claude/settings.local.json
 
 # ---------------------------------------------------------------- sistema
