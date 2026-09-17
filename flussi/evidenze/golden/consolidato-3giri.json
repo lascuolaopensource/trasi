@@ -1,0 +1,346 @@
+{
+  "data": "2026-09-17 21:25",
+  "giri_per_domanda": 3,
+  "domande": 37,
+  "turni": 111,
+  "totale": {
+    "pass": 16,
+    "parziale": 17,
+    "fail": 4
+  },
+  "casi": {
+    "G-01": {
+      "esito": "parziale",
+      "giri": [
+        "pass",
+        "pass",
+        "fail"
+      ],
+      "coerente": false
+    },
+    "G-02": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-03": {
+      "esito": "parziale",
+      "giri": [
+        "fail",
+        "fail",
+        "parziale"
+      ],
+      "coerente": false
+    },
+    "G-04": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-05": {
+      "esito": "parziale",
+      "giri": [
+        "fail",
+        "pass",
+        "pass"
+      ],
+      "coerente": false
+    },
+    "G-06": {
+      "esito": "parziale",
+      "giri": [
+        "pass",
+        "fail",
+        "fail"
+      ],
+      "coerente": false
+    },
+    "G-10": {
+      "esito": "parziale",
+      "giri": [
+        "parziale",
+        "pass",
+        "pass"
+      ],
+      "coerente": false
+    },
+    "G-11": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-12": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-13": {
+      "esito": "parziale",
+      "giri": [
+        "pass",
+        "parziale",
+        "pass"
+      ],
+      "coerente": false
+    },
+    "G-14": {
+      "esito": "parziale",
+      "giri": [
+        "pass",
+        "parziale",
+        "parziale"
+      ],
+      "coerente": false
+    },
+    "G-15": {
+      "esito": "parziale",
+      "giri": [
+        "parziale",
+        "pass",
+        "pass"
+      ],
+      "coerente": false
+    },
+    "G-16": {
+      "esito": "parziale",
+      "giri": [
+        "pass",
+        "fail",
+        "fail"
+      ],
+      "coerente": false
+    },
+    "G-17": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-18": {
+      "esito": "parziale",
+      "giri": [
+        "parziale",
+        "parziale",
+        "fail"
+      ],
+      "coerente": false
+    },
+    "G-19": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-20": {
+      "esito": "fail",
+      "giri": [
+        "fail",
+        "fail",
+        "fail"
+      ],
+      "coerente": true
+    },
+    "G-21": {
+      "esito": "fail",
+      "giri": [
+        "fail",
+        "fail",
+        "fail"
+      ],
+      "coerente": true
+    },
+    "G-22": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-30": {
+      "esito": "parziale",
+      "giri": [
+        "pass",
+        "pass",
+        "fail"
+      ],
+      "coerente": false
+    },
+    "G-31": {
+      "esito": "parziale",
+      "giri": [
+        "pass",
+        "parziale",
+        "pass"
+      ],
+      "coerente": false
+    },
+    "G-32": {
+      "esito": "parziale",
+      "giri": [
+        "parziale",
+        "parziale",
+        "parziale"
+      ],
+      "coerente": true
+    },
+    "G-33": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-40": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-41": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-42": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-43": {
+      "esito": "fail",
+      "giri": [
+        "fail",
+        "fail",
+        "fail"
+      ],
+      "coerente": true
+    },
+    "G-44": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-50": {
+      "esito": "parziale",
+      "giri": [
+        "parziale",
+        "parziale",
+        "pass"
+      ],
+      "coerente": false
+    },
+    "G-51": {
+      "esito": "parziale",
+      "giri": [
+        "parziale",
+        "parziale",
+        "pass"
+      ],
+      "coerente": false
+    },
+    "G-52": {
+      "esito": "parziale",
+      "giri": [
+        "parziale",
+        "parziale",
+        "parziale"
+      ],
+      "coerente": true
+    },
+    "G-53": {
+      "esito": "parziale",
+      "giri": [
+        "parziale",
+        "pass",
+        "parziale"
+      ],
+      "coerente": false
+    },
+    "G-60": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-61": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-62": {
+      "esito": "fail",
+      "giri": [
+        "fail",
+        "fail",
+        "fail"
+      ],
+      "coerente": true
+    },
+    "G-63": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    },
+    "G-64": {
+      "esito": "pass",
+      "giri": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "coerente": true
+    }
+  }
+}
