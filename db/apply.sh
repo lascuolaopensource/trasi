@@ -57,12 +57,17 @@ psql_owner() {
 #   * 016 dopo 014 (viste attrezzoteca) e dopo 005 (colonna `aggiornato_ts`).
 # La 020 (registro `flusso_run` di B4) resta applicabile a parte: `flussi/provisiona.sh` e
 # l'entrypoint del container `automazioni` la applicano da soli, e non serve allo shim.
+# La 026 (canale monitoraggio PA, US-4) gira per ultima: presuppone `report`/`commento` (024, 025),
+# pgcrypto (013), i ruoli `rete`/`ti`/`automazioni` (000) e il ruolo `pa` (aggiunto in 000).
+# 026_attrezzoteca_chat e 026_report_pa condividono il numero: entrambe idempotenti (IF NOT EXISTS),
+# l'ordine fra loro è indifferente; 028/029 (gruppo Processi) chiudono.
 ORDER=(000_roles.sql 001_schema.sql 002_rls.sql 003_parametri.sql 004_views.sql
        005_rls_proposta.sql 010_seed_case.sql 011_seed_fonti.sql 012_seed_luoghi.sql
        013_credenziali.sql 014_attrezzoteca.sql 015_messaggi.sql
        006_fn_proposte.sql 016_viste_new.sql 007_dash.sql 008_eventi.sql
        021_conversazioni.sql 022_statistiche.sql 023_sessione.sql
-       024_report.sql 025_campi_processi.sql 026_attrezzoteca_chat.sql 028_fasce_cittadino.sql 029_persone_casa.sql)
+       024_report.sql 025_campi_processi.sql 026_attrezzoteca_chat.sql 026_report_pa.sql
+       028_fasce_cittadino.sql 029_persone_casa.sql)
 
 # filtri opzionali da riga di comando (prefissi)
 FILTERS=("$@")

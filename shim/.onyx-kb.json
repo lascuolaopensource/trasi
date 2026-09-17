@@ -18,5 +18,7 @@
   "pat_id": 2,
   "pat_var": "ONYX_TRASI_KB_API_KEY",
   "created": "2026-09-15",
+  "documenti_cc_pair_id": 110,
+  "documenti_connector_name": "Trasi KB (documenti esterni)",
   "note": "Identificativi Onyx della KB Trasi (B2-ONX-07/B2-ONX-04/B2-ONX-05). cc_pair_id alimenta F3 (POST /onyx-api/ingestion). tool_id e document_set_id alimentano i 4 assistenti. Nessun segreto qui: la PAT sta in deployment/.env (mode 600)."
 }

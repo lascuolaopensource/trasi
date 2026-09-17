@@ -14,6 +14,14 @@ Tre avvisi:
    della Casa** dell'evento (recapito da `trasi.v_flusso_recapiti`): la scheda è sua e la decisione
    di aggiornarla è sua. **Sola segnalazione**: nessuna scrittura sul dominio, mai — il flusso legge
    la vista e compone l'avviso, punto.
+4. **Report osservatorio approvati, non ancora notificati alla PA** — da `trasi.v_report_da_notificare`
+   (US-4): il report resta una **bozza** dal ciclo del giorno 3 finché l'operatore referente non lo
+   approva dalla dashboard (`trasi.approva_report`, sicurezza definita all'interno del DB); questo
+   step avverte il recapito `[P] email_report_pa` che il report approvato **è disponibile nella
+   dashboard PA** e marca l'invio con `trasi.marca_report_inviato(id)`. Se il parametro è vuoto, il
+   messaggio va su file e la scelta è dichiarata (stessa filosofia degli invii senza SMTP). La vista
+   filtra `inviato_pa_ts IS NULL`: un report notificato non viene rinotificato, e l'idempotenza di
+   questo avviso è nel **marcatore di stato**, non nel confronto di contenuto.
 
 **V6 — i messaggi dicono chi decide, non impartiscono compiti.** I quattro campi sono *cosa è stato
 osservato · su quale evidenza · cosa si potrebbe fare · chi decide*, e nessun verbo imperativo entra
@@ -55,6 +63,7 @@ from comune import (  # noqa: E402
     CAMPI_V6,
     FlussoErrore,
     apri_run,
+    esegui_sql,
     leggi,
     log,
     parametro_int,
@@ -92,6 +101,10 @@ class Messaggio:
     oggetto: str
     campi: dict[str, str] = field(default_factory=dict)
     righe: list[str] = field(default_factory=list)
+    #: L'id del report, per i messaggi del passo «report osservatorio approvato → PA» (US-4): è
+    #: ciò che `marca_report_inviato` riceve dopo l'invio riuscito. Resta `None` per gli altri
+    #: avvisi, perché nessun altro messaggio marca una transizione di stato.
+    report_id: int | None = None
 
     def righe_elenco(self) -> list[str]:
         """L'elenco, troncato al numero di righe che lascia il messaggio entro `MAX_RIGHE`.
@@ -414,6 +427,85 @@ def messaggi_eventi_dati_mancanti() -> list[Messaggio]:
     return messaggi
 
 
+# --------------------------------------------------------- report osservatorio approvati → PA (US-4)
+
+
+def _report_da_notificare() -> list[dict]:
+    """I report osservatorio approvati non ancora segnalati alla PA (vista del contract db/026)."""
+    return leggi(
+        "SELECT id, mese, approvato_ts FROM trasi.v_report_da_notificare ORDER BY mese"
+    )
+
+
+def _recapito_pa() -> str:
+    """Il recapito del parametro `[P] email_report_pa`; vuoto = modalità file dichiarata.
+
+    Chiave assente → la funzione SQL del parametro risponde NULL (db/003: nessuna eccezione), e il
+    flusso non deve inventare un indirizzo: il file è il modo in cui il messaggio resta leggibile.
+    """
+    from comune import uno
+
+    return uno("SELECT trasi.p_text('email_report_pa') AS v", "v").strip()
+
+
+def messaggi_report_pa() -> list[Messaggio]:
+    """Un messaggio per report approvato: «è disponibile nella dashboard PA». Chi decide ha deciso.
+
+    Il destinatario è il recapito del parametro dedicato — non `v_flusso_destinatari`: altrimenti
+    l'avviso arriverebbe all'AT, che è **chi ha approvato** e non chi deve sapere. Con parametro
+    vuoto il messaggio è comunque composto e va su **file**: il run dichiara il modo, non lo nasconde,
+    e `marca_report_inviato` scatta lo stesso — un report che non compare più in vista perché
+    marcato non deve rinotificarsi ogni mattina in attesa di un recapito.
+    """
+    da_notificare = _report_da_notificare()
+    if not da_notificare:
+        return []
+    destinatario = _recapito_pa()  # vuoto → il ramo d'invio scrive su file e lo dichiara
+
+    messaggi: list[Messaggio] = []
+    for riga in da_notificare:
+        mese = str(riga["mese"])[:7]  # '2026-09-01' → '2026-09'
+        messaggi.append(
+            Messaggio(
+                a=destinatario,
+                report_id=int(riga["id"]),
+                oggetto=f"Trasi · report osservatorio {mese} approvato — disponibile in dashboard PA",
+                campi={
+                    "cosa_osservato": (
+                        f"Il report mensile dell'osservatorio di rete del mese {mese} risulta "
+                        "approvato dall'operatore referente ed è consultabile nella dashboard PA."
+                    ),
+                    "evidenza": (
+                        "vista trasi.v_report_da_notificare: report di ambito osservatorio con "
+                        f"stato «approvato» (approvato il {str(riga['approvato_ts'])[:10]})"
+                    ),
+                    "cosa_si_potrebbe_fare": (
+                        "Il report è leggibile nella dashboard PA e da lì si può esportare in un "
+                        "documento stampabile; la lettura di approfondimento resta disponibile "
+                        "dalla stessa pagina."
+                    ),
+                    "chi_decide": (
+                        "L'approvazione del report è dell'operatore referente della rete; la "
+                        "pubblicazione e l'uso del dato restano alla PA."
+                    ),
+                },
+                righe=[(f"  · report osservatorio {mese}: leggibile nella dashboard PA, "
+                        "con i conteggi già k-anonimi")],
+            )
+        )
+    return messaggi
+
+
+def marca_report_inviato(id_report: int) -> None:
+    """Segna la notifica avvenuta: `trasi.marca_report_inviato` (SECURITY DEFINER, con audit).
+
+    Mai `UPDATE` diretto su `trasi.report`: UPDATE non è grantato per costruzione (db/024, il report
+    non si corregge) e la transizione di stato è un atto tracciato, non un campo che un flusso
+    riscrive. È lo stesso criterio per cui lo stato `approvato` lo scrive `trasi.approva_report`.
+    """
+    esegui_sql(f"SELECT trasi.marca_report_inviato({int(id_report)})\n")
+
+
 # --------------------------------------------------------------------------- invio
 
 
@@ -535,6 +627,7 @@ def esegui(*, dry_run: bool, giorni: int | None = None, come_json: bool = False)
     mittente = os.environ.get("TRASI_SMTP_FROM", "trasi@trasi.local")
 
     try:
+        messaggi_pa = [] if dry_run else messaggi_report_pa()
         messaggi = messaggi_proposte(gg) + messaggi_coerenza() + messaggi_eventi_dati_mancanti()
     except FlussoErrore as errore:
         # L'errore va **anche su stderr**, non solo in `flusso_run`: un run che fallisce senza dire
@@ -547,9 +640,10 @@ def esegui(*, dry_run: bool, giorni: int | None = None, come_json: bool = False)
     # --- il presidio V6, prima di qualunque invio ------------------------------------------
     # Se un template contenesse un verbo imperativo, l'alert non parte. Un avviso che impartisce
     # viola V6, e V6 è un invariante: meglio nessun avviso (e un run in errore, che qualcuno vedrà)
-    # che un avviso che dice a una Casa cosa deve fare.
+    # che un avviso che dice a una Casa cosa deve fare. Vale anche per la notifica alla PA: il
+    # presidio non conosce eccezioni di destinatario.
     violazioni: list[str] = []
-    for messaggio in messaggi:
+    for messaggio in messaggi + messaggi_pa:
         trovati = messaggio.verifica()
         if trovati:
             violazioni.append(f"{messaggio.oggetto}: {', '.join(trovati)}")
@@ -580,6 +674,40 @@ def esegui(*, dry_run: bool, giorni: int | None = None, come_json: bool = False)
     modo = "smtp" if config else "file"
     quando = datetime.now()
     recapiti: list[dict] = []
+
+    # --- notifica dei report osservatorio approvati alla PA (US-4) ---------------------------
+    # Il messaggio va al recapito `[P] email_report_pa`; con il parametro vuoto il messaggio va su
+    # **file**, perché il messaggio esiste anche senza un indirizzo e il run dichiara il modo. La
+    # marcatura (`marca_report_inviato`) segue l'invio riuscito: la vista `v_report_da_notificare`
+    # filtra `inviato_pa_ts IS NULL`, quindi un report notificato non torna più in elenco — e
+    # l'idempotenza è nel marcatore di stato, non nel confronto del contenuto.
+    pa_dettaglio = {"notificati": 0, "report": []}
+    if messaggi_pa:
+        for messaggio in messaggi_pa:
+            recapito = {"a": messaggio.a or "(file: parametro email_report_pa vuoto)",
+                        "oggetto": messaggio.oggetto,
+                        "impronta": _impronta(messaggio)}
+            try:
+                if config and messaggio.a:
+                    invia_smtp(messaggio, mittente, config)
+                    recapito["modo"] = "smtp"
+                else:
+                    percorso = invia_file(messaggio, quando)
+                    recapito["modo"] = "file"
+                    recapito["file"] = str(percorso)
+            except FlussoErrore as errore:
+                log(f"  notifica PA «{messaggio.oggetto}»: invio fallito ({errore})")
+                recapito["errore"] = str(errore)
+            else:
+                pa_dettaglio["notificati"] += 1
+                # Invio riuscito: la marcatura chiude il ciclo. Se la funzione SQL mancasse (db/026
+                # non ancora applicato) l'errore ferma il run: un report *notificato ma non marcato*
+                # ripartirebbe a ogni esecuzione, e questo è un guasto da vedere, non da tacere.
+                if messaggio.report_id is not None:
+                    marca_report_inviato(messaggio.report_id)
+            pa_dettaglio["report"].append(recapito)
+
+    esito_pa_errore = any("errore" in r for r in pa_dettaglio["report"])
 
     # --- deduplicazione: lo stesso avviso non parte due volte -------------------------------
     # Un gestore che riceve «1 proposta in attesa» ogni mattina per la stessa proposta smette di
@@ -616,16 +744,18 @@ def esegui(*, dry_run: bool, giorni: int | None = None, come_json: bool = False)
             log(f"  {messaggio.a}: invio fallito ({errore})")
             recapiti.append({"a": messaggio.a, "modo": modo, "errore": str(errore)})
 
-    esito = "parziale" if any("errore" in r for r in recapiti) else "ok"
+    esito = "parziale" if (any("errore" in r for r in recapiti) or esito_pa_errore) else "ok"
     log(f"alert: {len(recapiti)} messaggi via {modo} · {len(soppressi)} soppressi (già inviati) · "
+        f"report PA notificati: {pa_dettaglio['notificati']}/{len(messaggi_pa)} · "
         f"giorni_attesa={gg} · esito={esito}")
     for recapito in recapiti:
         log(f"  → {recapito['a']} ({recapito['modo']}): {recapito['oggetto']}")
     for s in soppressi:
         log(f"  · {s['a']}: soppresso ({s['motivo']})")
 
-    run.chiudi(esito, len(recapiti), modo=modo, giorni_attesa=gg, recapiti=recapiti,
-               soppressi=soppressi, campi_v6=list(CAMPI_V6))
+    run.chiudi(esito, len(recapiti) + pa_dettaglio["notificati"],
+               modo=modo, giorni_attesa=gg, recapiti=recapiti,
+               report_pa=pa_dettaglio, soppressi=soppressi, campi_v6=list(CAMPI_V6))
     registra_run(run)
     return 0 if esito == "ok" else 1
 

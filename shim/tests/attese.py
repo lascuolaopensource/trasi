@@ -5,8 +5,9 @@ documento con un'attesa scritta a mano, invece di rileggere la stessa fonte e co
 cambia senza una decisione, questi test falliscono.
 """
 
-# Le operazioni congelate: `operationId`, metodo HTTP, percorso. Decisa l'aggiunta di `crea_evento` (scrittura
-# diretta dell'evento da parte dell'operatore-gestore, opzione A approvata dal progetto).
+# Le operazioni del contratto: `operationId`, metodo HTTP, percorso. Decisa l'aggiunta di `crea_evento` (scrittura
+# diretta dell'evento da parte dell'operatore-gestore, opzione A approvata dal progetto) e, il 16/09/2026, di
+# `cerca_opendata` e `leggi_dataset` (i cataloghi CKAN che il connettore `web` di Onyx non può indicizzare).
 OPERAZIONI_ATTESE: tuple[tuple[str, str, str], ...] = (
     ("cerca_luogo", "get", "/cerca_luogo"),
     ("eventi_oggi", "get", "/eventi_oggi"),
@@ -25,6 +26,8 @@ OPERAZIONI_ATTESE: tuple[tuple[str, str, str], ...] = (
     # che la chat non aveva — l'assistente non poteva rispondere a «quante richieste quest'anno?».
     ("statistiche", "get", "/statistiche"),
     ("cerca_web", "get", "/cerca_web"),
+    ("cerca_opendata", "get", "/cerca_opendata"),
+    ("leggi_dataset", "get", "/leggi_dataset"),
     # La scheda !NEW 5 (attrezzoteca) entra nel contratto: ricerca inventario, prenotazione anticipata
     # (con conflitti dichiarati in ritorno, V6), spostamento con conferma della ricevente, statistiche
     # d'uso. La scheda !NEW 5 dei dialoghi di servizio, 2026-09-17.

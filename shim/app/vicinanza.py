@@ -374,17 +374,21 @@ def item_kb(
     di fiducia, non parte del nome (vedi `badge.py`).
     """
     fonte = nome_fonte(riga["fonte_autorita"], riga["fonte_nome"])
+    # Le colonne numeriche arrivano dall'asyncpg come `Decimal` (la query le arrotonda con ::numeric):
+    # con `indirizzo` il centro cambia e la distanza va ricalcolata in Python, dove `Decimal - float`
+    # solleva TypeError (misurato live 17/09: 500 su vicino_a?indirizzo). Si normalizza qui, una volta.
+    lat_r, lon_r = float(riga["lat"]), float(riga["lon"])
     distanza = riga.get("distanza_m")
     if distanza is None:
-        distanza = distanza_m(casa_lat, casa_lon, riga["lat"], riga["lon"])
+        distanza = distanza_m(casa_lat, casa_lon, lat_r, lon_r)
     orari_testo = riga["orari_testo"]
     return {
         "provenienza": "kb",
         "nome": riga["nome"],
         "tipo": tipo,
         "indirizzo": riga["indirizzo"] or "",
-        "lat": riga["lat"],
-        "lon": riga["lon"],
+        "lat": lat_r,
+        "lon": lon_r,
         "distanza_m": round(float(distanza), 1),
         "aperto_adesso": riga["aperto_adesso"],
         "orari_testo": orari_testo,
@@ -463,3 +467,77 @@ def adesso_locale() -> datetime:
 def oggi_locale() -> date:
     """La data locale: `eventi_oggi` con fuso Europe/Rome deve cambiare giorno a mezzanotte italiana."""
     return adesso_locale().date()
+
+
+# --- Nominatim ------------------------------------------------------------------------------------------------
+
+# La finestra geografica entro cui Nominatim cerca (`viewbox` = lon min, lat max, lon max, lat min; `bounded=1` la
+# rende un vincolo e non una preferenza). Copre la provincia di Brindisi: «via Appia 120» esiste in decine di comuni
+# italiani, e senza confine il primo risultato sarebbe plausibile e sbagliato — un dato inventato con l'aria di quello
+# giusto, che è l'errore peggiore per uno strumento di sportello.
+VIEWBOX_BRINDISI = "17.30,40.90,18.20,40.30"
+
+
+@dataclass
+class EsitoGeocodifica:
+    """L'esito di una geocodifica: uno stato dichiarato, mai un'eccezione.
+
+    `centro` è `None` sia quando la fonte non ha risposto (`stato` ≠ `ok`) sia quando ha risposto **che l'indirizzo non
+    esiste** (`stato == "ok"`): il chiamante distingue i due casi dallo stato, perché il primo è un guasto della fonte da
+    dichiarare in `fonti_esterne` e il secondo è un parametro sbagliato (422).
+    """
+
+    stato: str
+    ms: int
+    centro: dict[str, Any] | None = None
+
+
+async def geocodifica(indirizzo: str, *, url: str, user_agent: str, timeout_s: float) -> EsitoGeocodifica:
+    """`indirizzo` → `{lat, lon, etichetta}` con Nominatim, entro la viewbox di Brindisi. Non solleva mai (§9.1).
+
+    `limit=1`: si prende il miglior risultato e lo si **mostra** (`etichetta` = `display_name`) invece di scegliere fra
+    alternative — è l'operatore che riconosce se il posto è quello, e lo shim non deve fingere una certezza che non ha.
+    Lo User-Agent identificativo è obbligatorio per la policy d'uso di Nominatim, come per Overpass. Il budget di tempo è
+    imposto con `wait_for` per la stessa ragione di `_chiama_overpass`: i timeout di `httpx` sono per fase.
+    """
+    inizio = time.monotonic()
+    parametri_ricerca = {
+        "q": indirizzo,
+        "format": "jsonv2",
+        "limit": 1,
+        "countrycodes": "it",
+        "viewbox": VIEWBOX_BRINDISI,
+        "bounded": 1,
+    }
+
+    async def tentativo() -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=timeout_s, headers=_intestazioni(user_agent)) as client:
+            risposta = await client.get(f"{url.rstrip('/')}/search", params=parametri_ricerca)
+            risposta.raise_for_status()
+            corpo = risposta.json()
+            return corpo if isinstance(corpo, list) else []
+
+    try:
+        risultati = await asyncio.wait_for(tentativo(), timeout=timeout_s)
+    except (TimeoutError, httpx.TimeoutException):
+        return EsitoGeocodifica(stato=STATO_TIMEOUT, ms=_trascorsi_ms(inizio))
+    except (httpx.HTTPError, ValueError):
+        return EsitoGeocodifica(stato=STATO_ERRORE, ms=_trascorsi_ms(inizio))
+
+    ms = _trascorsi_ms(inizio)
+    for risultato in risultati:
+        try:
+            centro = {
+                "lat": float(risultato["lat"]),
+                "lon": float(risultato["lon"]),
+                "etichetta": str(risultato.get("display_name") or indirizzo),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+        return EsitoGeocodifica(stato=STATO_OK, ms=ms, centro=centro)
+    return EsitoGeocodifica(stato=STATO_OK, ms=ms)
+
+
+def _trascorsi_ms(inizio: float) -> int:
+    """I millisecondi trascorsi da `inizio` (`time.monotonic()`), come dichiarati in `fonti_esterne[].ms`."""
+    return int((time.monotonic() - inizio) * 1000)

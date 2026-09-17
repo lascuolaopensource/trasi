@@ -44,6 +44,9 @@ umask 077
   printf 'export ONYX_API_URL=%s\n'           "${ONYX_API_URL:-}"
   printf 'export ONYX_TRASI_KB_API_KEY=%s\n'  "${ONYX_TRASI_KB_API_KEY:-}"
   printf 'export ONYX_KB_CC_PAIR_ID=%s\n'     "${ONYX_KB_CC_PAIR_ID:-}"
+  # Il cc_pair dei documenti esterni (fonti_documenti.py, domenica 01:30): nel container
+  # `shim/.onyx-kb.json` non c'è (l'immagine copia solo `flussi/`), quindi l'unica via è l'ambiente.
+  printf 'export ONYX_DOCUMENTI_CC_PAIR_ID=%s\n' "${ONYX_DOCUMENTI_CC_PAIR_ID:-}"
   printf 'export TRASI_SMTP_HOST=%s\n'        "${TRASI_SMTP_HOST:-}"
   printf 'export TRASI_SMTP_PORT=%s\n'        "${TRASI_SMTP_PORT:-}"
   printf 'export TRASI_SMTP_USER=%s\n'        "${TRASI_SMTP_USER:-}"

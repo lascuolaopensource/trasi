@@ -123,6 +123,21 @@ class ItemVicinanza(BaseModel):
     badge: str
 
 
+class CentroVicinanza(BaseModel):
+    """`vicino_a?indirizzo=…`: il punto geocodificato da cui si è misurata la distanza, con l'etichetta di Nominatim.
+
+    L'`etichetta` è il `display_name` così com'è: è ciò che l'operatore legge per accorgersi che «via Appia 120» è
+    stata risolta nel posto giusto, e riscriverla toglierebbe proprio il dettaglio che serve a quel controllo.
+    """
+
+    model_config = TIPO_STRETTO
+
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    etichetta: str
+    fonte: str
+
+
 class RispostaVicinoA(BaseModel):
     """Luoghi vicini alla Casa, ordinati per gruppo (prima `kb`, poi `esterna`), apertura e distanza."""
 
@@ -133,6 +148,7 @@ class RispostaVicinoA(BaseModel):
     raggio_m: int = Field(ge=1)
     items: list[ItemVicinanza]
     fonti_esterne: list[FonteEsterna]
+    centro: CentroVicinanza | None = None
 
 
 class ItemStatisticheAmbito(BaseModel):

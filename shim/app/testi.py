@@ -55,7 +55,7 @@ from .vicinanza import (
 # percorso, contratto congelato); `router_op` è la via del browser dell'operatore (cookie di sessione,
 # nessun identificatore nell'URL) e viene montato sotto `/op`. La distinzione non è formale: tenendo i
 # due router separati, nessuna route può essere valida per entrambi i canali, e la scheda evento — che
-# è per il browser — non entra nell'OpenAPI che il gate V-09 confronta con le nove operazioni.
+# è per il browser — non entra nell'OpenAPI che il gate V-09 confronta con le operazioni del contratto (dodici al 16/09/2026).
 router = APIRouter()
 router_op = APIRouter()
 

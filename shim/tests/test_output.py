@@ -1116,7 +1116,7 @@ def test_scheda_evento_e_fuori_dal_contratto_congelato(app_cliente):
     """La scheda non compare nell'OpenAPI dell'applicazione: quel documento è il contratto con Onyx (gate V-09).
 
     La scheda la chiama il browser, non il LLM, e `include_in_schema=False` è ciò che la tiene fuori dalle
-    nove operazioni congelate. Il test guarda lo schema generato dall'app — non lo YAML, che nessuno tocca
+    operazioni del contratto. Il test guarda lo schema generato dall'app — non lo YAML, che nessuno tocca
     — perché è da lì che un `include_in_schema` dimenticato farebbe divergere il contratto che Onyx
     registra. L'insieme completo delle `operationId` esposte è già verificato da
     `test_openapi_contract.py`: qui si difende l'assenza di questa, non si ripete quel confronto.

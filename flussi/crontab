@@ -1,4 +1,4 @@
-# Trasi — flussi/crontab · i quattro orari della notte (§6, §8 F3/F4/F6/F9)
+# Trasi — flussi/crontab · i quattro orari della notte (§6, §8 F3/F4/F6/F9) più un passo settimanale
 #
 # **Formato: crontab UTENTE** — cinque campi di schedulazione, poi il comando. **Nessun campo utente.**
 # Si installa come utente, e l'entrypoint del container lo fa da solo:
@@ -29,7 +29,8 @@
 #     05:00 applica + scadi    — le proposte approvate diventano dato reale, con riga di audit
 #     06:00 fonti + coerenza   — iCal (unica scrittura diretta) e change-detection HTTP (solo proposte)
 #     07:30 alert              — proposte in attesa e coerenza delle fonti, a chi decide
-#
+# e un passo **settimanale** (domenica 01:30), fuori dai sei passi di `notte.sh`:
+#     01:30 dom fonti documenti — file istituzionali (ZIP ISTAT, CSV Open Data, PDF Procura) → KB
 # L'ordine non è arbitrario ed è quello del giorno lavorativo: alle 05:00 si applica ciò che un umano
 # ha approvato ieri, alle 06:00 si guarda cosa è cambiato fuori, alle 07:30 si avvisa chi deve
 # decidere — così l'avviso delle 07:30 contiene anche ciò che la notte ha trovato.
@@ -54,6 +55,13 @@ TRASI_DB_VIA=diretta
 
 # 01:00 — F3 export KB: la KB di Onyx rispecchia v_kb_export (upsert idempotente per doc_id)
 0 1 * * *   /app/flussi/job.sh /app/flussi/export_kb.py            >> /var/log/trasi/export_kb.log 2>&1
+
+# 01:30 domenica — F4 documenti: file istituzionali (ZIP/CSV/PDF) → KB di Onyx, id `documento:<slug>`.
+# Settimanale e non notturno perché le fonti cambiano di rado (ISTAT annuale, registri regionali
+# annuali, PDF stabile) e ogni run riscarica ~2 MB: farlo ogni notte sarebbe traffico verso portali
+# pubblici senza un dato nuovo. Dopo l'export delle 01:00 — che cancella gli orfani `trasi*` e non
+# tocca `documento:*` — così la domenica la KB è completa in un'unica finestra.
+30 1 * * 0  /app/flussi/job.sh /app/flussi/fonti_documenti.py      >> /var/log/trasi/fonti_documenti.log 2>&1
 
 # 05:00 — F9 applica: proposte approvate → dato reale, con audit; poi le scadute
 0 5 * * *   /app/flussi/job.sh /app/flussi/applica.sh              >> /var/log/trasi/applica.log 2>&1

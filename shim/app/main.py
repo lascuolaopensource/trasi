@@ -32,8 +32,11 @@ from .vicinanza import FUSO
 
 logger = logging.getLogger("trasi.shim")
 
-# Le operazioni del contratto congelato. La tupla è la dichiarazione **indipendente** delle `operationId`:
+# Le operazioni del contratto. La tupla è la dichiarazione **indipendente** delle `operationId`:
 # i test la confrontano con `openapi.yaml` e con i router, e l'import fallisce se una diverge.
+# Le due operazioni open data (`cerca_opendata`, `leggi_dataset`) consumano i cataloghi CKAN in
+# allow-list (`trasi.fonte` tipo_accesso='api'): il connettore `web` di Onyx non può indicizzare
+# un'API JSON, e la memoria della rete non deve inventare un dato che un portale pubblico ha.
 FIRMA_OPERAZIONI: tuple[tuple[str, str], ...] = (
     ("cerca_luogo", "GET"),
     ("eventi_oggi", "GET"),
@@ -51,6 +54,8 @@ FIRMA_OPERAZIONI: tuple[tuple[str, str], ...] = (
     ("oggi", "GET"),
     ("statistiche", "GET"),
     ("cerca_web", "GET"),
+    ("cerca_opendata", "GET"),
+    ("leggi_dataset", "GET"),
     # La scheda !NEW 5 (attrezzoteca): ricerca inventario, prenotazione anticipata, spostamento e
     # statistiche d'uso — il contratto cresce coi dialoghi di servizio, 2026-09-17.
     ("attrezzoteca", "GET"),
@@ -154,13 +159,14 @@ def crea_app() -> FastAPI:
     applicazione.include_router(routes_lettura.router, prefix=prefisso)
     applicazione.include_router(routes_geo.router, prefix=prefisso)
 
-    # I router delle scritture e degli output sono dell'altro worker (B3ShimB) e vivono in file separati: si
-    # montano **dopo** i miei e ognuno monta il proprio `router`, così nessuno riscrive il file dell'altro. Il
-    # prefisso lo applica il loro `monta()`, derivandolo dal contratto congelato.
-    from . import scritture, testi
+    # I router delle scritture, degli output e degli open data vivono in file separati: si montano
+    # **dopo** i miei e ognuno monta il proprio `router`, così nessuno riscrive il file dell'altro.
+    # Il prefisso lo applica il loro `monta()`, derivandolo dal contratto.
+    from . import opendata, scritture, testi
 
     scritture.monta(applicazione)
     testi.monta(applicazione)
+    opendata.monta(applicazione)
 
     # --- area operatore (schede !NEW 3/5/6/7): le funzioni del browser, non di Onyx --------------
     #
@@ -243,6 +249,12 @@ def crea_app() -> FastAPI:
             applicazione.include_router(_modulo.router, prefix="/op", include_in_schema=False)
         else:
             logger.warning("router non montato: shim/app/%s.py non espone `monta` né `router`", _nome)
+    # Monitoraggio PA (US-4): il browser della PA e i tool di Onyx. Come gli altri router del browser, sta fuori
+    # dallo schema del contratto congelato (`include_in_schema=False`), e lo schema delle quattro operazioni dei
+    # tool `/v1/m/…` è in `openapi_monitoraggio.yaml`, non in quello congelato (gate V-09).
+    from . import monitoraggio
+
+    monitoraggio.monta(applicazione)
 
     @applicazione.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:
@@ -258,6 +270,7 @@ def crea_app() -> FastAPI:
         """
         inizio = time.perf_counter()
         ruolo = ""
+
         try:
             risposta = await call_next(request)
         except Exception:
