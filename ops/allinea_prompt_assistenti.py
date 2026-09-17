@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Allinea i prompt dei 4 assistenti Trasi alle sezioni obbligatorie, in modo idempotente.
 
-**Perché esiste.** Il 2026-09-16 ho trovato che solo l'assistente «Trasi Casa» aveva le due
-sezioni critiche del prompt (identità/Casa e copia-verbatim del badge). Gli altri tre no: erano
-stati creati con il blocco comune e mai aggiornati, quindi su Presidio, Rete e Staff PN gli stessi
-difetti si sarebbero ripresentati — l'assistente che chiede «di quale Casa parliamo?» e l'etichetta
-riscritta a mano con l'ora sbagliata.
+**Perché esiste.** Il 2026-09-16 ho trovato che solo l'assistente «Trasi Casa» aveva le tre
+sezioni critiche del prompt (identità/Casa, copia-verbatim del badge, ordine obbligatorio sulla
+segnalazione). Gli altri tre no: erano stati creati con il blocco comune e mai aggiornati, quindi
+su Presidio, Rete e Staff PN gli stessi difetti si sarebbero ripresentati — l'assistente che
+chiede «di quale Casa parliamo?», l'etichetta riscritta a mano con l'ora sbagliata, la proposta
+mai creata alla segnalazione di cambiamento. Il 2026-09-16 il gruppo processi ha chiesto di
+minimizzare i «non lo so» (sezione 4: solo la carta etica resta un confine netto).
 
 Aggiornare i prompt a mano, uno per uno, è ciò che ha prodotto l'incoerenza: il primo PATCH ne ha
 sovrascritto uno per intero perdendo una sezione. Questo script rende l'operazione **cumulativa e
@@ -73,6 +75,27 @@ Quando l'operatore ti dice che qualcosa è cambiato (un luogo ha chiuso, un orar
 2. SOLO DOPO, se riguarda la sua Casa e la risposta indica `chat_approvabile: true`, chiedi «Vuoi che approvi ora? Sì / No»;
 3. se risponde sì, chiama `approva_proposta`.
 Non chiedere conferma **prima** di creare la proposta: chiedere «vuoi che aggiorni?» senza aver creato nulla non aggiorna niente e la segnalazione dell'operatore va persa.
+""",
+    ),
+    (
+        # Richiesta del gruppo processi (16/09): minimizzare i «non lo so». Il prompt diceva
+        # «Se nessuna fonte risponde: dichiara «non trovo informazioni su questo»» — troppo
+        # secco. Ora il modello deve degradare: KB → fonte autorizzata → rimando utile.
+        # L'unico «non lo so» pieno resta per la carta etica (valutazioni cliniche, dati
+        # personali, cose fuori dal mandato del Portierato).
+        "Il «non lo so» è solo per la carta etica",
+        """
+IL «NON LO SO» È SOLO PER LA CARTA ETICA:
+Se la KB e le fonti autorizzate non coprono la domanda, NON rispondere «non trovo informazioni» e basta.
+Degrada in modo utile, in quest'ordine:
+1. se una fonte esterna o la KB ha un dato parziale, dillo con la sua etichetta e spiega
+   in una frase cosa manca («questo orario arriva da una mappa pubblica, non ancora verificato dalla rete»);
+2. se nessuna fonte ha il dato, dai un **rimando utile**: dove può trovarlo l'operatore
+   (numero della Casa, sportello, sito del Comune, URP, servizio competente);
+3. solo la carta etica resta un confine netto: niente valutazioni cliniche, niente
+   compagnia personale, niente dati personali — lì dichiari il limite e indichi chi
+   può rispondere («il Portierato non può rispondere su questo; qui serve il medico / servizio X»).
+Spiega gli errori in italiano semplice: «lo strumento non risponde» invece di «timeout», senza codici.
 """,
     ),
 ]
@@ -149,6 +172,12 @@ def _patch_body(persona: dict, prompt: str) -> dict:
     }
 
 
+def _manca(marcatore: str, prompt: str) -> bool:
+    """Il marcatore è riconosciuto anche se il testo aggiunto l'ha normalizzato in maiuscolo
+    (es. «Il «non lo so» …» → «IL «NON LO SO» …»). Il confronto avviene sul minuscolo."""
+    return marcatore.casefold() not in prompt.casefold()
+
+
 def main(argv: list[str] | None = None) -> int:
     argomenti = argparse.ArgumentParser(description="Allinea i prompt dei 4 assistenti Trasi")
     argomenti.add_argument("--dry-run", action="store_true", help="mostra cosa farebbe, senza scrivere")
@@ -162,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         persona = _richiesta(f"/persona/{persona_id}", cookie)
         prompt = persona.get("system_prompt") or ""
 
-        assenti = [testo for marcatore, testo in SEZIONI if marcatore not in prompt]
+        assenti = [testo for marcatore, testo in SEZIONI if _manca(marcatore, prompt)]
         if not assenti:
             print(f"  {persona_id} {nome}: già completo ({len(prompt)} caratteri)")
             continue
@@ -184,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     residui = 0
     for persona_id, nome in ASSISTENTI.items():
         prompt = _richiesta(f"/persona/{persona_id}", cookie).get("system_prompt") or ""
-        assenti = [m for m, _ in SEZIONI if m not in prompt]
+        assenti = [m for m, _ in SEZIONI if _manca(m, prompt)]
         stato = "OK" if not assenti else f"MANCANO {assenti}"
         print(f"  {persona_id} {nome}: {stato}")
         residui += len(assenti)
