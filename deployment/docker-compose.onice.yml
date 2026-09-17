@@ -1,0 +1,37 @@
+# Trasi — variante onice (host LXC con Onyx).
+#
+# Perché esiste
+#   Il compose principale deve validare anche sotto il parse di Coolify (giorgio), dove la rete
+#   Onyx non esiste. Qui stanno le sole chiavi che appartengono a onice: la rete esterna
+#   `onyx_default` e le porte host pubblicate su 127.0.0.1 (lì il tunnel Cloudflare parla con
+#   Caddy su porte host; su Coolify l'ingresso è Traefik e le porte host collidono tra ambienti).
+#
+# Uso (onice):
+#   docker compose -f docker-compose.yml -f docker-compose.onice.yml --profile onice up -d db_trasi searxng
+#
+# Coolify invece usa:
+#   docker compose -f docker-compose.yml -f docker-compose.coolify.yml --profile coolify up -d
+
+services:
+  # Le porte host su 127.0.0.1 sono una scelta di onice (tunnel Cloudflare → Caddy/loopback).
+  # Rimesse qui così il compose principale è parseabile da Coolify senza collidere.
+  db_trasi:
+    ports: !override
+      - "127.0.0.1:${HOST_PORT_DB:-5432}:5432"
+  shim:
+    ports: !override
+      - "127.0.0.1:${HOST_PORT_SHIM:-8001}:8000"
+  nocodb:
+    ports: !override
+      - "127.0.0.1:${HOST_PORT_NOCODB:-8081}:8080"
+  metabase:
+    ports: !override
+      - "127.0.0.1:${HOST_PORT_METABASE:-3001}:3000"
+  activepieces:
+    ports: !override
+      - "127.0.0.1:${HOST_PORT_ACTIVEPIECES:-8082}:80"
+
+networks:
+  onyx_net:
+    name: onyx_default
+    external: true
