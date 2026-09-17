@@ -76,6 +76,14 @@ def _argomenti(operation_id: str) -> dict[str, Any]:
 
 # Dettaglio dei rifiuti che il contratto non nomina, perché non è un esempio ma un caso distinto.
 DETAIL_RUOLO_NON_CONSENTITO = "operazione non consentita al ruolo dell'operatore"
+DETAIL_RIGA_NON_DELLA_CASA = "riga non appartiene alla Casa dell'operatore"
+#: Il rifiuto di una proposta su un dato **proprio**, con la via alternativa. Il messaggio dice dove andare,
+#: non solo che non si passa di qui: `{entita}` è una delle ENTITA_DIRETTE.
+DETAIL_USA_SCRITTURA_DIRETTA = (
+    "i dati della propria Casa si scrivono direttamente (salva_dato per scheda/opportunità, crea_evento per "
+    "gli eventi, salva_orari per gli orari): una proposta su «{entita}» della propria Casa non è decidibile da "
+    "nessuno, perché operatore e gestore condividono un solo accesso per Casa"
+)
 DETAIL_DESTINAZIONE_INESISTENTE = "destinazione_id non corrisponde a un luogo della memoria della rete"
 DETAIL_CASA_INESISTENTE = "casa_id non corrisponde a una Casa della rete"
 DETAIL_ENTITA_NON_AMMESSA = (
@@ -166,6 +174,10 @@ class PayloadProposta(BaseModel):
     nome: str | None = None
     tipo: str | None = None
     indirizzo: str | None = None
+    # `categoria` esiste su `scheda_servizio` e `opportunita` (db/001) e mancava qui: senza, una
+    # proposta di nuova scheda non poteva dichiarare la categoria e `applica_proposte_approvate` la
+    # scriveva NULL. Aggiunta con la scrittura diretta (`salva_dato`), che la usa per entrambe.
+    categoria: str | None = None
     lat: float | None = Field(default=None, ge=-90, le=90)
     lon: float | None = Field(default=None, ge=-180, le=180)
     orari: OrariProposti | None = None
@@ -356,6 +368,192 @@ async def crea_evento(
     return {"evento_id": evento_id, "badge": badge}
 
 
+# --- `salva_dato` — la scrittura diretta della propria Casa -----------------------------------------------
+
+#: Le entità che una Casa scrive **direttamente** — sono le sue.
+#:
+#: La specifica del gruppo Processi (2026-09-17) è esplicita: «ogni casa/ente può modificare i propri dati,
+#: della propria casa». Operatore e gestore condividono un solo accesso per Casa, quindi la cerimonia
+#: proposta → approvazione **non ha un secondo umano a cui passare**: chiedere a qualcuno di approvare ciò che
+#: ha appena scritto l'unica identità della Casa è la definizione del vicolo cieco, ed è esattamente BUG-02.
+#:
+#: `evento` era già così (`crea_evento`, decisione S2 «opzione A»); `scheda_servizio` e `opportunita` lo
+#: diventano qui, come il piano prevedeva già (`plan.md` §7 riga 390: «scrittura diretta gestore su proprie
+#: schede/eventi/opportunità … **Ammessa** (principio 3)»).
+#:
+#: Restano al ciclo mediato le entità che **non sono della Casa**: `luogo` (il territorio), le promozioni
+#: dall'esterno, l'anagrafica della Casa in senso stretto. Lì un secondo decisore esiste davvero, e V4 fa il
+#: suo lavoro.
+ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa")
+
+#: Le colonne che `salva_dato` accetta di scrivere, per entità. Elenco chiuso: `casa_id` non c'è perché viene
+#: dall'identità (la policy lo impone comunque), e le colonne di servizio (`fonte_id`, `affidabilita`,
+#: `aggiornato_ts`) non c'è perché un dato scritto a mano da una persona ha affidabilità 3 e impronta
+#: automatica — un operatore non si dichiara «affidabile 1» né si firma.
+#:
+#: Per `casa` l'elenco è **esattamente** il privilegio che il database concede al ruolo della Casa
+#: (`db/002`: `UPDATE (orari, orari_eccezioni, orari_provvisori, email_digest)`). Non è una coincidenza da
+#: mantenere a mano: è lo stesso criterio di least-privilege visto dai due lati, e un campo in più qui
+#: produrrebbe un `42501` — cioè un rifiuto del database, non una scrittura.
+COLONNE_DIRETTE: dict[str, tuple[str, ...]] = {
+    "scheda_servizio": ("titolo", "descrizione", "categoria", "orari", "referente_ruolo", "scadenza", "url"),
+    "opportunita": ("titolo", "descrizione", "categoria", "scadenza", "url"),
+    "casa": ("orari", "orari_provvisori", "email_digest"),
+}
+
+
+class SalvaDatoIn(BaseModel):
+    """Il corpo di `salva_dato`: i campi della propria scheda/opportunità/orari, nessun `casa_id`.
+
+    Come per `crea_evento`, `casa_id` **non** è nel corpo: la Casa è quella dell'identità, e la policy
+    `scheda_ins_casa`/`opp_ins_casa` (`casa_id = casa_corrente()`) la impone anche a livello di database.
+    `extra="forbid"` è il presidio strutturale contro i dati personali (V5/§12): un campo non previsto — un
+    nome, un telefono — è un 422, non una colonna scritta per distrazione.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    entita: Literal["scheda_servizio", "opportunita", "casa"]  # type: ignore[valid-type]
+    # None = nuova entità; un id = modifica di quella esistente (che la RLS riserva alla propria Casa).
+    # Per `entita="casa"` è **sempre** None: la Casa è una sola, quella dell'identità, e non si sceglie.
+    id: int | None = Field(default=None, ge=1)
+    # I campi di `scheda_servizio`/`opportunita`. Per `casa` non si usano: si usano quelli sotto.
+    titolo: str | None = Field(default=None, min_length=1, max_length=200)
+    descrizione: str | None = None
+    categoria: str | None = None
+    orari: OrariProposti | None = None
+    referente_ruolo: str | None = None
+    scadenza: date | None = None
+    url: str | None = None
+    # I campi della Casa (solo `entita="casa"`): gli orari di apertura e i recapiti del digest.
+    orari_provvisori: bool | None = None
+    email_digest: str | None = None
+
+    @model_validator(mode="after")
+    def _coerenza(self) -> "SalvaDatoIn":
+        """Cosa si può dichiarare per ciascuna entità: un campo fuori posto è un 422, non un campo ignorato.
+
+        Senza questo, `entita="scheda_servizio"` con `orari_provvisori` verrebbe accettato e il valore
+        sparirebbe in silenzio — il tipo di scrittura che sembra riuscita e non ha fatto nulla.
+        """
+        if self.entita == "opportunita" and self.orari is not None:
+            raise ValueError("orari non si applica a «opportunita»: è una colonna di scheda_servizio")
+        if self.entita != "casa" and (self.titolo is None or not self.titolo.strip()):
+            # `titolo` è obbligatorio per scheda/opportunità ed è `NOT NULL` nello schema: senza questo
+            # controllo l'assenza diventerebbe un `NotNullViolation` tradotto in un 500, invece del 422
+            # parlante che il contratto dichiara.
+            raise ValueError(f"titolo è obbligatorio per «{self.entita}»")
+        if self.entita == "casa":
+            if self.id is not None:
+                raise ValueError("«casa» non vuole id: la Casa è quella dell'identità, un ruolo una Casa")
+            if any(v is not None for v in (self.titolo, self.descrizione, self.categoria,
+                                           self.referente_ruolo, self.scadenza, self.url)):
+                raise ValueError("«casa» accetta solo orari, orari_provvisori ed email_digest")
+        else:
+            if self.orari_provvisori is not None or self.email_digest is not None:
+                raise ValueError("orari_provvisori/email_digest si applicano solo a «casa»")
+        return self
+
+
+@router.post(
+    **_argomenti("salva_dato"),
+    status_code=201,
+)
+async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> dict[str, Any]:
+    """Crea o aggiorna un dato **della propria Casa**, scrittura diretta (specifica del gruppo Processi).
+
+    Non è una proposta, e non è una scorciatoia: è la regola. «Ogni casa/ente può modificare i propri dati,
+    della propria casa» — e un accesso solo per Casa significa che non esiste una seconda identità a cui
+    chiedere l'approvazione. Il ciclo mediato resta per ciò che **non** è della Casa (`luogo`, promozioni
+    dall'esterno), dove il secondo decisore c'è.
+
+    Tre entità, due forme:
+
+    * `scheda_servizio` / `opportunita` — `id` assente = INSERT, `id` presente = UPDATE della propria riga;
+    * `casa` — **sempre** UPDATE della riga dell'identità (`casa_corrente()`), mai INSERT: una Casa non si
+      crea dallo sportello, e `id` non è ammesso perché la Casa è quella di chi scrive, non una da scegliere.
+      Si scrivono solo gli orari e i recapiti — cioè esattamente le colonne che `db/002` concede al ruolo
+      della Casa (`UPDATE (orari, orari_eccezioni, orari_provvisori, email_digest)`).
+
+    **Chi garantisce cosa.** La RLS: `scheda_ins_casa`/`scheda_upd_casa` (e le omologhe su `opportunita` e
+    `casa`) impongono `casa_id = casa_corrente()`. La scrittura su un dato di un'altra Casa non è un errore
+    da validare qui — è una riga che Postgres non rende possibile: un `UPDATE` che non tocca righe è un
+    rifiuto (403), non un 500. La tracciabilità è dei trigger di dominio (`scrittura_00_ts` timbra
+    `aggiornato_ts` e `aggiornato_da`), quindi la scrittura è contabilizzata da `v_scritture_senza_audit`
+    come ogni altra.
+    """
+    if sess.casa_id is None:
+        raise errore(403, DETAIL_RUOLO_NON_CONSENTITO)
+
+    pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
+
+    tabella = corpo.entita
+    orari = corpo.orari.model_dump(exclude_unset=True, mode="json") if corpo.orari else None
+    # I campi inviati davvero (`exclude_unset`): una PATCH parziale non deve azzerare ciò che non nomina.
+    inviati = corpo.model_dump(exclude_unset=True)
+
+    def valore_di(nome: str) -> Any:
+        """Il valore del campo, con `orari` già convertito in dizionario (il codec `jsonb` serializza)."""
+        return orari if nome == "orari" else getattr(corpo, nome, None)
+
+    try:
+        # --- `casa`: UPDATE della propria riga, mai INSERT --------------------------------
+        if tabella == "casa":
+            assegnazioni, valori = [], []
+            for nome in COLONNE_DIRETTE["casa"]:
+                if nome in inviati:
+                    valori.append(valore_di(nome))
+                    assegnazioni.append(f"{nome} = ${len(valori)}")
+            if not assegnazioni:
+                raise errore(422, "parametri non ammessi — nessun campo da aggiornare per «casa»")
+            esito = await sess.execute(
+                f"UPDATE trasi.casa SET {', '.join(assegnazioni)} "
+                f"WHERE id = trasi.casa_corrente()",
+                *valori,
+            )
+
+        # --- `scheda_servizio` / `opportunita`: INSERT o UPDATE ------------------------------
+        elif corpo.id is None:
+            # `casa_id` dall'identità; `aggiornato_ts`/`aggiornato_da` li timbra il trigger. Le colonne
+            # scritte sono l'elenco chiuso di COLONNE_DIRETTE: nessun nome di colonna dal chiamante.
+            colonne = ["casa_id"]
+            valori = [sess.casa_id]
+            for nome in COLONNE_DIRETTE[tabella]:
+                valore = valore_di(nome)
+                if valore is not None:
+                    colonne.append(nome)
+                    valori.append(valore)
+            segnaposti = ", ".join(f"${i}" for i in range(1, len(valori) + 1))
+            nuovo_id = await sess.fetchval(
+                f"INSERT INTO trasi.{tabella} ({', '.join(colonne)}) VALUES ({segnaposti}) RETURNING id",
+                *valori,
+            )
+            return {"id": nuovo_id, "entita": tabella, "creato": True}
+
+        else:
+            assegnazioni, valori = [], []
+            for nome in COLONNE_DIRETTE[tabella]:
+                if nome in inviati:
+                    valori.append(valore_di(nome))
+                    assegnazioni.append(f"{nome} = ${len(valori)}")
+            if not assegnazioni:
+                raise errore(422, "parametri non ammessi — nessun campo da aggiornare oltre a entita e id")
+            valori.append(corpo.id)
+            esito = await sess.execute(
+                f"UPDATE trasi.{tabella} SET {', '.join(assegnazioni)} WHERE id = ${len(valori)}",
+                *valori,
+            )
+    except Exception as exc:  # noqa: BLE001 — la traduzione è il compito di `_rifiuta_violazione`
+        _rifiuta_violazione(exc)
+
+    if _righe(esito) == 0:
+        # La RLS non ha reso la riga visibile al ruolo: non è della Casa dell'operatore. Stesso criterio di
+        # `approva_proposta` — «0 righe» è un rifiuto, non un errore interno.
+        raise errore(403, DETAIL_RIGA_NON_DELLA_CASA)
+
+    return {"id": corpo.id, "entita": tabella, "creato": False}
+
+
 # --- `proponi_modifica` ---------------------------------------------------------------------------------------
 
 
@@ -402,7 +600,40 @@ async def proponi_modifica(
 
     # Filtro anti-PII su `motivazione` **e** `payload` (V5/§12): è il presidio sui *valori*, complementare al
     # presidio sui *campi* (`extra="forbid"`).
+    #
+    # **Prima** del controllo di routing qui sotto, e l'ordine è deliberato: il filtro anti-PII è un presidio di
+    # sicurezza, e un presidio di sicurezza non sta dietro a una decisione di instradamento. Se stesse dopo, un
+    # payload con un codice fiscale riceverebbe come risposta «usa `salva_dato`» — cioè il sistema
+    # **consiglierebbe** di scrivere altrove un dato personale, invece di rifiutarlo. Misurato: era l'ordine
+    # sbagliato nella prima versione, e i test `test_proponi_modifica_dato_personale_*` sono diventati rossi
+    # perché si aspettavano `dato_personale_sospetto` e ricevevano il messaggio di routing.
     pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
+
+    # --- BUG-02: i dati della PROPRIA Casa non passano di qui -------------------------------------------
+    # La specifica del gruppo Processi è che «ogni casa/ente può modificare i propri dati, della propria
+    # casa». Con un accesso solo per Casa non esiste una seconda identità a cui chiedere l'approvazione,
+    # quindi una proposta su un dato proprio nasce in un vicolo cieco: `proposto_da` è il ruolo DB (comune
+    # a operatore e gestore), la policy `no_self_approve` impedisce a quel ruolo di approvarla, e nessun
+    # altro ruolo è ammesso da `upd_client`. Misurato: **5 tipi su 12** restavano per sempre in coda.
+    #
+    # La correzione non è allentare V4 — è togliere la ragione per cui la proposta esiste: se il dato è
+    # della Casa, la Casa lo scrive **direttamente** (`salva_dato` per scheda/opportunità/orari,
+    # `crea_evento` per gli eventi). Il ciclo mediato resta per ciò che non è della Casa — `luogo`,
+    # `promuovi_esterno`, la scheda/opportunità di un'**altra** Casa — dove un secondo decisore c'è.
+    #
+    # Il rifiuto è un **422 con la via alternativa**, non un errore muto: chi chiama (l'assistente, o un
+    # operatore) deve sapere *dove* andare. Un 403 direbbe «non puoi», che è falso: puoi, per un'altra via.
+    #
+    # **`entita_id IS NULL` è il caso «nuovo dato»**: non esiste ancora una riga, quindi non c'è una Casa
+    # da confrontare e la proposta resta legittima — l'assistente segnala che *serve* una scheda nuova, e
+    # qualcuno (l'AT, o la Casa stessa via `salva_dato`) la crea. Rifiutare anche quel caso toglierebbe
+    # all'assistente la capacità di segnalare il bisogno, che è il suo compito principale (V3/V6).
+    if (
+        corpo.entita in ENTITA_DIRETTE
+        and corpo.entita_id is not None
+        and _casa_della_proposta(corpo, sess) == sess.casa_id
+    ):
+        raise errore(422, DETAIL_USA_SCRITTURA_DIRETTA.format(entita=corpo.entita))
 
     casa_proposta = _casa_della_proposta(corpo, sess)
     # `payload` così com'è stato dichiarato: solo i campi inviati (`exclude_unset`), perché un `null` esplicito

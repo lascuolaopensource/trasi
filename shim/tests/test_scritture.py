@@ -185,16 +185,84 @@ def test_registra_richiesta_categoria_fuori_vocabolario_422(app_cliente):
 
 
 def _proposta(**extra: Any) -> dict[str, Any]:
-    """Un corpo valido di `proponi_modifica`, con i campi da variare nel test."""
+    """Un corpo valido di `proponi_modifica`, con i campi da variare nel test.
+
+    **`entita='luogo'` e non `'casa'`**, e il cambio è una conseguenza della specifica del gruppo Processi
+    (2026-09-17): i dati della **propria** Casa si scrivono direttamente (`salva_dato`), quindi una proposta
+    su `casa`/`scheda_servizio`/`opportunita` della propria Casa non è più una richiesta valida — è un 422
+    con la via alternativa. Il ciclo mediato resta per ciò che non è della Casa, e `luogo` (il territorio, che
+    decide l'AT) ne è il caso tipico: è lì che una proposta ha davvero un secondo decisore.
+    """
     corpo = {
-        "tipo": "modifica_orari_casa",
-        "entita": "casa",
-        "entita_id": 5,
-        "payload": {"orari": {"lun": ["09:00", "13:00"]}},
+        "tipo": "modifica_luogo",
+        "entita": "luogo",
+        "entita_id": 16,
+        "payload": {"descrizione": "sportello chiuso il sabato"},
         "motivazione": "orario aggiornato dalla segnalazione",
     }
     corpo.update(extra)
     return corpo
+
+
+def test_proponi_modifica_su_dato_proprio_422_con_la_via_alternativa(app_cliente):
+    """Una proposta su un dato della **propria** Casa è un 422 che dice dove andare (BUG-02).
+
+    La specifica del gruppo Processi è che «ogni casa/ente può modificare i propri dati, della propria
+    casa». Con un accesso solo per Casa, operatore e gestore condividono `current_user`, quindi
+    `no_self_approve` impedisce a quel ruolo di approvare la propria proposta e `upd_client` non ammette
+    altri: **nessuno** la decide. Misurato prima della correzione: 5 tipi su 12 restavano in coda per sempre.
+
+    Il test verifica le due metà dell'invariante: che il rifiuto sia **422** (non 403: puoi, per un'altra via)
+    e che il messaggio **nomini la via alternativa** — un errore muto lascerebbe l'assistente senza modo di
+    correggersi, e sarebbe un vicolo cieco solo spostato di un livello.
+    """
+    sessione_finta = SessioneFinta(casa_id=5)
+    client = app_cliente(sessione_finta)
+
+    risposta = client.post(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/proponi_modifica",
+        headers=_intestazioni(),
+        json=_proposta(entita="scheda_servizio", tipo="modifica_scheda", entita_id=101,
+                       payload={"descrizione": "nuova descrizione"}),
+    )
+
+    assert risposta.status_code == 422, risposta.text
+    dettaglio = risposta.json()["detail"]
+    assert "salva_dato" in dettaglio, f"il rifiuto non nomina la via alternativa: {dettaglio}"
+    # Nessun INSERT tentato: il rifiuto avviene prima di toccare il database.
+    assert not [c for c in sessione_finta.eseguite if "INSERT INTO trasi.proposta" in c[0]]
+
+
+def test_proponi_modifica_su_dato_di_un_altra_casa_resta_legittima(app_cliente):
+    """La proposta resta valida quando il dato **non** è della propria Casa: lì il secondo decisore c'è.
+
+    È la metà che impedisce alla correzione di BUG-02 di diventare un divieto generale: l'AT propone la scheda
+    di una Casa, e quella proposta la decide qualcuno — `rete`/`ti` per l'approvatore `at`. Il test fissa
+    questo confine, perché è quello che distingue «il vicolo cieco è chiuso» da «le proposte sono state
+    disattivate».
+    """
+    sessione_finta = SessioneFinta(casa_id=5)
+    client = app_cliente(sessione_finta)
+
+    # `payload.casa_id = 8` (Bozzano): la proposta riguarda un'**altra** Casa, quindi non è un dato proprio.
+    risposta = client.post(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/proponi_modifica",
+        headers=_intestazioni(),
+        json=_proposta(entita="scheda_servizio", tipo="modifica_scheda", entita_id=101,
+                       payload={"descrizione": "aggiornata", "casa_id": 8}),
+    )
+
+    assert risposta.status_code == 201, risposta.text
+
+    # `entita_id` assente = «serve un dato nuovo»: non esiste una riga, quindi non c'è una Casa da
+    # confrontare. Resta legittima, ed è il caso in cui l'assistente **segnala un bisogno**.
+    risposta2 = client.post(
+        f"/v1/u/{ambiente.EMAIL_SANBAO}/proponi_modifica",
+        headers=_intestazioni(),
+        json=_proposta(entita="scheda_servizio", tipo="nuova_scheda", entita_id=None,
+                       payload={"titolo": "Sportello energia", "descrizione": "da attivare"}),
+    )
+    assert risposta2.status_code == 201, risposta2.text
 
 
 def test_proponi_modifica_non_scrive_il_dominio_e_non_sceglie_l_approvatore(app_cliente):
@@ -237,7 +305,7 @@ def test_proponi_modifica_non_scrive_il_dominio_e_non_sceglie_l_approvatore(app_
     # entrambi i casi e non copriva nulla. Il difetto era largo (44 delle 46 proposte in database avevano
     # `jsonb_typeof(payload) = 'string'`) e nessun test lo vedeva, perché le fixture scrivono il payload in
     # SQL, dove `$5::jsonb` su una stringa è la cosa giusta.
-    assert insert[0][1][4] == {"orari": {"lun": ["09:00", "13:00"]}}
+    assert insert[0][1][4] == {"descrizione": "sportello chiuso il sabato"}
     assert isinstance(insert[0][1][4], dict), "il payload deve essere un oggetto JSON, non una stringa"
 
 

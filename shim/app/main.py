@@ -31,7 +31,7 @@ from .vicinanza import FUSO
 
 logger = logging.getLogger("trasi.shim")
 
-# Le nove operazioni del contratto congelato. La tupla è la dichiarazione **indipendente** delle `operationId`:
+# Le operazioni del contratto congelato. La tupla è la dichiarazione **indipendente** delle `operationId`:
 # i test la confrontano con `openapi.yaml` e con i router, e l'import fallisce se una diverge.
 FIRMA_OPERAZIONI: tuple[tuple[str, str], ...] = (
     ("cerca_luogo", "GET"),
@@ -39,6 +39,11 @@ FIRMA_OPERAZIONI: tuple[tuple[str, str], ...] = (
     ("vicino_a", "GET"),
     ("registra_richiesta", "POST"),
     ("crea_evento", "POST"),
+    # `salva_dato` è la scrittura **diretta** della propria Casa (scheda, opportunità, orari): la
+    # specifica del gruppo Processi — «ogni casa/ente può modificare i propri dati, della propria
+    # casa» — con un accesso solo per Casa, che rende impossibile la proposta→approvazione su un dato
+    # proprio (BUG-02). Sostituisce i cinque tipi di proposta che finivano in un vicolo cieco.
+    ("salva_dato", "POST"),
     ("proponi_modifica", "POST"),
     ("approva_proposta", "POST"),
     ("biglietto", "GET"),

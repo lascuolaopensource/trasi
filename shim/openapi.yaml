@@ -426,6 +426,105 @@ paths:
           $ref: '#/components/responses/IdentitaNonRiconosciuta'
         '422':
           $ref: '#/components/responses/ParametriNonAmmessi'
+  /salva_dato:
+    post:
+      operationId: salva_dato
+      tags:
+      - kb
+      summary: 'Crea o aggiorna un dato della **propria** Casa: la scheda di un servizio, un''opportunità, o gli orari
+        della Casa. Scrittura diretta, non una proposta: la Casa scrive i propri dati. Usalo quando l''operatore
+        comunica o corregge qualcosa che riguarda la sua Casa (es. "il corso di italiano è il martedì alle 15", "siamo
+        chiusi ad agosto", "è uscito il bando del Comune"). Se il dato riguarda il **territorio** o un''altra Casa, usa
+        `proponi_modifica`: quello lo decide l''AT.'
+      requestBody:
+        required: true
+        description: 'Il dato della propria Casa. `casa_id` non è ammesso: la Casa è quella dell''identità. Per
+          `entita=casa` si scrivono solo orari e recapiti, e `id` non serve (la Casa è una).'
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - entita
+              properties:
+                entita:
+                  type: string
+                  enum:
+                  - scheda_servizio
+                  - opportunita
+                  - casa
+                  description: 'Cosa si scrive: una scheda di servizio, un''opportunità, oppure gli orari/recapiti
+                    della Casa stessa.'
+                id:
+                  type: integer
+                  minimum: 1
+                  description: 'Identificativo del dato da aggiornare. Omesso per crearne uno nuovo. Non ammesso per
+                    `entita=casa` (la Casa è quella dell''identità).'
+                titolo:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Titolo della scheda o dell'opportunità (obbligatorio per `scheda_servizio` e `opportunita`).
+                descrizione:
+                  type: string
+                  description: Descrizione breve, facoltativa. Non contenere dati personali.
+                categoria:
+                  type: string
+                  description: Categoria del servizio o dell'opportunità (es. orientamento, fiscale_isee, lavoro).
+                orari:
+                  type: object
+                  additionalProperties: false
+                  description: 'Orari settimanali: chiavi `lun`…`dom`, valore = elenco di fasce `HH:MM`; elenco vuoto
+                    = chiuso quel giorno. Vale per `scheda_servizio` e per `casa`; non per `opportunita`.'
+                  properties:
+                    lun:
+                      $ref: '#/components/schemas/FasceOrario'
+                    mar:
+                      $ref: '#/components/schemas/FasceOrario'
+                    mer:
+                      $ref: '#/components/schemas/FasceOrario'
+                    gio:
+                      $ref: '#/components/schemas/FasceOrario'
+                    ven:
+                      $ref: '#/components/schemas/FasceOrario'
+                    sab:
+                      $ref: '#/components/schemas/FasceOrario'
+                    dom:
+                      $ref: '#/components/schemas/FasceOrario'
+                referente_ruolo:
+                  type: string
+                  description: 'Ruolo di chi è referente per questa scheda (non un nome: nessun dato personale).'
+                scadenza:
+                  type: string
+                  format: date
+                  description: Data di scadenza ISO `AAAA-MM-GG`, facoltativa (es. il termine di un bando).
+                url:
+                  type: string
+                  format: uri
+                  description: URL di riferimento, facoltativo.
+                orari_provvisori:
+                  type: boolean
+                  description: 'Solo per `entita=casa`: `true` se gli orari sono ancora da confermare (il sistema lo
+                    dichiara all''operatore invece di presentarli come definitivi).'
+                email_digest:
+                  type: string
+                  format: email
+                  description: 'Solo per `entita=casa`: recapito che riceve il digest mensile. Indirizzo di servizio
+                    della Casa, non di una persona.'
+      responses:
+        '201':
+          description: Dato salvato nella memoria della rete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaSalvaDato'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
   /biglietto:
     get:
       operationId: biglietto
@@ -1084,6 +1183,30 @@ components:
           type: string
           description: 'Etichetta di provenienza già formattata, da riportare così com''è (es. "[KB · inserito dall''operatore
             · 16/09/2026 · affidabilità 3]").'
+    RispostaSalvaDato:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - entita
+      - creato
+      description: Esito del salvataggio. `creato` distingue un dato nuovo da uno aggiornato; `id` è quello della riga scritta.
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Identificativo del dato salvato (per `entita=casa`, l'identificativo della Casa dell'operatore).
+        entita:
+          type: string
+          enum:
+          - scheda_servizio
+          - opportunita
+          - casa
+          description: L'entità salvata, come dichiarata nella richiesta.
+        creato:
+          type: boolean
+          description: '`true` se il dato è stato creato, `false` se aggiornato. Per `entita=casa` è sempre `false`:
+            la Casa esiste già.'
     RispostaProponiModifica:
       type: object
       additionalProperties: false

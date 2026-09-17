@@ -225,9 +225,16 @@ BEGIN
     --  * v_da_approvare, v_scritture_senza_audit — diagnostica, non esposte a metabase_ro
     --  * v_flusso_* (B4) — servono agli alert notturni, che devono vedere tutte le Case;
     --    B5 ha rimosso `metabase_ro` dai loro GRANT proprio per non aggirare il least-privilege.
+    --  * v_report, v_commento (db/024) — **non** sono viste aggregate: espongono righe di dominio
+    --    (`report`, `commento`) e per quelle la regola è l'opposta. `v_report` porta i numeri NON
+    --    mascherati del rendiconto di una Casa, quindi la RLS deve filtrarli **per il chiamante**
+    --    (`security_invoker=true`): con `false` girerebbe come owner e ogni Casa leggerebbe i numeri
+    --    pieni delle altre, aggirando il k-anonimato di `v_confronto_case` per via laterale.
+    --    La protezione esiste solo se tutte le vie la rispettano; una via laterale la annulla.
     AND c.relname NOT IN ('v_da_approvare','v_scritture_senza_audit',
                           'v_flusso_alert_proposte','v_flusso_coerenza_fonti',
-                          'v_flusso_destinatari','v_flusso_recapiti')
+                          'v_flusso_destinatari','v_flusso_recapiti',
+                          'v_report','v_commento')
     AND NOT EXISTS (SELECT 1 FROM unnest(coalesce(c.reloptions, '{}'::text[])) o WHERE o = 'security_invoker=false');
   IF cattive IS NOT NULL THEN
     RAISE EXCEPTION 'FAIL V09 — viste senza security_invoker=false: %', cattive;

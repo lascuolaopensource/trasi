@@ -13,6 +13,10 @@ OPERAZIONI_ATTESE: tuple[tuple[str, str, str], ...] = (
     ("vicino_a", "get", "/vicino_a"),
     ("registra_richiesta", "post", "/registra_richiesta"),
     ("crea_evento", "post", "/eventi"),
+    # La scrittura diretta della propria Casa (scheda, opportunità, orari): sostituisce i cinque tipi
+    # di proposta che restavano in un vicolo cieco (operatore e gestore condividono un solo accesso per
+    # Casa, quindi nessuno poteva approvarli). Specifica del gruppo Processi, 2026-09-17.
+    ("salva_dato", "post", "/salva_dato"),
     ("proponi_modifica", "post", "/proponi_modifica"),
     ("approva_proposta", "post", "/approva_proposta"),
     ("biglietto", "get", "/biglietto"),
