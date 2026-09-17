@@ -422,10 +422,58 @@ async def op_chat(
         raise errore(503, DETAIL_CASA_SENZA_IDENTITA)
 
     esito = await _conversa(configurazione_chat, corpo.messaggio, email)
+    # Il ramo «guasto» si logga prima del raise: la traccia è best-effort e non deve far fallire la risposta,
+    # ma deve rispondere a «è successo qualcosa» anche quando l'operatore non la vede (es. sessione Onyx lenta).
     if isinstance(esito, Guasto):
+        await _log_chat_mensile(sess, "sportello", "errore", None)
         raise errore(503, esito.detail)
 
+    await _log_chat_mensile(sess, "sportello", "risposta", _fonte_log(esito))
     return {"risposta": esito.testo, "fonte": esito.fonte}
+
+
+def _fonte_log(esito: Conversazione) -> str:
+    """La fonte della risposta come valore per `chat_interazione_log.fonte`: `kb`, `esterna` o `nessuna`.
+
+    Il badge leggibile resta nella risposta al browser; qui si traduce nella forma che il database accetta,
+    perché la tabella non conserva testo (V5) e serve a contare per k-anonimato, non a ricostruire il testo.
+    """
+    if esito.fonte.startswith("[Esterna"):
+        return "esterna"
+    if esito.fonte.startswith("[KB"):
+        return "kb"
+    return "nessuna"
+
+
+async def _log_chat_mensile(
+    sess: SessioneOperatore, canale: str, esito: str, fonte: str | None
+) -> None:
+    """Traccia la conversazione in `trasi.chat_interazione_log`. Mai far fallire la risposta all'operatore.
+
+    È l'eccezione dichiarata al flusso proposte (come `messaggio`/`richiesta`): serve a contare quante volte la
+    chat è stata usata e con quale esito, senza conservare il testo.
+
+    **L'INSERT passa dalla connessione della sessione**, non da una nuova presa dal pool: la policy
+    `chatlog_ins_casa` (db/026) ammette i ruoli Casa, e il ruolo è già assunto nella transazione della richiesta.
+    Con una connessione propria il ruolo sarebbe `shim_rw`, che **non** ha policy INSERT: la riga non entrava mai
+    e restava solo un warning nel log dello shim (misurato il 17/09 con il container di prova).
+    Se il DB rifiuta la riga, il flusso continua: la traccia è contabilità, non una dipendenza della risposta.
+    """
+    try:
+        await sess.execute(
+            """
+INSERT INTO trasi.chat_interazione_log (casa_id, canale, esito, fonte)
+VALUES ($1, $2, $3, $4)
+            """,
+            sess.casa_id,
+            canale,
+            esito,
+            fonte,
+        )
+    except Exception as guasto:
+        # Il **tipo** dell'errore, mai il contenuto: la riga di log è contabilità, e una contabilità che
+        # fallisce in silenzio è una contabilità che non si può riparare.
+        logger.warning("log chat non scritto (%s: %s): la risposta resta valida", type(guasto).__name__, guasto)
 
 
 def monta(applicazione: FastAPI) -> None:

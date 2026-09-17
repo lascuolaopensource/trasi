@@ -192,6 +192,13 @@ def crea_app() -> FastAPI:
     applicazione.include_router(attrezzoteca.router, prefix="/op", include_in_schema=False)
     applicazione.include_router(messaggi.router, prefix="/op", include_in_schema=False)
 
+    # Monitoraggio PA (US-4): il browser della PA e i tool di Onyx. Come gli altri router del browser, sta fuori
+    # dallo schema del contratto congelato (`include_in_schema=False`), e lo schema delle quattro operazioni dei
+    # tool `/v1/m/…` è in `openapi_monitoraggio.yaml`, non in quello congelato (gate V-09).
+    from . import monitoraggio
+
+    monitoraggio.monta(applicazione)
+
     @applicazione.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:
         """Liveness del container: non tocca il database, così «healthy» significa «il processo risponde»."""
