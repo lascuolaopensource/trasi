@@ -376,7 +376,18 @@ async def biglietto(
                 422,
                 "luogo_id deve essere un identificativo numerico di luogo oppure un riferimento esterno «osm:node:<id>»",
             )
-        riga = await _luogo_kb(sess, int(luogo_id))
+        numero = int(luogo_id)
+        # `luogo.id` è `integer` (int4): un intero oltre il int32 (tipico: l'id di un nodo OSM passato come
+        # numero dal LLM, confondendo l'id del nodo con l'id del luogo) esplode in `asyncpg` come OverflowError
+        # prima ancora di toccare il database — un 500 invece del 422 dichiarato. Il limite è quello della
+        # colonna, non una preferenza: lo stesso numero arriva al bind di asyncpg.
+        if numero > 2147483647:
+            raise errore(
+                422,
+                "luogo_id non è un luogo della memoria: per una destinazione esterna usa la forma «osm:node:<id>» "
+                "con l'identificativo dell'URL OpenStreetMap dell'item",
+            )
+        riga = await _luogo_kb(sess, numero)
         if riga is None:
             raise errore(404, "luogo non presente nella memoria della rete")
 
