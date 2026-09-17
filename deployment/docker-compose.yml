@@ -64,14 +64,17 @@ services:
   # Va a buon fine e termina; chi ne dipende parte solo a `service_completed_successfully`.
   # Idempotente: lo stesso strato è db/apply.sh, qui invocato con il ruolo amministratore.
   db_init:
-    image: postgis/postgis:16-3.4
+    build:
+      context: ../db
+      dockerfile: Dockerfile
+    image: trasi-db-init:local
     restart: "no"
     mem_limit: 128m
     depends_on:
       db_trasi:
         condition: service_healthy
     environment:
-      PGHOST: db_trasi
+      PGHOST: ${SERVICE_NAME_DB_TRASI:-db_trasi}
       PGPORT: "5432"
       PGUSER: ${POSTGRES_USER}
       PGPASSWORD: ${POSTGRES_PASSWORD}
@@ -80,8 +83,6 @@ services:
       SHIM_DB_PASSWORD: ${SHIM_DB_PASSWORD}
       NOCODB_DB_NAME: ${NOCODB_DB_NAME:-nocodb_db}
       TZ: ${TZ}
-    volumes:
-      - ../db:/db:ro
     entrypoint: ["bash", "/db/init-entrypoint.sh"]
     logging: *default-logging
     networks: [trasi_net]
