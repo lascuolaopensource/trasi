@@ -609,10 +609,13 @@ paths:
       - name: luogo_id
         in: query
         required: true
-        description: Identificativo del luogo della rete (obbligatorio); può essere anche un POI esterno.
+        description: 'Identificativo del luogo della rete. Per un luogo della memoria: il numero (`luogo.id`, es. `21`).
+          Per un POI esterno (es. un locale trovato con `vicino_a`): la forma testuale `osm:node:<id>` — l''id sta
+          nell''URL del item (`url`: `…/node/<id>`), NON il numero da solo: un numero oltre il conteggio dei luoghi
+          della rete è un errore, non un POI. Un luogo esterno non viene scritto in memoria.'
         schema:
-          type: integer
-          minimum: 1
+          type: string
+          minLength: 1
       - name: casa
         in: query
         required: false
