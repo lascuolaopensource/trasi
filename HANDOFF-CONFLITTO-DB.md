@@ -173,3 +173,33 @@ Una nota dal mio lato, per il tuo merge: `db/apply.sh` di main ha l'ORDER che ch
 (`026_report_pa`, `028_fasce`, `029_persone`). E la mia `v_kb_export` (029 §4) ha ora il ramo
 `persona` in coda: se il tuo ramo monitoraggio dovesse ricrearla, il consenso delle persone va
 preservato (il presidio è in V11 di `db/tests/t_viste.sql`, ti accorgerai se cade).
+
+---
+
+## Nota della sessione «statistiche + chiusura colloquio» — 2026-09-17, 14:5x
+
+**Per chi ha `ops/allinea_prompt_assistenti.py` aperto** (`Implementazione-Wikipedia-pagine-e-categorie`,
+`US_consultazione_servizi_debug`, `installazione-connettori-mancanti`: ho visto il file modificato in tutti
+e tre i worktree). Ho committato su `main` due sezioni nuove in `SEZIONI` (`dccaebc`, `604c872`): prima
+«statistiche mensili», ora «CHIUSURA DEL COLLOQUIO — l'ultima riga di ogni tua risposta». Non ho toccato
+`_login`, `_patch_body`, `SOSTITUZIONI` né il `main()`.
+
+Tre cose che vi servono al merge, perché le ho imparate qui:
+
+1. **Il marcatore di `SEZIONI` deve esistere *nel testo* della sezione.** `_manca()` cerca la stringa nel
+   prompt salvato: un titolo-etichetta («CHIUSURA — risolta o rinviata») dichiara la sezione assente per
+   sempre, anche dopo un PATCH riuscito — misurato: 4/4 «MANCANO» con la sezione già scritta sul server.
+   Il marcatore giusto è la prima riga della sezione, che nel prompt c'è. La sessione `US_consultazione_*`
+   ha applicato la stessa correzione a «IDENTITÀ E CASA» → «ALTRA Casa (per nome o slug)»: stessa lezione,
+   trovata due volte in un'ora.
+2. **`ops/onyx_admin.py` non è ancora in `main`**: esiste solo in `installazione-connettori-mancanti` e
+   `resoconto-connettori` (untracked). Finché non lo portate, `allinea_prompt_assistenti.py` continua ad
+   avere la sua copia di `_login`/`_richiesta`: nessun conflitto con me, ma la duplicazione resta.
+3. **Lo strumento `trasi_shim` in Onyx (id 12) è ri-registrato** al contratto a 12 operazioni
+   (`PUT /admin/tool/custom/12`); se una vostra sessione rigenera quel tool, fatelo dall'`openapi.yaml`
+   di `main` — lo spec registrato era rimasto a `/cerca_opendata` + `/leggi_dataset` (worktree
+   `installazione-connettori-mancanti`) e **senza** `/salva_dato`.
+
+Sul DB condiviso non ho fatto nulla: nessuna migrazione, nessun `apply.sh`. L'unica riga scritta è una
+`richiesta` di prova a Molo 12 (id 3331, `fiscale_isee/risolta`, 14:41) nata dalla prova end-to-end della
+chiusura del colloquio — è un dato di sportello plausibile, ma se il rumore dà fastidio la si toglie.
