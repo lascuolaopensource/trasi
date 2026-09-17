@@ -23,6 +23,13 @@ parametro `casa` rinvia al vocabolario `casa.slug`: un valore fuori vocabolario 
 **Il tipo è un vocabolario chiuso → 422 con l'elenco ammesso.** `tipo` determina i tag OpenStreetMap da interrogare:
 un valore ignoto non è traducibile in una query, e restituire una lista vuota farebbe credere all'assistente che non
 esiste nulla, che è peggio di un errore dichiarato.
+
+**`indirizzo` sposta il centro, non il contesto.** Con `indirizzo` la distanza si misura dal punto geocodificato
+(Nominatim) e non dalla Casa — per la memoria della rete e per Overpass allo stesso modo, altrimenti i due gruppi
+direbbero due distanze incomparabili. La Casa resta in risposta (`casa`) perché è il contesto della richiesta: chi
+chiede lo fa da uno sportello. Un indirizzo che Nominatim **non trova** è un parametro sbagliato (422 con
+l'indirizzo citato, così l'operatore lo corregge); un Nominatim che **non risponde** è il guasto di una fonte esterna
+(200, `fonti_esterne[].stato`, `items: []`): senza centro non c'è distanza da dichiarare, e Overpass non si interroga.
 """
 
 from __future__ import annotations
@@ -35,7 +42,8 @@ from .badge import nome_fonte
 from .contratto import meta
 from .db import Sessione, dipendenza_sessione, parametri, parametro_int, risolvi_slug_casa, slug_casa_da_identita
 from .errori import errore
-from .schemi import FonteEsterna, ItemVicinanza, RispostaVicinoA
+from .opendata import e_nominatim, fonti_api
+from .schemi import CentroVicinanza, FonteEsterna, ItemVicinanza, RispostaVicinoA
 from .settings import get_settings
 from .vicinanza import (
     CHIAVI_PARAMETRI,
@@ -45,6 +53,7 @@ from .vicinanza import (
     TIPI_AMMESSI,
     TIPI_OSM,
     adesso_locale,
+    geocodifica,
     interroga_overpass,
     item_esterno,
     item_kb,
@@ -60,6 +69,10 @@ MAX_ESTERNI_DEFAULT = 5
 
 TIPO_ACCESSO_OSM = "osm_overpass"
 NOME_OSM_DEFAULT = "OpenStreetMap"
+
+DETAIL_GEOCODIFICA_NON_DISPONIBILE = (
+    "parametri non ammessi — indirizzo: geocodifica non disponibile (fonte Nominatim non in allow-list)"
+)
 
 SQL_CASA = """
 SELECT c.id, c.slug, c.nome, c.raggio_m,
@@ -115,6 +128,46 @@ async def fonte_esterna_osm(sess: Sessione) -> dict[str, Any] | None:
     return dict(riga) if riga else None
 
 
+async def fonte_nominatim(sess: Sessione) -> dict[str, Any] | None:
+    """La riga di allow-list di Nominatim: quella `api` attiva il cui host è l'host di `settings.nominatim_url`.
+
+    Le righe `api` sono condivise con i cataloghi open data (`opendata.fonti_api`): la stessa query e lo stesso criterio
+    di separazione, così un portale non può essere scambiato per il geocodificatore né viceversa.
+    """
+    for riga in await fonti_api(sess):
+        if e_nominatim(riga["url"]):
+            return riga
+    return None
+
+
+async def _centro_da_indirizzo(
+    indirizzo: str, *, sess: Sessione, soglia_fiducia: int
+) -> tuple[CentroVicinanza | None, FonteEsterna]:
+    """`indirizzo` → (centro, esito Nominatim). 422 se non c'è fonte ammessa o se l'indirizzo non esiste.
+
+    L'ordine dei controlli è quello dei costi: prima l'allow-list (una lettura già fatta), poi la rete. Una fonte sotto
+    soglia è trattata come assente — il TI l'ha declassata, e usarla comunque sarebbe ignorare la sua decisione.
+    """
+    fonte = await fonte_nominatim(sess)
+    if fonte is None or fonte["livello_fiducia"] < soglia_fiducia:
+        raise errore(422, DETAIL_GEOCODIFICA_NON_DISPONIBILE)
+    nome = nome_fonte(fonte["fonte"], fonte["tecnica"])
+
+    impostazioni = get_settings()
+    esito = await geocodifica(
+        indirizzo,
+        url=impostazioni.nominatim_url,
+        user_agent=impostazioni.overpass_user_agent,
+        timeout_s=impostazioni.overpass_timeout_s,
+    )
+    voce = FonteEsterna(fonte=nome, stato=esito.stato, ms=esito.ms)
+    if esito.stato != STATO_OK:
+        return None, voce
+    if esito.centro is None:
+        raise errore(422, f"indirizzo non trovato: «{indirizzo}»")
+    return CentroVicinanza(**esito.centro, fonte=nome), voce
+
+
 @router.get("/vicino_a", response_model=RispostaVicinoA, **meta("vicino_a"))
 async def vicino_a(
     tipo: str = Query(description="Tipo di luogo cercato (obbligatorio); mappa chiusa verso i tag OpenStreetMap."),
@@ -126,6 +179,11 @@ async def vicino_a(
         default=None, description="Se `true`, esclude i luoghi noti come chiusi e ordina prima gli aperti."
     ),
     raggio_m: int | None = Query(default=None, ge=1, description="Raggio di ricerca in metri, facoltativo."),
+    indirizzo: str | None = Query(
+        default=None,
+        min_length=3,
+        description="Indirizzo o luogo da cui misurare la distanza al posto della Casa (geocodifica Nominatim).",
+    ),
     sess: Sessione = Depends(dipendenza_sessione),
 ) -> RispostaVicinoA:
     """I luoghi di un tipo vicino a una Casa, dalla memoria della rete e da OpenStreetMap.
@@ -133,12 +191,12 @@ async def vicino_a(
     Se `casa` non è indicata, si misura dalla Casa dell'operatore autenticato: l'identità
     (`identita_onyx.casa_id`) la determina, così l'assistente non deve conoscerla né indovinarla.
     Un ruolo senza Casa (es. `rete`) deve indicarla esplicitamente.
-
-    Uno slug **che non esiste** non è un errore quando l'operatore ha una Casa propria: il modello,
-    vedendo `casa` nel contratto, tende a riempirlo con il nome della Casa o il nome
-    dell'applicazione («Centro di Aggregazione Bozzano», «Trasi») invece dello slug, e rispondere 422
-    faceva dire all'assistente «la rete non riconosce questa Casa» — un guasto dichiarato che non
     esiste. Si ricade sull'identità, che è il dato certo.
+
+    Con `indirizzo` il centro di misura è il punto geocodificato: sostituisce le coordinate della Casa
+    **per entrambi i gruppi** (memoria della rete e Overpass), e la Casa resta come contesto. Se Nominatim
+    non risponde si dichiara lo stato e non si interroga Overpass: senza centro, nessuna distanza sarebbe
+    vera.
     """
     # L'ordine conta: prima il `tipo`, che è una validazione **locale** (non richiede il database e
     # il suo errore deve arrivare anche quando `casa` è assente), poi la Casa.
@@ -178,9 +236,28 @@ async def vicino_a(
     casa_lat = float(riga_casa["lat"])
     casa_lon = float(riga_casa["lon"])
 
+    centro: CentroVicinanza | None = None
+    fonti_esterne: list[FonteEsterna] = []
+    if indirizzo and indirizzo.strip():
+        centro, esito_nominatim = await _centro_da_indirizzo(
+            indirizzo.strip(), sess=sess, soglia_fiducia=soglia_fiducia
+        )
+        fonti_esterne.append(esito_nominatim)
+        if centro is None:
+            # Nominatim in timeout o in errore: il guasto è dichiarato e la risposta resta valida (§9.1), ma senza
+            # un centro nessuna distanza sarebbe misurabile — quindi né item KB né Overpass.
+            return RispostaVicinoA(
+                casa=slug, tipo=tipo_normalizzato, raggio_m=raggio_effettivo, items=[], fonti_esterne=fonti_esterne
+            )
+        casa_lat, casa_lon = centro.lat, centro.lon
+
     items = [
         item_kb(
-            dict(riga) | {"aperto_adesso": orari_da_jsonb(riga["orari"], adesso)},
+            # Con un centro diverso dalla Casa la distanza di `SQL_KB` (dalla Casa) non vale: si azzera e `item_kb` la
+            # ricalcola dal centro, così KB ed esterni sono misurati dallo stesso punto.
+            dict(riga)
+            | {"aperto_adesso": orari_da_jsonb(riga["orari"], adesso)}
+            | ({"distanza_m": None} if centro is not None else {}),
             casa_lat=casa_lat,
             casa_lon=casa_lon,
             tipo=tipo_normalizzato,
@@ -200,6 +277,7 @@ async def vicino_a(
         adesso=adesso,
     )
     items.extend(esterni)
+    fonti_esterne.append(esito)
 
     if aperto_adesso:
         # Escono i soli chiusi **noti**: `aperto_adesso is not False` tiene dentro i POI senza orari, che sono la
@@ -211,7 +289,8 @@ async def vicino_a(
         tipo=tipo_normalizzato,
         raggio_m=raggio_effettivo,
         items=[ItemVicinanza(**item) for item in ordina_items(items)],
-        fonti_esterne=[esito],
+        fonti_esterne=fonti_esterne,
+        centro=centro,
     )
 
 

@@ -27,7 +27,7 @@ tags:
 - name: kb
   description: Lettura della memoria della rete (base di conoscenza).
 - name: esterno
-  description: Fonti esterne (OpenStreetMap/Overpass, web su allow-list).
+  description: Fonti esterne (OpenStreetMap/Overpass e Nominatim, web su allow-list, cataloghi open data CKAN).
 - name: proposte
   description: Ciclo di scrittura mediata — proposta, approvazione umana, applicazione.
 paths:
@@ -167,6 +167,16 @@ paths:
         schema:
           type: integer
           minimum: 1
+      - name: indirizzo
+        in: query
+        required: false
+        description: 'Indirizzo o luogo scritto dall''operatore (es. "via Appia 120", "stazione di Brindisi"), facoltativo. Se
+          indicato, la distanza si misura da lì e non dalla Casa: l''indirizzo viene geocodificato con Nominatim (OpenStreetMap)
+          entro l''area di Brindisi e il punto trovato è riportato in `centro`. Un indirizzo che Nominatim non trova risponde
+          422 «indirizzo non trovato»; se Nominatim non risponde, `fonti_esterne[]` lo dichiara e `items` è vuoto.'
+        schema:
+          type: string
+          minLength: 3
       responses:
         '200':
           description: Luoghi KB ed esterni entro il raggio, con provenienza, fiducia e badge.
@@ -747,6 +757,118 @@ paths:
           $ref: '#/components/responses/ParametriNonAmmessi'
         '501':
           $ref: '#/components/responses/NonImplementato'
+  /cerca_opendata:
+    get:
+      operationId: cerca_opendata
+      tags:
+      - esterno
+      summary: 'Cerca dataset nei cataloghi open data in allow-list (Regione Puglia, dati.gov.it, IPRES). Usalo per dati
+        aperti e statistiche: dataset regionali o nazionali, registri delle strutture e dei servizi, popolazione, Osservatorio
+        sociale e Monitoraggio PA. Restituisce i dataset trovati, ognuno con le sue risorse (file o tabelle): per leggere i
+        record di una risorsa con `interrogabile: true` chiama `leggi_dataset` con il suo `id` e il `portale`. Ogni risultato
+        è esterno e non verificato dalla rete: riporta il badge così com''è e cita fonte e ora. Se un portale non risponde,
+        dichiaralo leggendo `fonti_esterne[].stato`.'
+      parameters:
+      - name: q
+        in: query
+        required: true
+        description: Cosa cercare nei cataloghi open data, in italiano (obbligatorio). Es. "strutture sociali Brindisi", "popolazione",
+          "centri antiviolenza". Non inserire dati personali.
+        schema:
+          type: string
+          minLength: 1
+      - name: max
+        in: query
+        required: false
+        description: Numero massimo di dataset richiesti, facoltativo; il server applica comunque il tetto `max_risultati_esterni`.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Dataset trovati nei portali in allow-list, con risorse, provenienza esterna, fiducia, badge e stato
+            di ogni portale interrogato.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaOpenData'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+  /leggi_dataset:
+    get:
+      operationId: leggi_dataset
+      tags:
+      - esterno
+      summary: 'Legge i record di una risorsa open data interrogabile (tabella CKAN), trovata prima con `cerca_opendata`.
+        Usalo per rispondere con i dati veri di un registro o di un elenco (es. le strutture socio-assistenziali con sede a
+        Brindisi): indica `risorsa_id` e il `portale`, poi una ricerca libera `q` oppure un filtro esatto `campo`+`valore`
+        (almeno uno dei due). Ogni record è esterno e non verificato dalla rete: riporta il badge così com''è e cita fonte e
+        ora. Se il portale non risponde, dichiaralo leggendo `fonti_esterne[].stato`.'
+      parameters:
+      - name: risorsa_id
+        in: query
+        required: true
+        description: 'Identificativo della risorsa (obbligatorio), l''`id` di una voce di `risorse[]` con `interrogabile: true`
+          in `cerca_opendata`.'
+        schema:
+          type: string
+          minLength: 1
+      - name: portale
+        in: query
+        required: false
+        description: Host del portale che ospita la risorsa, come restituito in `portale` da `cerca_opendata` (es. `dati.puglia.it`).
+          Se omesso si usa il portale in allow-list con la fiducia più alta. Un host fuori allow-list risponde 422 con l'elenco
+          ammesso.
+        schema:
+          type: string
+          minLength: 1
+      - name: q
+        in: query
+        required: false
+        description: Ricerca libera nel testo dei record (es. "Brindisi", "anziani"). Obbligatoria se non si indicano `campo`
+          e `valore`.
+        schema:
+          type: string
+          minLength: 1
+      - name: campo
+        in: query
+        required: false
+        description: Nome esatto della colonna su cui filtrare (es. `COMUNE_SEDE_OP`, `COMUNE`); va indicato insieme a `valore`.
+        schema:
+          type: string
+          minLength: 1
+      - name: valore
+        in: query
+        required: false
+        description: Valore esatto che la colonna `campo` deve avere (es. `Brindisi`); va indicato insieme a `campo`.
+        schema:
+          type: string
+          minLength: 1
+      - name: max
+        in: query
+        required: false
+        description: Numero massimo di record richiesti (1-50), facoltativo; se omesso si usa il parametro `max_risultati_esterni`.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+      responses:
+        '200':
+          description: Record della risorsa, con il totale dei record che corrispondono e lo stato del portale interrogato.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaDataset'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
 components:
   responses:
     ChiaveShimNonValida:
@@ -805,7 +927,7 @@ components:
       properties:
         fonte:
           type: string
-          description: Nome della fonte esterna interrogata (es. OpenStreetMap, SearXNG).
+          description: Nome della fonte esterna interrogata (es. OpenStreetMap, Nominatim, SearXNG, il nome di un portale open data).
         stato:
           type: string
           enum:
@@ -870,7 +992,8 @@ components:
         distanza_m:
           type: number
           minimum: 0
-          description: Distanza in metri dalla Casa di riferimento.
+          description: 'Distanza in metri dal punto di riferimento: la Casa, oppure il `centro` geocodificato quando è stato
+            indicato `indirizzo`.'
         aperto_adesso:
           type: boolean
           nullable: true
@@ -1251,7 +1374,7 @@ components:
       properties:
         casa:
           type: string
-          description: Slug della Casa da cui è stata misurata la distanza.
+          description: Slug della Casa di riferimento; è il punto da cui si misura la distanza quando `centro` è `null`.
         tipo:
           type: string
           description: Tipo di luogo cercato.
@@ -1269,6 +1392,40 @@ components:
           description: Esito di ogni fonte esterna interrogata (anche quando non ha risposto).
           items:
             $ref: '#/components/schemas/FonteEsterna'
+          items:
+            $ref: '#/components/schemas/FonteEsterna'
+        centro:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/CentroVicinanza'
+          description: 'Punto da cui è stata misurata la distanza quando l''operatore ha indicato `indirizzo` (geocodificato con
+            Nominatim); `null` quando la distanza è misurata dalla Casa.'
+    CentroVicinanza:
+      type: object
+      additionalProperties: false
+      required:
+      - lat
+      - lon
+      - etichetta
+      - fonte
+      description: Il punto geocodificato da cui `vicino_a` ha misurato la distanza, con l'etichetta che Nominatim gli dà.
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+          description: Latitudine del punto (WGS84).
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+          description: Longitudine del punto (WGS84).
+        etichetta:
+          type: string
+          description: Nome completo del luogo trovato (`display_name` di Nominatim), da mostrare all'operatore per conferma.
+        fonte:
+          type: string
+          description: Fonte della geocodifica (es. «OpenStreetMap contributors (ODbL) — Nominatim»).
     RispostaRegistraRichiesta:
       type: object
       additionalProperties: false
@@ -1474,5 +1631,187 @@ components:
         fonti_esterne:
           type: array
           description: Esito del motore di ricerca interrogato.
+          items:
+            $ref: '#/components/schemas/FonteEsterna'
+    RisorsaOpenData:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - nome
+      - formato
+      - url
+      - interrogabile
+      description: Una risorsa di un dataset CKAN (un file scaricabile oppure una tabella interrogabile nel datastore).
+      properties:
+        id:
+          type: string
+          description: Identificativo della risorsa; è il `risorsa_id` da passare a `leggi_dataset`.
+        nome:
+          type: string
+          nullable: true
+          description: Nome della risorsa; `null` se il portale non lo dichiara.
+        formato:
+          type: string
+          nullable: true
+          description: Formato dichiarato (es. CSV, JSON, PDF, XLSX); `null` se non dichiarato.
+        url:
+          type: string
+          format: uri
+          description: Indirizzo di scaricamento della risorsa.
+        interrogabile:
+          type: boolean
+          description: '`true` se la risorsa è caricata nel datastore del portale e quindi leggibile record per record con
+            `leggi_dataset`; `false` se è solo un file da scaricare.'
+    ItemOpenData:
+      type: object
+      additionalProperties: false
+      required:
+      - provenienza
+      - titolo
+      - url
+      - descrizione
+      - organizzazione
+      - aggiornato
+      - portale
+      - risorse
+      - fonte
+      - consultato_ts
+      - fiducia
+      - badge
+      description: Un dataset di un catalogo open data in allow-list, quindi un dato esterno non verificato dalla rete.
+      properties:
+        provenienza:
+          type: string
+          enum:
+          - esterna
+          description: In questa risposta è sempre `esterna`.
+        titolo:
+          type: string
+          description: Titolo del dataset.
+        url:
+          type: string
+          format: uri
+          description: Pagina del dataset sul portale, da citare come riferimento.
+        descrizione:
+          type: string
+          nullable: true
+          description: Descrizione del dataset, troncata a 300 caratteri; `null` se assente.
+        organizzazione:
+          type: string
+          nullable: true
+          description: Ente che pubblica il dataset (es. «Regione Puglia — Sezione Inclusione sociale attiva»); `null` se non
+            dichiarato.
+        aggiornato:
+          type: string
+          nullable: true
+          description: Data dell'ultimo aggiornamento dei metadati, `AAAA-MM-GG`; `null` se non dichiarata.
+        portale:
+          type: string
+          description: Host del portale che ospita il dataset (es. `dati.puglia.it`); va passato a `leggi_dataset` come `portale`.
+        risorse:
+          type: array
+          description: Le risorse del dataset (file e tabelle), nell'ordine del portale.
+          items:
+            $ref: '#/components/schemas/RisorsaOpenData'
+        fonte:
+          type: string
+          description: Fonte dichiarata per il portale (tabella `fonte`, `tipo_accesso='api'`).
+        consultato_ts:
+          type: string
+          format: date-time
+          description: Istante della consultazione.
+        fiducia:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Livello di affidabilità della fonte (`fonte.livello_fiducia`).
+        badge:
+          type: string
+          description: Etichetta già formattata, da riportare così com'è (es. «[Esterna · Regione Puglia — Open Data · consultata
+            11:42 · non verificata dalla rete]»).
+    RispostaOpenData:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - fonti_esterne
+      description: Dataset trovati nei portali open data in allow-list, ordinati per fiducia della fonte e poi per data di
+        aggiornamento; una voce di `fonti_esterne` per ogni portale.
+      properties:
+        items:
+          type: array
+          description: Dataset ammessi, entro il tetto `max_risultati_esterni`.
+          items:
+            $ref: '#/components/schemas/ItemOpenData'
+        fonti_esterne:
+          type: array
+          description: Esito di ogni portale in allow-list (anche di quelli che non hanno risposto o sono sotto la soglia di fiducia).
+          items:
+            $ref: '#/components/schemas/FonteEsterna'
+    RecordDataset:
+      type: object
+      additionalProperties: false
+      required:
+      - provenienza
+      - titolo
+      - testo
+      - fonte
+      - consultato_ts
+      - fiducia
+      - badge
+      description: Un record di una risorsa open data, reso leggibile come testo; dato esterno non verificato dalla rete.
+      properties:
+        provenienza:
+          type: string
+          enum:
+          - esterna
+          description: In questa risposta è sempre `esterna`.
+        titolo:
+          type: string
+          description: Titolo del record, dal primo campo di denominazione presente (es. la denominazione della struttura);
+            altrimenti `record <numero>`.
+        testo:
+          type: string
+          description: 'Tutti i campi non vuoti del record, nella forma `CAMPO: valore · CAMPO: valore`, senza i campi tecnici
+            del datastore.'
+        fonte:
+          type: string
+          description: Fonte dichiarata per il portale (tabella `fonte`, `tipo_accesso='api'`).
+        consultato_ts:
+          type: string
+          format: date-time
+          description: Istante della consultazione.
+        fiducia:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Livello di affidabilità della fonte (`fonte.livello_fiducia`).
+        badge:
+          type: string
+          description: Etichetta già formattata, da riportare così com'è.
+    RispostaDataset:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - totale
+      - fonti_esterne
+      description: Record letti da una risorsa open data interrogabile, con il totale dei record corrispondenti sul portale.
+      properties:
+        items:
+          type: array
+          description: Record restituiti, entro il tetto richiesto (massimo 50).
+          items:
+            $ref: '#/components/schemas/RecordDataset'
+        totale:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Numero totale di record che corrispondono alla ricerca sul portale (può superare quelli restituiti);
+            `null` se il portale non ha risposto.
+        fonti_esterne:
+          type: array
+          description: Esito del portale interrogato.
           items:
             $ref: '#/components/schemas/FonteEsterna'

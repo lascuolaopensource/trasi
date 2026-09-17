@@ -1,0 +1,63 @@
+{
+  "_nota": "Documenti di fonte istituzionale che il flusso fonti_documenti.py scarica, riduce a testo e pubblica nella KB di Onyx (Ingestion API). Sono i link di .orca/drops/link_scartati.json che il connettore web non può indicizzare: non sono pagine HTML ma file (ZIP, CSV, PDF). Configurazione, non codice: aggiungere un documento non richiede di toccare lo script. La regola: si indicizza **direttamente** — non passa da `proposta` perché non scrive il dominio (luogo, scheda_servizio, evento…): scrive solo la KB, che export_kb ricostruisce ogni notte dalla vista. Per lo stesso motivo `affidabilita` è 1 (= non verificato dalla rete): il dato è di una fonte istituzionale ma nessuno di Trasi l'ha controllato; l'AT può alzarla voce per voce quando lo fa. Nel badge V3 la chat lo dichiara così.",
+  "_campi": {
+    "slug": "identificatore stabile: diventa `documento:<slug>`, l'id del documento in Onyx (upsert idempotente)",
+    "titolo": "titolo del documento nella KB, come lo vede chi cerca",
+    "fonte": "nome esatto della riga in `trasi.fonte` (allow-list §3): deve esistere ed essere attiva, altrimenti la voce va in errore e non si pubblica",
+    "url": "il file da scaricare",
+    "tipo": "csv | istat_posas | pdf — l'estrattore che riduce il file a testo",
+    "delimitatore": "solo per `csv`: `,` o `;`; se assente si riconosce dal contenuto",
+    "filtro": "solo per `csv`/`istat_posas`: {campo, valore} — si tengono le righe in cui `campo` vale `valore` (confronto senza maiuscole e spazi). Serve a pubblicare la sola Brindisi di un file regionale o provinciale",
+    "affidabilita": "1..3 come `luogo.affidabilita`; 1 = non verificato dalla rete (default per un file esterno)",
+    "servizi": "i servizi OLD/NEW della rete a cui il documento serve — finisce nei metadati, per il filtro in chat",
+    "attivo": "false per sospendere una voce senza cancellarla (stessa forma di `fonte.attiva`)"
+  },
+  "documenti": [
+    {
+      "slug": "istat-posas-brindisi-2026",
+      "titolo": "Popolazione residente a Brindisi per età e sesso al 1° gennaio 2026 (stima ISTAT POSAS)",
+      "fonte": "ISTAT-3",
+      "url": "https://demo.istat.it/data/posas/POSAS_2026_it_074_Brindisi.zip",
+      "tipo": "istat_posas",
+      "filtro": {"campo": "Codice comune", "valore": "074001"},
+      "affidabilita": 1,
+      "servizi": ["OLD Osservatorio sociale", "NEW 4 Monitoraggio PA"],
+      "attivo": true,
+      "_nota": "Lo zip contiene un CSV con tutti i comuni della provincia (074): si pubblica la sola Brindisi, riassunta per fasce d'età più la tabella per età."
+    },
+    {
+      "slug": "puglia-punti-facilitazione-digitale",
+      "titolo": "Punti di facilitazione digitale — Brindisi (Open Data Puglia)",
+      "fonte": "Open Data Puglia-3",
+      "url": "https://dati.puglia.it/ckan/dataset/b98b3c31-d861-4cab-b395-d51b5b917a5d/resource/eb1dba91-7152-4f8c-98d9-abfdb2b6d96b/download/punto-di-facilitazione-digitale.csv",
+      "tipo": "csv",
+      "filtro": {"campo": "comune", "valore": "Brindisi"},
+      "affidabilita": 1,
+      "servizi": ["OLD Front office", "NEW 2 Servizi"],
+      "attivo": true
+    },
+    {
+      "slug": "puglia-registri-strutture-servizi-sociali-2023",
+      "titolo": "Registri regionali delle strutture e dei servizi socio-assistenziali — sedi operative a Brindisi (2023)",
+      "fonte": "Open Data Puglia-3",
+      "url": "https://dati.puglia.it/ckan/dataset/bffa2d3d-c0b4-4fc9-a96c-7104a272ed38/resource/7aa651c7-b536-494e-861e-2adbcf798223/download/registri2023od.csv",
+      "tipo": "csv",
+      "filtro": {"campo": "COMUNE_SEDE_OP", "valore": "Brindisi"},
+      "affidabilita": 1,
+      "servizi": ["OLD Osservatorio sociale", "NEW 4 Monitoraggio PA"],
+      "attivo": true,
+      "_nota": "Il file porta anche COGNOME_LEGALE e NOME_LEGALE del rappresentante: sono dati personali e lo script li esclude sempre (V5, `CAMPI_PERSONALI`). Nella KB restano la struttura, la sede e il titolare (ente)."
+    },
+    {
+      "slug": "procura-brindisi-centri-antiviolenza",
+      "titolo": "Centri antiviolenza — contatti utili (Procura della Repubblica di Brindisi)",
+      "fonte": "Procura di Brindisi-3",
+      "url": "https://procura-brindisi.giustizia.it/cmsresources/cms/documents/CentriAntiViolenzaContattiUtili.pdf",
+      "tipo": "pdf",
+      "affidabilita": 1,
+      "servizi": ["OLD Facilitazione interculturale", "OLD Presidio solitudine"],
+      "attivo": true,
+      "_nota": "I recapiti nel PDF sono di centri e associazioni (telefoni e caselle istituzionali), non di persone."
+    }
+  ]
+}

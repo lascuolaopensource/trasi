@@ -88,7 +88,6 @@ case "$identita" in
     exit 1
     ;;
 esac
-
 if psql -X -q -tAc "SELECT 1 FROM trasi.flusso_run LIMIT 0" >/dev/null 2>&1; then
   echo "automazioni: registro flusso_run accessibile"
 else
@@ -99,7 +98,7 @@ fi
 # --- 4. Prova offline dei flussi ------------------------------------------------------------
 # `--help` costruisce tutti gli argomenti e importa tutti i moduli: un `sys.path` sbagliato o una
 # dipendenza mancante si vedono qui. Nessuna chiamata di rete, nessuna scrittura.
-for flusso in export_kb.py fonti_ical.py fonti_http.py alert.py; do
+for flusso in export_kb.py fonti_ical.py fonti_http.py fonti_documenti.py alert.py; do
   if python3 "/app/flussi/$flusso" --help >/dev/null 2>&1; then
     echo "automazioni: $flusso → importabile"
   else

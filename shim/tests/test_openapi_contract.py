@@ -36,8 +36,8 @@ def _operazioni(contratto: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def test_contratto_espone_le_nove_operazioni_attese(contratto):
-    """Il contratto contiene esattamente le nove operazioni congelate, ai percorsi e metodi attesi."""
+def test_contratto_espone_le_tredici_operazioni_attese(contratto):
+    """Il contratto contiene esattamente le tredici operazioni attese, ai percorsi e metodi attesi."""
     trovate = {
         operazione["operationId"]: (metodo, path)
         for path, elemento in contratto["paths"].items()
@@ -185,6 +185,34 @@ def test_vicino_a_dichiara_provenienza_badge_e_stato_delle_fonti(contratto):
         "errore",
         "scartata_fiducia",
     }
+
+
+def test_opendata_dichiara_provenienza_badge_risorse_e_stato_dei_portali(contratto):
+    """`cerca_opendata` e `leggi_dataset` sono strumenti esterni: ogni item etichettato (V3), ogni portale con uno stato.
+
+    `interrogabile` su ogni risorsa e `portale` su ogni dataset sono i due dati che rendono possibile la seconda
+    chiamata: senza, il LLM non saprebbe **quale** risorsa può leggere né **dove**.
+    """
+    schemi = contratto["components"]["schemas"]
+
+    assert set(schemi["RispostaOpenData"]["properties"]) == {"items", "fonti_esterne"}
+    assert set(schemi["ItemOpenData"]["required"]) >= {"provenienza", "portale", "risorse", "fonte", "fiducia", "badge"}
+    assert schemi["ItemOpenData"]["properties"]["provenienza"]["enum"] == ["esterna"]
+    assert set(schemi["RisorsaOpenData"]["required"]) == {"id", "nome", "formato", "url", "interrogabile"}
+
+    assert set(schemi["RispostaDataset"]["required"]) == {"items", "totale", "fonti_esterne"}
+    assert schemi["RispostaDataset"]["properties"]["totale"]["nullable"] is True
+    assert set(schemi["RecordDataset"]["required"]) == {
+        "provenienza", "titolo", "testo", "fonte", "consultato_ts", "fiducia", "badge",
+    }
+
+    operazioni = _operazioni(contratto)
+    parametri_lettura = {p["name"]: p for p in operazioni["leggi_dataset"]["parameters"]}
+    assert parametri_lettura["risorsa_id"]["required"] is True
+    assert parametri_lettura["max"]["schema"]["maximum"] == 50
+    assert {p["name"] for p in operazioni["vicino_a"]["parameters"]} >= {"indirizzo"}
+    assert schemi["RispostaVicinoA"]["properties"]["centro"]["nullable"] is True
+    assert "centro" not in schemi["RispostaVicinoA"]["required"]
 
 
 def test_contratto_valido_per_un_validatore_openapi_rigoroso(contratto):
