@@ -1,360 +1,225 @@
-/* Trasi Home — comportamento della pagina. Vanilla JS, nessuna dipendenza.
- * Fa quattro cose: la Casa scelta (in `localStorage` c'è **solo** lo slug), le
- * destinazioni con le frasi che la nominano, la riga «Oggi» (scadenza 3 s) e
- * quella della coda, dalla stessa lettura.
- *
- * Si passa da `/api/shim/…` e non dallo shim diretto perché la chiave
- * `X-Trasi-Key` è un segreto di servizio e questa pagina è pubblica: la mette
- * Caddy. L'identità è `rete@trasi.local` perché la Home non ha un login proprio:
- * un ruolo `casa_*` risponderebbe 404 su altre Case, `rete` non ne ha una
- * (`casa_corrente()` è NULL). Lo shim filtra comunque lato database.
- */
-(function () {
-  "use strict";
+/* Trasi Home — comportamento della pagina. Vanilla JS, ES module, nessuna dipendenza.
+ * Contratti invariati: slug della Casa in localStorage (chiave `trasi.casa_id`),
+ * GET /api/shim/v1/u/rete@trasi.local/{oggi,eventi_oggi} con scadenza 3 s,
+ * POST /api/shim/logout. Caddy aggiunge X-Trasi-Key: il browser non vede segreti. */
 
-  /* Valori pubblici (slug delle Case), non dati personali: in `localStorage`
-     non entra nient'altro (V5). */
-  var CHIAVE_CASA = "trasi.casa_id";
-  var CASA_PREDEFINITA = "san-bao";
-  var IDENTITA = "rete@trasi.local";
-  var ATTESA_MS = 3000;
-  var TESTO_ATTESA = "Lettura dei dati di oggi in corso\u2026";
-  var TESTO_ASSENTE = "Dati non disponibili: la memoria della rete non risponde in questo momento.";
-  /* Senza questa riga, su uno schermo condiviso con un cittadino, l'operatore
-     legge un guasto dove c'è solo un dato che manca. */
-  var NOTA_ASSENTE = "\u00c8 un'informazione, non un guasto: le destinazioni qui sotto funzionano.";
+const CHIAVE_CASA = "trasi.casa_id";
+const CASA_PREDEFINITA = "san-bao";
+const IDENTITA = "rete@trasi.local";
+const ATTESA_MS = 3000;
+const TESTO_ATTESA = "Lettura dei dati di oggi in corso…";
+const TESTO_ASSENTE = "Dati non disponibili: la memoria della rete non risponde in questo momento.";
+const NOTA_ASSENTE = "È un’informazione, non un guasto: le destinazioni qui sotto funzionano.";
 
-  var selettore = document.getElementById("selettore-casa");
-  var rigaOggi = document.getElementById("oggi");
-  var casaNota = document.getElementById("casa-nota");
-  var riquadroCoda = document.getElementById("coda");
-  var testoCoda = document.getElementById("coda-testo");
-  var listaEventi = document.getElementById("oggi-eventi");
-  var contatore = document.getElementById("osservatorio-contatore");
-  var notaChiedi = document.getElementById("chiedi-nota");
-  var hrefInCorso = null;
+const selettore = document.getElementById("selettore-casa");
+const oggiScheda = document.getElementById("oggi-scheda");
+const oggiTesto = document.getElementById("oggi-testo");
+const listaEventi = document.getElementById("oggi-eventi");
+const casaNota = document.getElementById("casa-nota");
+const riquadroCoda = document.getElementById("coda");
+const testoCoda = document.getElementById("coda-testo");
+const contatore = document.getElementById("osservatorio-contatore");
+const notaChiedi = document.getElementById("chiedi-nota");
 
-  /* Lo slug è valido solo se è una delle opzioni del selettore: un residuo in
-     `localStorage` non deve poter costruire un indirizzo arbitrario. */
-  function opzione(slug) {
-    if (typeof slug !== "string" || slug === "") return null;
-    for (var i = 0; i < selettore.options.length; i++) {
-      if (selettore.options[i].value === slug) return selettore.options[i];
-    }
-    return null;
+function opzione(slug) {
+  if (typeof slug !== "string" || slug === "") return null;
+  for (const opt of selettore.options) if (opt.value === slug) return opt;
+  return null;
+}
+const casaValida = slug => (opzione(slug) ? slug : null);
+function casaScelta() { return casaValida(selettore.value) || CASA_PREDEFINITA; }
+function nomeCasa(slug) {
+  const scelta = opzione(slug);
+  return scelta ? scelta.textContent.split(" — ")[0].trim() : slug;
+}
+function memorizza(slug) { try { localStorage.setItem(CHIAVE_CASA, slug); } catch { /* navigazione privata: la pagina funziona lo stesso */ } }
+function ricorda() { try { return casaValida(localStorage.getItem(CHIAVE_CASA)); } catch { return null; } }
+
+/* destinazioni */
+function aggiornaDestinazioni(slug) {
+  const codificato = encodeURIComponent(slug);
+  for (const anello of document.querySelectorAll("[data-modello]")) {
+    anello.setAttribute("href", anello.getAttribute("data-modello").replace("{casa}", codificato));
   }
-
-  function casaValida(slug) {
-    return opzione(slug) ? slug : null;
+}
+function aggiornaNomi(slug) {
+  const nome = nomeCasa(slug);
+  const frase = "si apre con " + nome + " già impostata";
+  if (notaChiedi) notaChiedi.textContent = frase;
+  for (const nota of document.querySelectorAll(".nota-casa-dest")) nota.textContent = frase;
+  if (casaNota) {
+    const scelta = opzione(slug);
+    const provvisori = scelta && scelta.textContent.includes("dati provvisori");
+    casaNota.hidden = !provvisori;
+    if (provvisori) casaNota.textContent = nome + ": dati provvisori — alcune schede non sono ancora complete.";
   }
+}
 
-  function casaScelta() {
-    return casaValida(selettore.value) || CASA_PREDEFINITA;
+/* «Oggi» */
+function impostaStatoOggi(stato) {
+  oggiScheda.style.borderLeftColor = {
+    "attesa": "var(--border-03)",
+    "dati": "var(--status-info-05)",
+    "non-disponibile": "var(--status-warning-05)",
+  }[stato] || "var(--border-03)";
+}
+
+function mostraTesto(testo, stato, nota) {
+  oggiTesto.classList.remove("skeleton");
+  oggiTesto.textContent = testo;
+  document.getElementById("oggi").setAttribute("aria-busy", "false");
+  impostaStatoOggi(stato);
+  const vecchia = oggiTesto.parentElement.querySelector(".oggi-nota");
+  if (vecchia) vecchia.remove();
+  if (nota) {
+    const n = document.createElement("span");
+    n.className = "oggi-nota";
+    n.style.cssText = "flex-basis:100%;font-size:0.875rem;color:var(--text-03)";
+    n.textContent = nota;
+    oggiTesto.parentElement.appendChild(n);
   }
+}
 
-  /* Il nome della Casa senza la nota: nell'opzione di Tuturano il testo porta
-     anche «dati provvisori», che in una frase come «...a Tuturano» sarebbe di
-     troppo. Il nome è quello che precede il trattino lungo. */
-  function nomeCasa(slug) {
-    var scelta = opzione(slug);
-    if (!scelta) return slug;
-    return scelta.textContent.split(" \u2014 ")[0].trim();
-  }
-
-  function memorizza(slug) {
-    try {
-      window.localStorage.setItem(CHIAVE_CASA, slug);
-    } catch (e) {
-      /* Navigazione privata o storage disabilitato: la pagina funziona lo stesso,
-         semplicemente non ricorda la scelta. Non è un errore da mostrare. */
-    }
-  }
-
-  function ricorda(slug) {
-    try {
-      return casaValida(window.localStorage.getItem(CHIAVE_CASA));
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /* ---------------------------------------------------------- destinazioni */
-
-  /* Gli indirizzi stanno una volta sola, in `data-modello`. `URL`/`searchParams`
-     riscriverebbe in relativo gli indirizzi dei sottodomini (CHIEDI sta su un
-     altro host) o aggiungerebbe una barra finale alla rotta di Metabase. */
-  function aggiornaDestinazioni(slug) {
-    var anelli = document.querySelectorAll("[data-modello]");
-    var codificato = encodeURIComponent(slug);
-    for (var i = 0; i < anelli.length; i++) {
-      anelli[i].setAttribute("href", anelli[i].getAttribute("data-modello").replace("{casa}", codificato));
-    }
-  }
-
-  /* La nota di CHIEDI e quella dei dati provvisori: un nome sbagliato in una
-     nota è un'informazione sbagliata. */
-  function aggiornaNomi(slug) {
-    var nome = nomeCasa(slug);
-    if (notaChiedi) notaChiedi.textContent = "si apre con " + nome + " gi\u00e0 impostata";
-    if (casaNota) {
-      var scelta = opzione(slug);
-      var provvisori = scelta && scelta.textContent.indexOf("dati provvisori") !== -1;
-      casaNota.hidden = !provvisori;
-      if (provvisori) {
-        casaNota.textContent = nome + ": dati provvisori \u2014 alcune schede non sono ancora complete.";
-      }
+function mostraCoda(slug, numero, giorni) {
+  const nome = nomeCasa(slug);
+  const vuota = !numero;
+  riquadroCoda.hidden = false;
+  testoCoda.replaceChildren();
+  if (vuota) {
+    testoCoda.append("Nessuna proposta in attesa a " + nome + ".");
+  } else {
+    const forte = document.createElement("strong");
+    forte.textContent = String(numero);
+    testoCoda.append(forte, " " + (numero === 1 ? "proposta aspetta" : "proposte aspettano") + " una decisione a " + nome);
+    if (giorni) {
+      const quando = document.createElement("span");
+      quando.style.color = "var(--text-03)";
+      quando.textContent = " · la più vecchia da " + giorni + (giorni === 1 ? " giorno" : " giorni");
+      testoCoda.appendChild(quando);
     }
   }
-
-  /* ---------------------------------------------------------------- «Oggi» */
-
-  function mostraTesto(testo, stato, nota) {
-    rigaOggi.textContent = testo;
-    rigaOggi.setAttribute("aria-busy", "false");
-    if (stato) {
-      rigaOggi.setAttribute("data-stato", stato);
-    } else {
-      rigaOggi.removeAttribute("data-stato");
-    }
-    var vecchia = rigaOggi.querySelector(".oggi-nota");
-    if (vecchia) vecchia.remove();
-    if (nota) {
-      var p = document.createElement("span");
-      p.className = "oggi-nota";
-      p.textContent = nota;
-      rigaOggi.appendChild(p);
-    }
+  if (contatore) {
+    contatore.hidden = vuota;
+    if (!vuota) contatore.textContent = numero + (numero === 1 ? " proposta in attesa" : " proposte in attesa");
   }
+}
 
-  /* La coda: presenza, non allarme. Nessuna scadenza, nessun imperativo. Il dato
-     che dice se è ferma non è il numero ma l'età della più vecchia: distingue
-     «tre arrivate oggi» da «tre ferme da un mese». */
-  function mostraCoda(slug, numero, giorni) {
-    if (!riquadroCoda || !testoCoda) return;
-    var nome = nomeCasa(slug);
-    var vuota = !numero;
+function nascondiCoda() {
+  riquadroCoda.hidden = true;
+  if (contatore) contatore.hidden = true;
+}
 
-    riquadroCoda.hidden = false;
-    riquadroCoda.setAttribute("data-vuota", vuota ? "si" : "no");
-
-    while (testoCoda.firstChild) testoCoda.removeChild(testoCoda.firstChild);
-
-    if (vuota) {
-      testoCoda.appendChild(document.createTextNode("Nessuna proposta in attesa a " + nome + "."));
-    } else {
-      var forte = document.createElement("strong");
-      forte.className = "coda-numero";
-      forte.textContent = String(numero);
-      testoCoda.appendChild(forte);
-      testoCoda.appendChild(document.createTextNode(
-        " " + (numero === 1 ? "proposta aspetta" : "proposte aspettano") + " una decisione a " + nome
-      ));
-      if (giorni) {
-        var quando = document.createElement("span");
-        quando.className = "coda-quando";
-        quando.textContent = " \u00b7 la pi\u00f9 vecchia da " + giorni + (giorni === 1 ? " giorno" : " giorni");
-        testoCoda.appendChild(quando);
-      }
+function mostraEventi(eventi) {
+  const contenitore = document.getElementById("oggi-eventi-contenitore");
+  const sommario = document.getElementById("oggi-eventi-sommario");
+  listaEventi.replaceChildren();
+  if (!eventi.length) { nascondiEventi(); return; }
+  for (const e of eventi) {
+    const voce = document.createElement("li");
+    voce.className = "oggi-evento";
+    const quando = e.ora_inizio ? e.ora_inizio + (e.ora_fine ? "–" + e.ora_fine : "") : (e.orari_nota || "");
+    if (quando) {
+      const ora = document.createElement("span");
+      ora.className = "oggi-ora";
+      ora.textContent = quando;
+      voce.appendChild(ora);
     }
-
-    /* Anche sul riquadro OSSERVATORIO: è là che si decide. */
-    if (contatore) {
-      contatore.hidden = vuota;
-      if (!vuota) contatore.textContent = numero + (numero === 1 ? " proposta in attesa" : " proposte in attesa");
+    const titolo = document.createElement("strong");
+    titolo.textContent = e.titolo;
+    voce.appendChild(titolo);
+    if (e.dove) {
+      const dove = document.createElement("span");
+      dove.className = "dove";
+      dove.textContent = e.dove;
+      voce.appendChild(dove);
     }
+    listaEventi.appendChild(voce);
   }
-
-  /* Lettura fallita: la coda sparisce. Non sappiamo quante proposte aspettano, e
-     «nessuna in attesa» sarebbe falso — l'operatore non controllerebbe una coda
-     che ha davvero proposte ferme. */
-  function nascondiCoda() {
-    if (riquadroCoda) riquadroCoda.hidden = true;
-    if (contatore) contatore.hidden = true;
+  if (contenitore) {
+    sommario.textContent = eventi.length + (eventi.length === 1 ? " evento di oggi" : " eventi di oggi");
+    contenitore.hidden = false;
+    /* Allo sportello gli eventi sono il contenuto: aperti quando lo spazio c'è. */
+    contenitore.open = window.matchMedia("(min-width: 40rem)").matches;
   }
+}
+function nascondiEventi() {
+  listaEventi.replaceChildren();
+  const contenitore = document.getElementById("oggi-eventi-contenitore");
+  if (contenitore) contenitore.hidden = true;
+}
 
-  /* Gli eventi del giorno, sotto il conteggio. Titolo, orario e luogo come li
-     dà `eventi_oggi`: nessuna formattazione qui che la chat non farebbe. La
-     lista è nascosta quando è vuota o quando la lettura fallisce — il conteggio
-     nella riga sopra è già la risposta, e una lista vuota sotto «2 eventi»
-     direbbe il falso. */
-  function mostraEventi(eventi) {
-    if (!listaEventi) return;
-    while (listaEventi.firstChild) listaEventi.removeChild(listaEventi.firstChild);
-    if (!eventi.length) {
-      nascondiEventi();
-      return;
-    }
-    for (var i = 0; i < eventi.length; i++) {
-      var e = eventi[i];
-      var voce = document.createElement("li");
-      voce.className = "oggi-evento";
+let inCorso = null;
+function leggiOggi(slug) {
+  if (inCorso) inCorso.abort();
+  const controllo = new AbortController();
+  inCorso = controllo;
 
-      var quando = e.ora_inizio ? e.ora_inizio + (e.ora_fine ? "\u2013" + e.ora_fine : "") : (e.orari_nota || "");
-      if (quando) {
-        var ora = document.createElement("span");
-        ora.className = "oggi-evento-ora";
-        ora.textContent = quando;
-        voce.appendChild(ora);
-      }
+  mostraTesto("Lettura dei dati di oggi in corso…", "attesa", null);
+  document.getElementById("oggi").setAttribute("aria-busy", "true");
+  oggiTesto.classList.add("skeleton");
+  riquadroCoda.hidden = true;
+  nascondiEventi();
 
-      var titolo = document.createElement("span");
-      titolo.className = "oggi-evento-titolo";
-      titolo.textContent = e.titolo;
-      voce.appendChild(titolo);
+  const scadenza = setTimeout(() => controllo.abort(), ATTESA_MS);
+  let inAttesa = 2;
+  const finisci = () => { if (--inAttesa === 0) { clearTimeout(scadenza); inCorso = null; } };
 
-      if (e.dove) {
-        var dove = document.createElement("span");
-        dove.className = "oggi-evento-dove";
-        dove.textContent = e.dove;
-        voce.appendChild(dove);
-      }
-      listaEventi.appendChild(voce);
-    }
-    listaEventi.hidden = false;
-    rigaOggi.setAttribute("data-eventi", "si");
-  }
+  const base = "/api/shim/v1/u/" + encodeURIComponent(IDENTITA) + "/";
+  const opzioni = { signal: controllo.signal, headers: { Accept: "application/json" } };
 
-  function nascondiEventi() {
-    if (listaEventi) listaEventi.hidden = true;
-    rigaOggi.removeAttribute("data-eventi");
-  }
+  fetch(base + "eventi_oggi?casa=" + encodeURIComponent(slug), opzioni)
+    .then(r => { if (!r.ok) throw new Error("risposta " + r.status); return r.json(); })
+    .then(dati => { finisci(); mostraEventi(dati && Array.isArray(dati.eventi) ? dati.eventi : []); })
+    .catch(() => { finisci(); nascondiEventi(); });
 
-  /* Una lettura per volta: se il selettore cambia due volte di fila, la risposta
-     della Casa precedente non deve sovrascrivere quella nuova. */
-  function leggiOggi(slug) {
-    if (hrefInCorso && typeof hrefInCorso.abort === "function") hrefInCorso.abort();
-    var controllo = typeof AbortController === "function" ? new AbortController() : null;
-    hrefInCorso = controllo;
-
-    mostraTesto(TESTO_ATTESA, "attesa", null);
-    rigaOggi.setAttribute("aria-busy", "true");
-    /* Nascosta durante la lettura: un numero della Casa precedente sarebbe
-       sbagliato, ed è peggio di nessun numero. */
-    if (riquadroCoda) riquadroCoda.hidden = true;
-    nascondiEventi();
-
-    var scadenza = window.setTimeout(function () {
-      if (controllo) controllo.abort();
-    }, ATTESA_MS);
-
-    /* Due letture sotto la stessa scadenza: il timer si spegne quando è arrivata
-       anche la seconda, altrimenti la lista resterebbe senza limite di attesa. */
-    var inAttesa = 2;
-    function finisci() {
-      if (--inAttesa > 0) return;
-      window.clearTimeout(scadenza);
-      hrefInCorso = null;
-    }
-
-    var base = "/api/shim/v1/u/" + encodeURIComponent(IDENTITA) + "/";
-    var opzioni = { signal: controllo ? controllo.signal : undefined, headers: { Accept: "application/json" } };
-    var richiesta;
-    var richiestaEventi;
-    try {
-      richiesta = fetch(base + "oggi?casa=" + encodeURIComponent(slug), opzioni);
-      /* Stessa scadenza e stesso `abort` della riga: una lista della Casa
-         precedente non deve comparire sotto il conteggio di quella nuova. */
-      richiestaEventi = fetch(base + "eventi_oggi?casa=" + encodeURIComponent(slug), opzioni);
-    } catch (e) {
-      window.clearTimeout(scadenza);
-      hrefInCorso = null;
-      mostraTesto(TESTO_ASSENTE, "non-disponibile", NOTA_ASSENTE);
-      nascondiCoda();
-      return;
-    }
-
-    richiestaEventi
-      .then(function (risposta) {
-        if (!risposta.ok) throw new Error("risposta " + risposta.status);
-        return risposta.json();
-      })
-      .then(function (dati) {
-        finisci();
-        mostraEventi(dati && Array.isArray(dati.eventi) ? dati.eventi : []);
-      })
-      .catch(function () {
-        finisci();
-        nascondiEventi();
-      });
-
-    richiesta
-      .then(function (risposta) {
-        if (!risposta.ok) throw new Error("risposta " + risposta.status);
-        return risposta.json();
-      })
-      .then(function (dati) {
-        finisci();
-        /* Si mostra **solo** il `testo` della vista: ricomporre la frase qui
-           sarebbe una seconda formattazione da tenere allineata, e la Home
-           direbbe numeri diversi dalla chat. */
-        if (dati && typeof dati.testo === "string" && dati.testo.trim() !== "") {
-          mostraTesto(dati.testo, null, null);
-          mostraCoda(dati.casa || slug, Number(dati.proposte) || 0, Number(dati.giorni_piu_vecchia) || 0);
-        } else {
-          mostraTesto(TESTO_ASSENTE, "non-disponibile", NOTA_ASSENTE);
-          nascondiCoda();
-        }
-      })
-      .catch(function () {
-        /* Timeout, rete assente, shim fermo, risposta non JSON: stessa frase per
-           l'operatore. Nessun errore grezzo a schermo. */
-        finisci();
+  fetch(base + "oggi?casa=" + encodeURIComponent(slug), opzioni)
+    .then(r => { if (!r.ok) throw new Error("risposta " + r.status); return r.json(); })
+    .then(dati => {
+      finisci();
+      /* Solo il `testo` della vista: la Home non ricompone frasi che la chat
+         comporrebbe diversamente. */
+      if (dati && typeof dati.testo === "string" && dati.testo.trim() !== "") {
+        mostraTesto(dati.testo, "dati", null);
+        mostraCoda(dati.casa || slug, Number(dati.proposte) || 0, Number(dati.giorni_piu_vecchia) || 0);
+      } else {
         mostraTesto(TESTO_ASSENTE, "non-disponibile", NOTA_ASSENTE);
         nascondiCoda();
-      });
-  }
-
-  /* ------------------------------------------------------------- avvio */
-
-  /* Il selettore è l'unica fonte della Casa scelta: gli `href` nell'HTML sono la
-     destinazione predefinita senza JS. */
-  selettore.value = ricorda(selettore.value) || selettore.value || CASA_PREDEFINITA;
-
-  function applica(slug) {
-    aggiornaDestinazioni(slug);
-    aggiornaNomi(slug);
-    leggiOggi(slug);
-  }
-
-  applica(casaScelta());
-
-  selettore.addEventListener("change", function () {
-    var slug = casaScelta();
-    memorizza(slug);
-    applica(slug);
-  });
-
-  /* Cambio di Casa da un'altra scheda dello stesso browser: la pagina segue. */
-  window.addEventListener("storage", function (evento) {
-    if (evento.key !== CHIAVE_CASA) return;
-    var slug = casaValida(evento.newValue);
-    if (!slug || slug === selettore.value) return;
-    selettore.value = slug;
-    applica(slug);
-  });
-
-  /* Uscita: chiude la sessione **dello shim** con lo stesso percorso del resto
-     della pagina (Caddy aggiunge la chiave lato server). Il POST è gestito qui e
-     non da un modulo HTML, perché l'`action` puntava a un altro dominio: il logout
-     di Onyx. La sessione dell'operatore è del cookie `trasi_sessione`, e la revoca
-     avviene sul database dello shim, quindi il pulsante non deve uscire da Trasi
-     per funzionare. L'esito si dichiara in ogni caso — anche se la richiesta
-     fallisce, chi ha premuto sa che non è uscito. */
-  var pulsanteEsci = document.getElementById("pulsante-esci");
-  var esitoUscita = document.getElementById("esito-uscita");
-  if (pulsanteEsci && esitoUscita) {
-    pulsanteEsci.addEventListener("click", function () {
-      fetch("/api/shim/logout", { method: "POST", credentials: "same-origin" })
-        .then(function (risposta) {
-          esitoUscita.textContent = risposta.ok
-            ? "Sessione chiusa."
-            : "Uscita non riuscita (risposta " + risposta.status + ").";
-          esitoUscita.hidden = false;
-        })
-        .catch(function () {
-          esitoUscita.textContent = "Uscita non riuscita: servizio non raggiungibile.";
-          esitoUscita.hidden = false;
-        });
+      }
+    })
+    .catch(() => {
+      finisci();
+      mostraTesto(TESTO_ASSENTE, "non-disponibile", NOTA_ASSENTE);
+      nascondiCoda();
     });
-  }
-})();
+}
+
+/* avvio */
+selettore.value = ricorda() || selettore.value || CASA_PREDEFINITA;
+
+function applica(slug) { aggiornaDestinazioni(slug); aggiornaNomi(slug); leggiOggi(slug); }
+applica(casaScelta());
+
+selettore.addEventListener("change", () => { const slug = casaScelta(); memorizza(slug); applica(slug); });
+
+window.addEventListener("storage", evento => {
+  if (evento.key !== CHIAVE_CASA) return;
+  const slug = casaValida(evento.newValue);
+  if (!slug || slug === selettore.value) return;
+  selettore.value = slug;
+  applica(slug);
+});
+
+/* uscita: chiude la sessione dello shim (cookie trasi_sessione), non Onyx */
+const pulsanteEsci = document.getElementById("pulsante-esci");
+const esitoUscita = document.getElementById("esito-uscita");
+pulsanteEsci.addEventListener("click", () => {
+  fetch("/api/shim/logout", { method: "POST", credentials: "same-origin" })
+    .then(risposta => {
+      esitoUscita.textContent = risposta.ok ? "Sessione chiusa." : "Uscita non riuscita (risposta " + risposta.status + ").";
+      esitoUscita.hidden = false;
+    })
+    .catch(() => {
+      esitoUscita.textContent = "Uscita non riuscita: servizio non raggiungibile.";
+      esitoUscita.hidden = false;
+    });
+});

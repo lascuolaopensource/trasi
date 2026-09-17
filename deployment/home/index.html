@@ -4,14 +4,78 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>Trasi — ingresso</title>
+<title>Trasi — la porta della rete delle Case di Quartiere</title>
 <meta name="description" content="Trasi: la porta della rete delle Case di Quartiere di Brindisi.">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%2306405A%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27sans-serif%27 font-size=%2716%27 font-weight=%27700%27 fill=%27white%27 text-anchor=%27middle%27%3ET%3C/text%3E%3C/svg%3E">
+<link rel="preload" href="assets/hanken-var-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="tokens.css?v=1">
+<script type="speculationrules">
+{ "prefetch": [ { "source": "document", "where": { "href_matches": "/operatore.html*" }, "eagerness": "moderate" } ] }
+</script>
+<link rel="stylesheet" href="sistema.css?v=1">
+<style>
+@layer pagina {
+  main.corpo { padding-block: 24px 0; }
+  .oggi-riga { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+  .oggi-parola { font-size: 0.75rem; line-height: 1rem; font-weight: 600; letter-spacing: 0.08em; color: var(--text-03); }
+  .oggi-eventi { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+  .oggi-evento { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; font-size: 0.875rem; line-height: 1.25rem; }
+  .oggi-ora { min-width: 5.5ch; font-variant-numeric: tabular-nums; color: var(--text-03); font-family: var(--font-mono); font-weight: 500; }
+  .oggi-evento .dove { color: var(--text-03); }
+  .oggi-evento .dove::before { content: "·\00a0"; }
+  .coda-parola { display: inline; }
+  .destinazioni { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  .dest-principale { padding: 24px; }
+  .dest-nome { font-weight: 700; letter-spacing: 0.06em; font-size: 1.25rem; line-height: 1.75rem; color: var(--theme-text-link); }
+  .dest-principale .dest-nome { font-size: 2rem; line-height: 2.5rem; }
+  .dest-testo { margin-top: 4px; color: var(--text-03); max-width: 60ch; }
+  .coppia { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); }
+  .dest-spenta { background: var(--background-neutral-01); border-color: var(--border-01); cursor: default; }
+  .dest-spenta .dest-nome { color: var(--text-04); }
+  #destinazioni:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .aiuto-dettagli summary { cursor: pointer; }
+  .aiuto-corpo { margin-top: 12px; display: grid; gap: 8px; max-width: 60ch; }
+  .esempio { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+  .glossa { color: var(--text-03); font-size: 0.875rem; }
+  @media (min-width: 40rem) { .destinazioni-due { grid-column: 1 / -1; } }
+  @media (max-width: 40rem) { .dest-principale { padding: 20px; } .dest-principale .dest-nome { font-size: 1.5rem; line-height: 2rem; } }
+  .selettore-scuro { min-width: 14rem; color: var(--text-inverted-05); background-color: transparent; border-color: #ffffff59; }
+  .selettore-scuro:focus-visible { border-color: var(--text-inverted-04); }
+  .home-stati .skeleton-riga { height: 1.5rem; width: 75%; margin: 4px 0; }
+  .oggi-riga { min-height: calc(1.5rem * 2); }
+  @media (min-width: 40rem) { .oggi-riga { min-height: 1.5rem; } }
+  #riquadro-chiedi .t-corpo { min-height: calc(1.5rem * 4); }
+  @media (min-width: 40rem) { #riquadro-chiedi .t-corpo { min-height: 0; } }
+  .oggi-scheda { min-height: calc(1.5rem * 7 + 24px); }
+  .oggi-scheda:has(#oggi-eventi-contenitore[hidden]) { min-height: calc(1.5rem * 6 + 24px); }
+  .oggi-scheda .oggi-eventi:empty { display: none; }
+
+  /* classi di pagina (ex stili inline) */
+  .marchio-testo { display: flex; flex-direction: column; min-width: 0; }
+  .casa-blocco { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .etichetta-testata { color: var(--text-inverted-03); font-size: 0.75rem; margin: 0; }
+  .nota-testata { font-size: 0.75rem; color: var(--text-inverted-03); }
+  .esito-uscita-testata { flex-basis: 100%; font-size: 0.75rem; color: var(--text-inverted-03); }
+  .corpo-pad { padding-block: 24px 0; }
+  .scheda-oggi-stato { border-left: 3px solid var(--border-03); }
+  .sommario-eventi { color: var(--text-04); cursor: pointer; padding: 8px 0; display: inline-flex; min-height: 32px; align-items: center; }
+  .coda-nota { color: var(--text-03); flex-basis: 100%; }
+  .dest-colonna { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .dest-nome-link { color: var(--theme-text-link); }
+  .testo-misura { max-width: 60ch; }
+  .nota-piede { color: var(--text-03); border-top: 1px solid var(--border-01); padding-top: 12px; }
+  .piede-pad { padding: 8px 0 32px; }
+  .secondario { color: var(--text-03); }
+  .width-fit { width: fit-content; }
+  .nota-riga { font-size: 0.875rem; color: var(--text-03); }
+  .dest-spenta .nota-riga { color: var(--text-03); }
+  .h3-pagina { font-size: 1rem; line-height: 1.5rem; }
+}
+</style>
 </head>
 <body>
-<!-- Risorse locali, zero CDN. Le destinazioni sono URL protocol-relative (`//host`)
-     o relativi all'origine, senza schema, così `grep -Ec "https?://"` sui src/href
-     resta 0. Il perché di ogni scelta di veste sta in design/readme.md. -->
+<!-- Le destinazioni sono URL protocol-relative o relativi: nessuna risorsa da
+     domini terzi. La chiave dello shim la mette Caddy (vedi home.js). -->
 <a class="salta" href="#destinazioni">Salta alle destinazioni</a>
 
 <header class="testata">
@@ -22,11 +86,9 @@
       <span class="marchio-sotto">Rete delle Case di Quartiere di Brindisi</span>
     </span>
   </p>
-  <div class="casa">
-    <label class="casa-etichetta" for="selettore-casa">Casa di riferimento</label>
-    <!-- L'elenco delle Case sta solo qui. L'opzione di Tuturano porta la nota
-         «dati provvisori» nel testo: il JS ne ricava il nome per le frasi. -->
-    <select id="selettore-casa">
+  <div class="casa-blocco">
+    <label class="etichetta etichetta-testata" for="selettore-casa">Casa di riferimento</label>
+    <select class="selettore selettore-scuro" id="selettore-casa">
       <option value="san-bao" selected>San Bao</option>
       <option value="bozzano">Centro di Aggregazione Bozzano</option>
       <option value="buscicchio">Parco Buscicchio</option>
@@ -38,115 +100,106 @@
       <option value="santa-spazio">Santa Spazio Culturale</option>
       <option value="tuturano">Tuturano — dati provvisori</option>
     </select>
-    <p class="casa-nota" id="casa-nota" hidden></p>
+    <p class="casa-nota nota-testata" id="casa-nota" hidden></p>
   </div>
   <nav class="azioni" aria-label="Aiuto e uscita">
-    <a class="azione" href="/operatore.html">Area operatore</a>
-    <a class="azione" href="#aiuto">Aiuto</a>
-    <!-- Esci chiude la sessione **dello shim**, non quella di Onyx: prima era un
-         invio del browser a un altro dominio. Il logout ora è
-         `POST /api/shim/logout` (cookie HttpOnly revocato sul database),
-         gestito in `home.js`. -->
-    <button class="azione" type="button" id="pulsante-esci">Esci</button>
-    <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
+    <a class="bottone" data-prominenza="su-scoro" data-size="md" href="/operatore.html">Area operatore</a>
+    <a class="bottone" data-prominenza="su-scoro" data-size="md" href="#aiuto">Aiuto</a>
+    <button class="bottone" data-prominenza="su-scoro" data-size="md" type="button" id="pulsante-esci">Esci</button>
+    <p class="esito-uscita esito-uscita-testata" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
   </nav>
 </header>
 
-<main>
-  <!-- Le due sole cose che cambiano da sole stanno in testa: si leggono prima di
-       scegliere dove andare, non dopo. Il filetto di 4 px a sinistra è il segno di
-       stato del sistema: blu mare per «Oggi», terracotta per la coda. Mai il colore
-       da solo — accanto c'è sempre la parola. -->
-  <section class="fascia" aria-label="Stato di oggi">
-    <p class="oggi" id="oggi" role="status" aria-live="polite" aria-busy="true">Lettura dei dati di oggi in corso…</p>
-    <!-- La lista sotto il conteggio: gli eventi del giorno, titolo e orario, dalla
-         stessa memoria. Non è una regione live (cambia insieme alla riga, che è già
-         annunciata) e sparisce se la lettura fallisce: il conteggio basta. -->
-    <ul class="oggi-eventi" id="oggi-eventi" aria-label="Eventi di oggi" hidden></ul>
+<main class="contenitore corpo-pad">
+  <div class="sezione" id="destinazioni" tabindex="-1">
 
-    <div class="coda" id="coda" hidden>
-      <p class="coda-testo" id="coda-testo"></p>
-      <!-- Predisposto ma inattivo (B6): NocoDB non ha ancora le basi, quindi il
-           collegamento atterrerebbe su una registrazione. La nota lo dichiara,
-           come per REGISTRA/AGGIORNA. -->
-      <a class="coda-azione" id="coda-azione" data-modello="/nocodb/?casa={casa}&amp;view=da-approvare" href="/nocodb/?casa=san-bao&amp;view=da-approvare">Apri la coda delle proposte</a>
-      <span class="nota">il registro non è ancora attivo: per ora si approvano dalla chat</span>
-    </div>
-  </section>
+    <section class="fascia-stato sezione" aria-label="Stato di oggi">
+      <div class="scheda oggi-scheda scheda-oggi-stato" id="oggi-scheda">
+        <p class="oggi-riga t-corpo" id="oggi" role="status" aria-live="polite" aria-busy="true">
+          <span class="oggi-parola">OGGI</span>
+          <span id="oggi-testo" class="skeleton skeleton-riga">Lettura dei dati di oggi in corso…</span>
+        </p>
+        <details class="oggi-eventi-contenitore" id="oggi-eventi-contenitore" hidden>
+          <summary class="t-secondaria-a sommario-eventi" id="oggi-eventi-sommario">Eventi di oggi</summary>
+          <ul class="oggi-eventi" id="oggi-eventi" aria-label="Eventi di oggi"></ul>
+        </details>
 
-  <div id="destinazioni">
-    <h1 class="titolo">La porta della rete delle Case di Quartiere</h1>
+        <p class="coda-riga" id="coda" hidden>
+          <span class="t-corpo" id="coda-testo"></span>
+          <span class="t-secondaria coda-nota">
+            il registro non è ancora attivo: per ora si approvano dalla chat —
+            <a id="coda-azione" data-modello="/nocodb/?casa={casa}&amp;view=da-approvare" href="/nocodb/?casa=san-bao&amp;view=da-approvare">apri la coda delle proposte</a>
+          </span>
+        </p>
+      </div>
 
-    <!-- La gerarchia dice quanto una cosa si usa: CHIEDI decine di volte al giorno,
-         MAPPA e OSSERVATORIO qualche volta, REGISTRA quando capita. Quattro riquadri
-         uguali direbbero una cosa falsa. Vedi guidelines/analisi-architettura-informazione.md §1. -->
-    <a class="destinazione principale" id="riquadro-chiedi" data-modello="/operatore.html?casa={casa}" href="/operatore.html?casa=san-bao">
-      <span class="destinazione-titolo principale-titolo">CHIEDI</span>
-      <span class="destinazione-testo principale-testo">L’assistente della rete: risponde alla persona che hai davanti — dove andare, con quali orari — e dichiara da dove viene ogni informazione.</span>
-      <span class="nota" id="chiedi-nota">si apre nella tua area operatore, con San Bao già impostata</span>
+
+    </section>
+
+    <h1 class="solo-lettore">La porta della rete delle Case di Quartiere</h1>
+
+    <a class="scheda scheda-interattiva dest-principale dest-colonna" id="riquadro-chiedi" data-modello="/operatore.html?casa={casa}" href="/operatore.html?casa=san-bao">
+      <span class="dest-nome dest-nome-link">CHIEDI</span>
+      <span class="t-corpo testo-misura">L’assistente della rete: risponde alla persona che hai davanti — dove andare, con quali orari — e dichiara da dove viene ogni informazione.</span>
+      <span class="t-ui-ten" id="chiedi-nota">si apre con San Bao già impostata</span>
     </a>
-
     <div class="coppia">
-      <a class="destinazione" id="riquadro-mappa" data-modello="/metabase/dashboard/4?casa={casa}" href="/metabase/dashboard/4?casa=san-bao">
-        <span class="destinazione-titolo">MAPPA</span>
-        <span class="destinazione-testo">Dove sono i luoghi e le Case vicine, da guardare insieme alla persona.</span>
+      <a class="scheda scheda-interattiva dest-colonna" id="riquadro-mappa" data-modello="/metabase/dashboard/4?casa={casa}" href="/metabase/dashboard/4?casa=san-bao">
+        <span class="dest-nome t-h2">MAPPA</span>
+        <span class="t-corpo-ten">Dove sono i luoghi e le Case vicine, da guardare insieme alla persona.</span>
+        <span class="t-ui-ten nota-casa-dest">si apre con San Bao già impostata</span>
       </a>
-      <a class="destinazione" id="riquadro-osservatorio" data-modello="/metabase/dashboard/3?casa={casa}" href="/metabase/dashboard/3?casa=san-bao">
-        <span class="destinazione-intestazione">
-          <span class="destinazione-titolo">OSSERVATORIO</span>
-          <span class="destinazione-contatore" id="osservatorio-contatore" hidden></span>
-        </span>
-        <span class="destinazione-testo">I numeri della Casa e le proposte che aspettano una decisione.</span>
+      <a class="scheda scheda-interattiva dest-colonna" id="riquadro-osservatorio" data-modello="/metabase/dashboard/3?casa={casa}" href="/metabase/dashboard/3?casa=san-bao">
+        <span class="dest-nome t-h2">OSSERVATORIO</span>
+        <span class="t-corpo-ten">I numeri della Casa e le proposte che aspettano una decisione.</span>
+        <span class="t-ui-ten nota-casa-dest">si apre con San Bao già impostata</span>
+        <span class="etichetta-stato width-fit" data-tipo="attenzione" id="osservatorio-contatore" hidden></span>
       </a>
     </div>
 
-    <!-- Non è `disabled` (illeggibile e non spiega nulla): è spento, e lo dichiara
-         in parole. Un servizio non attivo che occupa un quarto della pagina insegna
-         che il sistema promette cose che non fa. -->
-    <div class="destinazione spenta" id="riquadro-registra">
-      <span class="destinazione-titolo">REGISTRA / AGGIORNA</span>
-      <span class="destinazione-testo">Schede, eventi e opportunità della Casa.</span>
-      <span class="nota">Fino all’attivazione, le correzioni passano dalle proposte in chat.</span>
-      <span class="etichetta-attenzione">Servizio non ancora attivo</span>
+    <div class="scheda dest-spenta dest-colonna" id="riquadro-registra">
+      <span class="dest-nome t-h2">REGISTRA / AGGIORNA</span>
+      <span class="t-corpo-ten">Schede, eventi e opportunità della Casa.</span>
+      <span class="nota nota-riga">Fino all’attivazione, le correzioni passano dalle proposte in chat.</span>
+      <span class="etichetta-stato width-fit" data-tipo="attenzione">Servizio non ancora attivo</span>
     </div>
+
+    <details class="scheda aiuto-dettagli" id="aiuto">
+      <summary class="t-ui-azione">Aiuto</summary>
+      <div class="aiuto-corpo">
+        <p class="t-corpo-ten">Trasi è la porta della rete delle Case di Quartiere. Da qui si aprono quattro destinazioni, e ognuna si apre già sulla Casa scelta in alto.</p>
+        <h2 class="t-h2 h3-pagina">CHIEDI</h2>
+        <p class="t-corpo-ten">La chat con l’assistente della rete. Si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali.</p>
+        <h2 class="t-h2 h3-pagina">MAPPA</h2>
+        <p class="t-corpo-ten">I luoghi e le Case della rete su una mappa, da guardare insieme alla persona.</p>
+        <h2 class="t-h2 h3-pagina">REGISTRA / AGGIORNA</h2>
+        <p class="t-corpo-ten">Il registro delle schede, degli eventi e delle opportunità della Casa. Non è ancora attivo: fino all’attivazione le correzioni passano dalle proposte fatte in chat.</p>
+        <h2 class="t-h2 h3-pagina">OSSERVATORIO</h2>
+        <p class="t-corpo-ten">I numeri della Casa e la coda delle proposte che aspettano una decisione. I conteggi troppo piccoli si leggono come «&lt;5»: è una tutela della riservatezza delle persone.</p>
+        <h2 class="t-h2 h3-pagina">Da dove viene l’informazione</h2>
+        <p class="t-corpo-ten">Ogni informazione porta un’etichetta. Ce ne sono due, e dicono cose diverse.</p>
+        <p class="esempio"><span class="fonte"><strong>KB</strong> Rete delle Case di Quartiere · agg. 15/09/2026 · affidabilità 2</span> <span class="glossa">la rete lo sa</span></p>
+        <p class="t-corpo-ten">La rete lo sa: qualcuno della rete ha verificato questo dato. La data dice quando, il numero da 1 a 3 dice quanto è solida la fonte.</p>
+        <p class="esempio"><span class="fonte" data-origine="esterna"><strong>Esterna</strong> OpenStreetMap contributors (ODbL) · consultata 02:21 · non verificata dalla rete</span> <span class="glossa">trovato fuori, non verificato</span></p>
+        <p class="t-corpo-ten">Trovato fuori: viene da una fonte esterna e nessuno della rete l’ha controllato. Si può usare, dicendo alla persona che non è verificato — meglio una telefonata prima di mandarla lì.</p>
+        <h2 class="t-h2 h3-pagina">Le proposte</h2>
+        <p class="t-corpo-ten">Trasi non cambia la memoria della rete da sola. Se in chat si segnala che un bar ha chiuso o che un orario è cambiato, nasce una proposta: resta in attesa finché una persona la approva. La riga in alto dice quante ne aspettano una decisione e da quanto tempo. Non c’è una scadenza da rispettare.</p>
+        <h2 class="t-h2 h3-pagina">La riga «Oggi»</h2>
+        <p class="t-corpo-ten">È una lettura della memoria della rete per la Casa scelta: eventi, schede in scadenza, proposte. Sotto il conteggio compaiono gli eventi del giorno, con orario e luogo, nell’ordine in cui iniziano. Se il servizio dati non risponde entro tre secondi, la riga dice «dati non disponibili»: è un’informazione, non un guasto, e le destinazioni funzionano comunque.</p>
+        <h2 class="t-h2 h3-pagina">La Casa in alto</h2>
+        <p class="t-corpo-ten">Il selettore ricorda la Casa nel browser: al prossimo accesso è già quella. L’unica cosa conservata è il nome breve della Casa, nessun dato personale. Tuturano porta la nota «dati provvisori»: alcune sue schede non sono ancora complete.</p>
+        <h2 class="t-h2 h3-pagina">Tastiera</h2>
+        <p class="t-corpo-ten">Si può usare tutto da tastiera: il tasto Tab passa dal salto alle destinazioni, al selettore della Casa, ad Aiuto ed Esci, poi a CHIEDI, MAPPA, OSSERVATORIO e alla coda delle proposte. Il riquadro attorno al fuoco indica sempre dove sei.</p>
+        <p class="t-secondaria nota-piede">La verifica di accessibilità delle tre applicazioni esterne (Onyx, Metabase, NocoDB) è rinviata alla settimana 2 del piano: qui è verificata la sola pagina Trasi Home.</p>
+      </div>
+    </details>
+
+    <footer class="piede-pad">
+      <p class="t-secondaria secondario">Trasi · rete delle Case di Quartiere di Brindisi. Questa pagina non conserva dati personali: la Casa scelta resta nel browser.</p>
+    </footer>
   </div>
-
-  <section id="aiuto" aria-labelledby="aiuto-titolo">
-    <h2 id="aiuto-titolo">Aiuto</h2>
-    <p>Trasi è la porta della rete delle Case di Quartiere. Da qui si aprono quattro destinazioni, e ognuna si apre già sulla Casa scelta in alto.</p>
-    <h3>CHIEDI</h3>
-    <p>La chat con l’assistente della rete. Si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali.</p>
-    <h3>MAPPA</h3>
-    <p>I luoghi e le Case della rete su una mappa, da guardare insieme alla persona.</p>
-    <h3>REGISTRA / AGGIORNA</h3>
-    <p>Il registro delle schede, degli eventi e delle opportunità della Casa. Non è ancora attivo: fino all’attivazione le correzioni passano dalle proposte fatte in chat.</p>
-    <h3>OSSERVATORIO</h3>
-    <p>I numeri della Casa e la coda delle proposte che aspettano una decisione. I conteggi troppo piccoli si leggono come «&lt;5»: è una tutela della riservatezza delle persone.</p>
-
-    <h3>Da dove viene l’informazione</h3>
-    <p>Ogni informazione porta un’etichetta. Ce ne sono due, e dicono cose diverse.</p>
-    <p class="esempio"><span class="esempio-etichetta"><strong>KB</strong> Rete delle Case di Quartiere · agg. 15/09/2026 · affidabilità 2</span> <span class="esempio-glossa">la rete lo sa</span></p>
-    <p>La rete lo sa: qualcuno della rete ha verificato questo dato. La data dice quando, il numero da 1 a 3 dice quanto è solida la fonte.</p>
-    <p class="esempio"><span class="esempio-etichetta esterna"><strong>Esterna</strong> OpenStreetMap contributors (ODbL) · consultata 02:21 · non verificata dalla rete</span> <span class="esempio-glossa">trovato fuori, non verificato</span></p>
-    <p>Trovato fuori: viene da una fonte esterna e nessuno della rete l’ha controllato. Si può usare, dicendo alla persona che non è verificato — meglio una telefonata prima di mandarla lì.</p>
-
-    <h3>Le proposte</h3>
-    <p>Trasi non cambia la memoria della rete da sola. Se in chat si segnala che un bar ha chiuso o che un orario è cambiato, nasce una proposta: resta in attesa finché una persona la approva. La riga in alto dice quante ne aspettano una decisione e da quanto tempo. Non c’è una scadenza da rispettare.</p>
-    <h3>La riga «Oggi»</h3>
-    <p>È una lettura della memoria della rete per la Casa scelta: eventi, schede in scadenza, proposte. Sotto il conteggio compaiono gli eventi del giorno, con orario e luogo, nell’ordine in cui iniziano — anche quelli già finiti, perché «oggi» è la giornata intera. Se il servizio dati non risponde entro tre secondi, la riga dice «dati non disponibili»: è un’informazione, non un guasto, e le destinazioni funzionano comunque.</p>
-    <h3>La Casa in alto</h3>
-    <p>Il selettore ricorda la Casa nel browser: al prossimo accesso è già quella. L’unica cosa conservata è il nome breve della Casa, nessun dato personale. Tuturano porta la nota «dati provvisori»: alcune sue schede non sono ancora complete.</p>
-    <h3>Tastiera</h3>
-    <p>Si può usare tutto da tastiera: il tasto Tab passa dal salto alle destinazioni, al selettore della Casa, ad Aiuto ed Esci, poi a CHIEDI, MAPPA, OSSERVATORIO e alla coda delle proposte. Il riquadro giallo indica sempre dove sei.</p>
-
-    <p class="rinvio">La verifica di accessibilità delle tre applicazioni esterne (Onyx, Metabase, NocoDB) è rinviata alla settimana 2 del piano: qui è verificata la sola pagina Trasi Home.</p>
-  </section>
-
-  <footer class="piede">
-    <p>Trasi · rete delle Case di Quartiere di Brindisi. Questa pagina non conserva dati personali: la Casa scelta resta nel browser.</p>
-  </footer>
 </main>
 
-<script src="home.js?v=2"></script>
+<script src="home.js?v=3" type="module"></script>
 </body>
 </html>

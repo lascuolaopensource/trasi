@@ -1,0 +1,154 @@
+/* Trasi — token di sistema, paralleli a Onyx/Opal v4.7.2.
+ *
+ * Fonte delle regole: docs/onyx-regole-ui.md (estrazione v4.7.2 con fonti file:riga).
+ * I neutri e la semantica (text-01…05, border-01…05, background-neutral/tint-00…04,
+ * action-selection, status-*) sono i valori Onyx in tema chiaro; la marca Case di
+ * Quartiere entra come theme-primary e accento, e non tocca i neutri.
+ * Le varianti dark sono predisposte sotto `data-tema="scuro"` sul <html>.
+ */
+
+:root {
+  /* ---- font ---- */
+  --font-sans: "Hanken Grotesk", "Hanken Grotesk Fallback", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "DM Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", monospace;
+
+  /* ---- neutri Onyx (light) — fonte: web/lib/shared/tokens/semantic-light.json ---- */
+  --text-01: #00000033;
+  --text-02: #00000073;
+  --text-03: #0000008c;
+  --text-04: #000000bf;
+  --text-05: #000000e5;
+  --border-01: #e6e6e6;
+  --border-02: #cccccc;
+  --border-03: #a4a4a4;
+  --border-04: #808080;
+  --border-05: #000000;
+  --background-neutral-00: #ffffff;
+  --background-neutral-01: #fafafa;
+  --background-neutral-02: #f0f0f0;
+  --background-neutral-03: #e6e6e6;
+  --background-neutral-04: #cccccc;
+  --background-tint-00: #ffffff;
+  --background-tint-01: #fafafa;
+  --background-tint-02: #f0f0f1;
+  --background-tint-03: #e6e6e9;
+  --background-tint-04: #cccccf;
+
+  /* testo invertito (su theme-primary e su superfici scure) */
+  --text-inverted-01: #ffffff33;
+  --text-inverted-02: #ffffff73;
+  --text-inverted-03: #ffffff99;
+  --text-inverted-04: #ffffffd9;
+  --text-inverted-05: #fffffff2;
+
+  /* ---- marca Case di Quartiere → theme-primary ----
+     Il blu notte #06405A (testata) diventa il colore pieno; i toni attorno
+     derivano dal mare #0B90CB del logo. Su #06405A il bianco misura 11,1:1. */
+  --theme-primary-01: #e8f1f6;          /* velo di mare — fondi selezione leggeri */
+  --theme-primary-02: #d3e6ef;
+  --theme-primary-03: #9cc4d8;
+  --theme-primary-04: #1d5b76;          /* hover del pieno */
+  --theme-primary-05: #06405a;          /* pieno: testata, bottone primario */
+  --theme-primary-06: #042c3e;          /* pressato */
+  --theme-text-link: #07577b;           /* link: mare-profondo, 7,9:1 su bianco */
+
+  /* ---- stati Onyx (semantic-light.json) ---- */
+  --status-info-00: #f8fafe;
+  --status-info-01: #e7effc;
+  --status-info-05: #286df8;
+  --status-info-text: #1d5ecf;
+  --status-success-00: #f8fbf8;
+  --status-success-01: #e6f2e7;
+  --status-success-05: #00a43f;
+  --status-success-text: #00761f;
+  /* warning senza rosso: è attenzione, non guasto (V6) */
+  --status-warning-00: #fef9f7;
+  --status-warning-01: #fbeae4;
+  --status-warning-05: #ec5b13;
+  --status-warning-text: #b44105;
+  --status-error-00: #fef7f6;
+  --status-error-01: #fceae7;
+  --status-error-05: #dc2626;
+  --status-error-text: #b02b27;
+  --action-danger-00: #fef7f6;
+  --action-danger-01: #fceae7;
+  --action-danger-05: #dc2626;
+
+  /* ---- provenienza (KB / Esterna): la parola decide, il tratto distingue ---- */
+  --fonte-kb-sfondo: var(--background-tint-01);
+  --fonte-kb-bordo: var(--border-02);
+  --fonte-esterna-sfondo: var(--status-warning-00);
+  --fonte-esterna-bordo: var(--border-03);
+
+  /* ---- dimensioni (shared.ts containerSizeVariants, size.json) ---- */
+  --h-line-h1: 2.25rem;      /* 36px — controlli lg */
+  --h-line-h3: 1.75rem;      /* 28px — controlli md */
+  --h-line-main: 1.25rem;    /* 20px — controlli xs */
+  --h-line-secondary: 1rem;  /* 16px — controlli 2xs */
+  --radius-04: 0.25rem;
+  --radius-08: 0.5rem;
+  --radius-12: 0.75rem;
+  --radius-16: 1rem;
+  --radius-round: 62.5rem;
+
+  /* contenitori (styles/sizes.css --app-container-*) */
+  --container-sm: 42rem;     /* 672px */
+  --container-md: 54.5rem;   /* 872px */
+  --container-lg: 62rem;     /* 992px */
+  --sidebar-larghezza: 15rem;       /* 240px */
+  --sidebar-larghezza-piegata: 3.25rem;
+  --header-altezza: 3.25rem;        /* 52px */
+
+  /* ---- movimento (core/interactive/shared.css) ---- */
+  --durata: 150ms;
+  --curva: ease-in-out;
+  --durata-vista: 240ms;    /* view transitions, sotto il tetto dei 250ms */
+
+  /* ---- focus (pattern de facto Onyx: outline 2px border-04, offset 2) ---- */
+  --focus-ring: var(--border-04);
+
+  /* ---- ombre (solo dove serve profondità reale; niente decorative) ---- */
+  --ombra-header: linear-gradient(to bottom, #00000033, transparent);
+  --ombra-popover: 0 4px 12px #0000001f;
+
+  /* ---- metriche di lettura ---- */
+  --misura-testo: 60ch;
+
+  color-scheme: light;
+}
+
+/* ---- tema scuro predisposto (stessa struttura, valori semantic-dark.json) ---- */
+@media (prefers-color-scheme: dark) {
+  html[data-tema="auto"] { color-scheme: dark; }
+  html[data-tema="auto"] {
+    --text-01: #ffffff33;
+    --text-02: #ffffff73;
+    --text-03: #ffffff99;
+    --text-04: #ffffffd9;
+    --text-05: #fffffff2;
+    --border-01: #333333;
+    --border-02: #555555;
+    --border-03: #808080;
+    --border-04: #b2b2b2;
+    --border-05: #ffffff;
+    --background-neutral-00: #000000;
+    --background-neutral-01: #1a1a1a;
+    --background-neutral-02: #262626;
+    --background-neutral-03: #333333;
+    --background-neutral-04: #404040;
+    --background-tint-00: #000000;
+    --background-tint-01: #19191e;
+    --background-tint-02: #26262b;
+    --background-tint-03: #323239;
+    --background-tint-04: #3f3f46;
+    --theme-primary-01: #0d2b3c;
+    --theme-primary-02: #10405a;
+    --theme-primary-03: #14506f;
+    --theme-primary-04: #0a4a68;
+    --theme-primary-05: #07577b;
+    --theme-primary-06: #0a6f9e;
+    --theme-text-link: #5fa6c9;
+    --focus-ring: #b2b2b2;
+  }
+}
+html[data-tema="scuro"] { color-scheme: dark; }

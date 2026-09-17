@@ -6,187 +6,351 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — area operatore</title>
 <meta name="description" content="Area operatore Trasi: chat con l’assistente, registrazione richieste, attrezzoteca, messaggi interni.">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%2306405A%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27sans-serif%27 font-size=%2716%27 font-weight=%27700%27 fill=%27white%27 text-anchor=%27middle%27%3ET%3C/text%3E%3C/svg%3E">
+<link rel="preload" href="assets/hanken-var-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="tokens.css?v=1">
+<link rel="stylesheet" href="sistema.css?v=1">
+<style>
+@layer pagina {
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; }
+  .op-shell { display: grid; grid-template-columns: 1fr; grid-template-areas: "corpo"; flex: 1; min-height: 0; }
+  .op-shell > main { grid-area: corpo; min-width: 0; }
+  .op-navigazione { border-bottom: 1px solid var(--border-01); background: var(--background-tint-01); padding: 8px 16px; }
+  .op-nav-interna { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: thin; width: min(var(--container-lg), 100%); margin-inline: auto; }
+  #banco { display: grid; grid-template-areas: "nav" "contenuto"; grid-template-rows: auto 1fr; min-height: 0; }
+  #banco > *, .op-contenuto > * { min-width: 0; }
+  .op-nav-interna { max-width: 100%; }
+  #banco[hidden] { display: none; }
+  .op-navigazione { grid-area: nav; }
+  .op-contenuto { grid-area: contenuto; }
+  .op-contenuto { width: min(var(--container-lg), 100%); margin-inline: auto; padding: 24px 16px 64px; display: flex; flex-direction: column; gap: 16px; }
+  @media (min-width: 73.75rem) {
+    #banco { grid-template-areas: "nav contenuto"; grid-template-columns: var(--sidebar-larghezza) 1fr; grid-template-rows: 1fr; }
+    .op-navigazione { border-bottom: 0; border-right: 1px solid var(--border-01); padding: 16px 8px; align-self: start; position: sticky; top: var(--header-altezza); max-height: calc(100dvh - var(--header-altezza)); }
+    .op-nav-interna { flex-direction: column; width: 100%; }
+    .op-corpo { padding-inline: 0; }
+  }
+
+  .testata { row-gap: 8px; }
+  .testata .marchio-nome { font-size: 1.125rem; }
+  .voce-casa { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 30rem) {
+    .testata { padding-inline: 8px; }
+    .testata .azioni { gap: 4px; }
+    .testata .azioni .bottone { min-width: 0; padding-inline: 8px; }
+  }
+
+  .testata .marchio-sep { color: var(--text-inverted-03); }
+  .voce-casa { font-size: 0.875rem; color: var(--text-inverted-03); font-weight: 500; }
+
+  /* pannelli */
+  .pannello { display: flex; flex-direction: column; gap: 16px; }
+  .pannello[hidden] { display: none; }
+  .titolo-pannello { scroll-margin-top: calc(var(--header-altezza) + 8px); }
+
+  /* chat alla Onyx */
+  .chat { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+  .chat-registro { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; flex: 1; min-height: 240px; content-visibility: auto; contain-intrinsic-size: auto 600px; }
+  .battuta { display: flex; flex-direction: column; gap: 6px; max-width: 46rem; }
+  .battuta.io { align-self: flex-end; align-items: flex-end; }
+  .bolla { padding: 12px 16px; border-radius: var(--radius-16); font-size: 1rem; line-height: 1.5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .battuta[data-chi="operatore"] .bolla { background: var(--background-tint-02); border: 1px solid var(--border-01); }
+  .battuta[data-chi="assistente"] .bolla { background: var(--background-neutral-00); border: 1px solid var(--border-01); border-top-left-radius: var(--radius-04); }
+  .battuta .chi { font-size: 0.75rem; font-weight: 600; color: var(--text-03); }
+  .fonte-risposta { align-self: flex-start; }
+  .shimmer { color: var(--text-03); font-weight: 600; font-size: 0.875rem; }
+  .shimmer-testo { animation: trasi-pulse 1.6s ease-in-out infinite; }
+  @keyframes trasi-pulse { 50% { opacity: 0.45; } }
+  @media (prefers-reduced-motion: reduce) { .shimmer-testo { animation: none; } }
+  #banco-contenuto:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .chat-vuota { list-style: none; margin: auto; }
+  .chat-registro-log { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .chat-errore { align-self: stretch; max-width: 100%; }
+  .compositore { border: 1px solid var(--border-02); border-radius: var(--radius-16); background: var(--background-neutral-00); padding: 12px; display: flex; gap: 8px; align-items: flex-end; }
+  .compositore:focus-within { border-color: var(--border-03); }
+  .compositore .area-testo { border: 0; padding: 4px; min-height: 1.5rem; }
+  .compositore .area-testo:focus-visible { outline: none; }
+  .compositore .bottone { border-radius: var(--radius-round); width: var(--h-line-h1); min-width: var(--h-line-h1); padding: 0; }
+  .compositore-notta { font-size: 0.75rem; color: var(--text-03); }
+
+  /* attrezzoteca */
+  .movimenti { list-style: none; padding: 0; display: grid; gap: 8px; }
+  .movimento { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border-01); border-radius: var(--radius-08); font-size: 0.875rem; }
+
+  /* messaggi */
+  .bacheca { list-style: none; padding: 0; display: grid; gap: 8px; }
+  .voce-messaggio { padding: 8px 12px; border: 1px solid var(--border-01); border-radius: var(--radius-08); font-size: 0.875rem; line-height: 1.25rem; }
+  .voce-messaggio .quando { font-family: var(--font-mono); color: var(--text-03); font-size: 0.75rem; margin-right: 8px; }
+  .voce-messaggio .rotta { font-weight: 600; }
+  .voce-messaggio[data-letto="no"] { border-left: 3px solid var(--status-info-05); background: var(--status-info-00); }
+  .voce-messaggio[data-letto="no"]::after { content: " — non letto"; color: var(--status-info-text); font-size: 0.75rem; font-weight: 600; }
+
+  /* dialog prestito */
+  .modulo-dialogo { display: grid; gap: 12px; }
+  .modulo-dialogo .riga-campo { margin-bottom: 0; }
+  .finestra-piede { display: flex; justify-content: flex-end; gap: 8px; padding: 0 16px 16px; }
+
+  /* accesso */
+  .modulo-accesso { max-width: 22rem; display: flex; flex-direction: column; gap: 16px; }
+  .stato-vuoto-tabella td { text-align: center; padding: 32px; }
+
+  /* stampa */
+  @media print {
+    .testata, .op-navigazione, .azioni, .compositore, .salta, #pulsante-esci, .linguette { display: none !important; }
+    .op-shell { grid-template-columns: 1fr; }
+    .op-corpo { overflow: visible; }
+    .pannello[hidden] { display: none !important; }
+    body { background: white; }
+    .scheda { border: 1px solid #000; }
+  }
+  /* view transition condivisa col sistema */
+
+  [data-flex] { flex: 1; }
+  .esito-uscita-testata { flex-basis: 100%; font-size: 0.75rem; color: var(--text-inverted-03); }
+  .accesso-blocco { padding-block: 48px; }
+  .titolo-accesso { margin-bottom: 24px; }
+  .bottone-pieno-largo { width: 100%; }
+  .pannello-chat-alta { min-height: 60vh; }
+  .chat-modulo { display: flex; flex-direction: column; gap: 8px; }
+  .chat-registro-piena { flex: 1; }
+  .riga-azione { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .modulo-ricerca { flex-direction: row; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .campo-ricerca { margin: 0; flex: 1; min-width: 14rem; max-width: 24rem; }
+  .h3-pagina { font-size: 1rem; line-height: 1.5rem; }
+  .blocco-aiuto { border-top: 1px solid var(--border-01); background: var(--background-tint-01); }
+  .aiuto-pad { padding-block: 24px; }
+  .aiuto-titolo { margin-bottom: 12px; }
+  .aiuto-intro { max-width: 60ch; margin-bottom: 12px; }
+  .testo-misura { max-width: 60ch; }
+  .piede-pad { padding: 16px 0 32px; }
+  .piede-testo { color: var(--text-03); text-align: center; }
+  .modulo-scheda { padding: 24px; }
+  .riga-submit { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+}
+</style>
 </head>
 <body>
-<!-- Area operatore: un solo indirizzo, nessun redirect verso altri domini.
-     La sessione è un cookie HttpOnly emesso dallo shim (`POST /api/shim/login`):
-     questa pagina non vede né conserva credenziali oltre l'invio del modulo. -->
-<a class="salta" href="#banco">Salta al banco di lavoro</a>
+<!-- Un solo indirizzo, nessun redirect: la sessione è un cookie HttpOnly dello shim
+     (POST /api/shim/login); questa pagina non vede né conserva credenziali. -->
+<a class="salta" href="#banco-contenuto">Salta al banco di lavoro</a>
 
 <header class="testata">
-  <p class="marchio"><span class="marchio-nome">TRASI</span><span class="marchio-sep" aria-hidden="true">·</span>area operatore —
-    <span id="operatore-casa">accesso in corso…</span>
+  <p class="marchio">
+    <span class="marchio-nome">TRASI</span>
+    <span class="marchio-sotto">area operatore</span>
   </p>
+  <span class="voce-casa" id="operatore-casa">accesso richiesto</span>
   <nav class="azioni" aria-label="Navigazione operatore">
-    <a class="azione" href="/">Home</a>
-    <a class="azione" href="#aiuto">Aiuto</a>
-    <button class="azione" type="button" id="pulsante-esci">Esci</button>
-    <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
+    <a class="bottone" data-prominenza="su-scoro" data-size="md" href="/">Home</a>
+    <a class="bottone" data-prominenza="su-scoro" data-size="md" href="#aiuto">Aiuto</a>
+    <button class="bottone" data-prominenza="su-scoro" data-size="md" type="button" id="pulsante-esci">Esci</button>
+    <p class="esito-uscita esito-uscita-testata" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
   </nav>
 </header>
 
-<!-- ============================ accesso ================================== -->
-<main id="accesso" hidden>
-  <h1 class="titolo">Accesso operatori</h1>
-  <form class="modulo" id="modulo-accesso" novalidate>
-    <p>
-      <label class="etichetta" for="accesso-casa">Casa di Quartiere</label>
-      <select id="accesso-casa" required>
-        <option value="san-bao">San Bao</option>
-        <option value="bozzano">Centro di Aggregazione Bozzano</option>
-        <option value="buscicchio">Parco Buscicchio</option>
-        <option value="dream">Dream: Laboratorio Creativo</option>
-        <option value="erranti">Accademia degli Erranti</option>
-        <option value="minimus">Minimus</option>
-        <option value="molo12">Molo 12</option>
-        <option value="pop">POP — Piccolo Opificio Popolare</option>
-        <option value="santa-spazio">Santa Spazio Culturale</option>
-        <option value="tuturano">Tuturano</option>
-      </select>
-    </p>
-    <p>
-      <label class="etichetta" for="accesso-password">Parola d’ordine della Casa</label>
-      <input id="accesso-password" type="password" autocomplete="current-password" required>
-    </p>
-    <p><button class="riquadro-azione" type="submit">Entra</button></p>
-    <p class="messaggio-errore" id="accesso-errore" role="alert" hidden></p>
-  </form>
-</main>
+<div class="op-shell">
+  <!-- ============================ accesso ================================== -->
+  <main class="op-corpo" id="accesso" hidden>
+    <div class="contenitore-sm accesso-blocco">
+      <h1 class="t-h1 titolo-accesso">Accesso operatori</h1>
+      <form class="modulo-accesso" id="modulo-accesso" novalidate>
+        <p class="riga-campo riga-campo-larga">
+          <label class="etichetta" for="accesso-casa">Casa di Quartiere</label>
+          <select class="selettore" id="accesso-casa" required>
+            <option value="san-bao">San Bao</option>
+            <option value="bozzano">Centro di Aggregazione Bozzano</option>
+            <option value="buscicchio">Parco Buscicchio</option>
+            <option value="dream">Dream: Laboratorio Creativo</option>
+            <option value="erranti">Accademia degli Erranti</option>
+            <option value="minimus">Minimus</option>
+            <option value="molo12">Molo 12</option>
+            <option value="pop">POP — Piccolo Opificio Popolare</option>
+            <option value="santa-spazio">Santa Spazio Culturale</option>
+            <option value="tuturano">Tuturano</option>
+          </select>
+        </p>
+        <p class="riga-campo riga-campo-larga">
+          <label class="etichetta" for="accesso-password">Parola d’ordine della Casa</label>
+          <input class="campo" id="accesso-password" type="password" autocomplete="current-password" required>
+        </p>
+        <button class="bottone bottone-pieno-largo" data-prominenza="pieno" data-size="lg" type="submit">Entra</button>
+        <p class="messaggio" data-tipo="errore" id="accesso-errore" role="alert" hidden></p>
+      </form>
+    </div>
+  </main>
 
-<!-- ========================== banco di lavoro ============================ -->
-<main id="banco" hidden>
-  <h1 class="titolo">Banco di lavoro</h1>
+  <!-- ========================== banco di lavoro ============================ -->
+  <main class="op-corpo" id="banco" hidden>
+    <nav class="op-navigazione" aria-label="Funzioni operatore">
+      <div class="op-nav-interna">
+        <a class="linguetta" data-pannello="chat" href="?pannello=chat" aria-current="page"><svg class="icona" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.49 6.5H5.5M8.01 9.5H5.51M1.5 13.5H10.5C12.71 13.5 14.5 11.71 14.5 9.5V6.5C14.5 4.29 12.71 2.5 10.5 2.5H5.5C3.29 2.5 1.5 4.29 1.5 6.5V13.5Z"/></svg>Chiedi</a>
+        <a class="linguetta" data-pannello="richiesta" href="?pannello=richiesta">Registra richiesta</a>
+        <a class="linguetta" data-pannello="attrezzoteca" href="?pannello=attrezzoteca">Attrezzoteca</a>
+        <a class="linguetta" data-pannello="messaggi" href="?pannello=messaggi">Messaggi interni</a>
+      </div>
+    </nav>
+    <div class="op-contenuto" id="banco-contenuto" tabindex="-1">
+      <h1 class="solo-lettore">Banco di lavoro</h1>
+      <!-- ------------------------------ chat -------------------------------- -->
+      <section class="pannello sezione pannello-chat-alta" id="pannello-chat" aria-labelledby="chat-titolo">
+        <h2 class="t-h2 titolo-pannello" id="chat-titolo" tabindex="-1">Chiedi all’assistente</h2>
+        <div role="log" aria-label="Conversazione" class="chat-registro-log"><ol class="chat-registro" id="chat-registro">
+          <li class="stato-vuoto chat-vuota" id="chat-vuota"><span class="segno"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.49 6.5H5.5M8.01 9.5H5.51M1.5 13.5H10.5C12.71 13.5 14.5 11.71 14.5 9.5V6.5C14.5 4.29 12.71 2.5 10.5 2.5H5.5C3.29 2.5 1.5 4.29 1.5 6.5V13.5Z"/></svg></span><span class="titolo">Nessuna domanda ancora</span><span class="descrizione">La domanda della persona si scrive qui sotto; la risposta arriva con la sua fonte.</span></li>
+        </ol></div>
+        <form id="chat-modulo" class="chat-modulo">
+          <label class="etichetta" for="chat-testo">Domanda</label>
+          <div class="compositore">
+            <textarea class="area-testo" id="chat-testo" rows="2" maxlength="2000" placeholder="La domanda della persona" data-flex></textarea>
+            <button class="bottone" data-prominenza="pieno" data-size="md" type="submit" aria-label="Invia la domanda"><svg class="icona" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13.33V2.67M4 6.67l4-4 4 4"/></svg></button>
+          </div>
+          <p class="compositore-notta">La chat passa da Trasi e raggiunge l’assistente senza aprire altri siti. Ogni risposta dichiara la fonte.</p>
+        </form>
+      </section>
 
-  <nav class="linguette" aria-label="Funzioni operatore">
-    <button class="linguetta" type="button" data-pannello="chat" aria-pressed="true">Chiedi</button>
-    <button class="linguetta" type="button" data-pannello="richiesta" aria-pressed="false">Registra richiesta</button>
-    <button class="linguetta" type="button" data-pannello="attrezzoteca" aria-pressed="false">Attrezzoteca</button>
-    <button class="linguetta" type="button" data-pannello="messaggi" aria-pressed="false">Messaggi interni</button>
-  </nav>
+      <!-- --------------------------- richiesta ------------------------------- -->
+      <section class="pannello sezione" id="pannello-richiesta" hidden aria-labelledby="richiesta-titolo">
+        <h2 class="t-h2 titolo-pannello" id="richiesta-titolo" tabindex="-1">Registra la richiesta del colloquio</h2>
+        <p class="messaggio" data-tipo="info"><svg class="icona" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 10.67V8M8 5.33h.01M14.67 8A6.67 6.67 0 1 1 1.33 8a6.67 6.67 0 0 1 13.34 0Z"/></svg>Nessun dato della persona: solo categoria, esito e destinazione. È la regola della piattaforma, non una scelta dell’operatore.</p>
+        <form class="scheda sezione modulo-scheda" id="modulo-richiesta" novalidate>
+          <p class="riga-campo">
+            <label class="etichetta" for="richiesta-categoria">Categoria</label>
+            <select class="selettore" id="richiesta-categoria" required>
+              <option value="orientamento">Orientamento</option>
+              <option value="servizi_sociali">Servizi sociali</option>
+              <option value="fiscale_isee">Fiscale / ISEE</option>
+              <option value="lavoro">Lavoro</option>
+              <option value="abitare">Abitare</option>
+              <option value="salute">Salute</option>
+              <option value="interculturale">Interculturale</option>
+              <option value="ascolto_solitudine">Ascolto / solitudine</option>
+              <option value="eventi_attivita">Eventi e attività</option>
+              <option value="altro">Altro</option>
+            </select>
+          </p>
+          <p class="riga-campo">
+            <label class="etichetta" for="richiesta-esito">Esito</label>
+            <select class="selettore" id="richiesta-esito" required>
+              <option value="risolta">Risolta</option>
+              <option value="inviata_altrove">Inviata altrove</option>
+              <option value="non_trovata">Non trovata</option>
+              <option value="rinviata">Rinviata</option>
+            </select>
+          </p>
+          <p class="riga-campo" id="riga-destinazione" hidden>
+            <label class="etichetta" for="richiesta-destinazione-nota">Destinazione (luogo o nota breve)</label>
+            <input class="campo" id="richiesta-destinazione-nota" type="text" maxlength="120" placeholder="Es. «CAF via Cavour» oppure «sportello Casa Bozzano»">
+          </p>
+          <p class="riga-submit">
+            <button class="bottone" data-prominenza="pieno" data-size="lg" type="submit">Registra</button>
+          </p>
+          <p class="messaggio" data-tipo="ok" id="richiesta-esito-ok" role="status" hidden></p>
+          <p class="messaggio" data-tipo="errore" id="richiesta-errore" role="alert" hidden></p>
+        </form>
+      </section>
 
-  <!-- ------------------------------ chat -------------------------------- -->
-  <section class="pannello" id="pannello-chat" aria-labelledby="chat-titolo">
-    <h2 id="chat-titolo">Chiedi all’assistente</h2>
-    <ol class="chat-registro" id="chat-registro" aria-live="polite" aria-label="Conversazione"></ol>
-    <form class="chat-modulo" id="chat-modulo">
-      <label class="etichetta" for="chat-testo">Domanda</label>
-      <textarea id="chat-testo" rows="3" maxlength="2000" required></textarea>
-      <button class="riquadro-azione" type="submit">Invia</button>
-    </form>
-    <p class="messaggio-nota">La chat passa da Trasi e raggiunge l’assistente senza aprire altri siti. Ogni risposta dichiara la fonte.</p>
-  </section>
+      <!-- -------------------------- attrezzoteca ----------------------------- -->
+      <section class="pannello sezione" id="pannello-attrezzoteca" hidden aria-labelledby="attrezzoteca-titolo">
+        <h2 class="t-h2 titolo-pannello" id="attrezzoteca-titolo" tabindex="-1">Attrezzoteca della rete</h2>
+        <form class="sezione modulo-ricerca" id="modulo-cerca-oggetto">
+          <p class="riga-campo campo-ricerca">
+            <label class="etichetta" for="cerca-oggetto">Cerca oggetto</label>
+            <input class="campo" id="cerca-oggetto" type="search" maxlength="80" placeholder="Es. microfono">
+          </p>
+          <button class="bottone" data-prominenza="bordo" data-size="lg" type="submit">Cerca</button>
+        </form>
+        <div class="scorrevole">
+          <table class="tabella" id="tabella-inventario">
+            <caption class="solo-lettore">Inventario condiviso degli oggetti della rete</caption>
+            <thead>
+              <tr><th scope="col">Oggetto</th><th scope="col">Casa</th><th scope="col">Disponibili</th><th scope="col">Condizione</th><th scope="col">Fonte</th><th scope="col">Azione</th></tr>
+            </thead>
+            <tbody id="corpo-inventario"></tbody>
+          </table>
+        </div>
+        <h3 class="t-h2 h3-pagina">Movimenti da confermare</h3>
+        <ul class="movimenti" id="movimenti-da-confermare"></ul>
+        <p class="messaggio" data-tipo="ok" id="attrezzoteca-ok" role="status" hidden></p>
+        <p class="messaggio" data-tipo="errore" id="attrezzoteca-errore" role="alert" hidden></p>
+      </section>
 
-  <!-- --------------------------- richiesta ------------------------------- -->
-  <section class="pannello" id="pannello-richiesta" hidden aria-labelledby="richiesta-titolo">
-    <h2 id="richiesta-titolo">Registra la richiesta del colloquio</h2>
-    <p class="messaggio-nota">Nessun dato della persona: solo categoria, esito e destinazione. È la regola della piattaforma, non una scelta dell’operatore.</p>
-    <form class="modulo" id="modulo-richiesta">
-      <p>
-        <label class="etichetta" for="richiesta-categoria">Categoria</label>
-        <select id="richiesta-categoria" required>
-          <option value="orientamento">Orientamento</option>
-          <option value="servizi_sociali">Servizi sociali</option>
-          <option value="fiscale_isee">Fiscale / ISEE</option>
-          <option value="lavoro">Lavoro</option>
-          <option value="abitare">Abitare</option>
-          <option value="salute">Salute</option>
-          <option value="interculturale">Interculturale</option>
-          <option value="ascolto_solitudine">Ascolto / solitudine</option>
-          <option value="eventi_attivita">Eventi e attività</option>
-          <option value="altro">Altro</option>
-        </select>
-      </p>
-      <p>
-        <label class="etichetta" for="richiesta-esito">Esito</label>
-        <select id="richiesta-esito" required>
-          <option value="risolta">Risolta</option>
-          <option value="inviata_altrove">Inviata altrove</option>
-          <option value="non_trovata">Non trovata</option>
-          <option value="rinviata">Rinviata</option>
-        </select>
-      </p>
-      <p id="riga-destinazione" hidden>
-        <label class="etichetta" for="richiesta-destinazione-nota">Destinazione (luogo o nota breve)</label>
-        <input id="richiesta-destinazione-nota" type="text" maxlength="120" placeholder="Es. «CAF via Cavour» oppure «sportello Casa Bozzano»">
-      </p>
-      <p><button class="riquadro-azione" type="submit">Registra</button></p>
-      <p class="messaggio-ok" id="richiesta-esito-ok" role="status" hidden></p>
-      <p class="messaggio-errore" id="richiesta-errore" role="alert" hidden></p>
-    </form>
-  </section>
+      <!-- ---------------------------- messaggi ------------------------------- -->
+      <section class="pannello sezione" id="pannello-messaggi" hidden aria-labelledby="messaggi-titolo">
+        <h2 class="t-h2 titolo-pannello" id="messaggi-titolo" tabindex="-1">Messaggi interni (rete e Comune)</h2>
+        <p class="messaggio" data-tipo="info"><svg class="icona" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.49 6.5H5.5M8.01 9.5H5.51M1.5 13.5H10.5C12.71 13.5 14.5 11.71 14.5 9.5V6.5C14.5 4.29 12.71 2.5 10.5 2.5H5.5C3.29 2.5 1.5 4.29 1.5 6.5V13.5Z"/></svg>Canale operativo senza assistente: scrivono solo le persone. Decide chi riceve.</p>
+        <ul class="bacheca" id="elenco-messaggi"></ul>
+        <form class="scheda sezione modulo-scheda" id="modulo-messaggio">
+          <p class="riga-campo">
+            <label class="etichetta" for="messaggio-destinatario">Destinatario</label>
+            <select class="selettore" id="messaggio-destinatario">
+              <option value="san-bao">San Bao</option>
+              <option value="bozzano">Centro di Aggregazione Bozzano</option>
+              <option value="buscicchio">Parco Buscicchio</option>
+              <option value="dream">Dream: Laboratorio Creativo</option>
+              <option value="erranti">Accademia degli Erranti</option>
+              <option value="minimus">Minimus</option>
+              <option value="molo12">Molo 12</option>
+              <option value="pop">POP — Piccolo Opificio Popolare</option>
+              <option value="santa-spazio">Santa Spazio Culturale</option>
+              <option value="tuturano">Tuturano</option>
+            </select>
+          </p>
+          <p class="riga-campo riga-campo-larga">
+            <label class="etichetta" for="messaggio-testo">Messaggio</label>
+            <textarea class="area-testo" id="messaggio-testo" rows="3" maxlength="2000" required></textarea>
+          </p>
+          <p><button class="bottone" data-prominenza="pieno" data-size="lg" type="submit">Invia messaggio</button></p>
+          <p class="messaggio" data-tipo="ok" id="messaggio-ok" role="status" hidden></p>
+          <p class="messaggio" data-tipo="errore" id="messaggio-errore" role="alert" hidden></p>
+        </form>
+      </section>
 
-  <!-- -------------------------- attrezzoteca ----------------------------- -->
-  <section class="pannello" id="pannello-attrezzoteca" hidden aria-labelledby="attrezzoteca-titolo">
-    <h2 id="attrezzoteca-titolo">Attrezzoteca della rete</h2>
-    <form class="modulo modulo-in-linea" id="modulo-cerca-oggetto">
-      <label class="etichetta" for="cerca-oggetto">Cerca oggetto</label>
-      <input id="cerca-oggetto" type="search" maxlength="80" placeholder="Es. microfono">
-      <button class="riquadro-azione" type="submit">Cerca</button>
-    </form>
-    <table class="tabella" id="tabella-inventario">
-      <caption class="solo-lettore">Inventario condiviso degli oggetti della rete</caption>
-      <thead>
-        <tr><th scope="col">Oggetto</th><th scope="col">Casa</th><th scope="col">Disponibili</th><th scope="col">Condizione</th><th scope="col">Fonte</th><th scope="col">Azione</th></tr>
-      </thead>
-      <tbody id="corpo-inventario"><tr><td colspan="6">Caricamento…</td></tr></tbody>
-    </table>
-    <h3>Movimenti da confermare</h3>
-    <ul class="elenco-movimenti" id="movimenti-da-confermare"><li>Caricamento…</li></ul>
-    <p class="messaggio-ok" id="attrezzoteca-ok" role="status" hidden></p>
-    <p class="messaggio-errore" id="attrezzoteca-errore" role="alert" hidden></p>
-  </section>
-
-  <!-- ---------------------------- messaggi ------------------------------- -->
-  <section class="pannello" id="pannello-messaggi" hidden aria-labelledby="messaggi-titolo">
-    <h2 id="messaggi-titolo">Messaggi interni (rete e Comune)</h2>
-    <p class="messaggio-nota">Canale operativo senza assistente: scrivono solo le persone. Decide chi riceve.</p>
-    <ul class="elenco-messaggi" id="elenco-messaggi"><li>Caricamento…</li></ul>
-    <form class="modulo" id="modulo-messaggio">
-      <p>
-        <label class="etichetta" for="messaggio-destinatario">Destinatario</label>
-        <select id="messaggio-destinatario">
-          <option value="">Comune (monitoraggio)</option>
-          <option value="san-bao">San Bao</option>
-          <option value="bozzano">Centro di Aggregazione Bozzano</option>
-          <option value="buscicchio">Parco Buscicchio</option>
-          <option value="dream">Dream: Laboratorio Creativo</option>
-          <option value="erranti">Accademia degli Erranti</option>
-          <option value="minimus">Minimus</option>
-          <option value="molo12">Molo 12</option>
-          <option value="pop">POP — Piccolo Opificio Popolare</option>
-          <option value="santa-spazio">Santa Spazio Culturale</option>
-          <option value="tuturano">Tuturano</option>
-        </select>
-      </p>
-      <p>
-        <label class="etichetta" for="messaggio-testo">Messaggio</label>
-        <textarea id="messaggio-testo" rows="3" maxlength="2000" required></textarea>
-      </p>
-      <p><button class="riquadro-azione" type="submit">Invia messaggio</button></p>
-      <p class="messaggio-ok" id="messaggio-ok" role="status" hidden></p>
-      <p class="messaggio-errore" id="messaggio-errore" role="alert" hidden></p>
-    </form>
-  </section>
-</main>
-
-<section id="aiuto" aria-labelledby="aiuto-titolo">
-  <h2 id="aiuto-titolo">Aiuto</h2>
-  <p>Questa è l’area di lavoro dell’operatore: le quattro linguette corrispondono alle funzioni nuove della piattaforma.</p>
-  <dl class="aiuto-elenco">
-    <dt>Chiedi</dt><dd>La stessa assistente della Home, dentro Trasi: nessun salto di sito. Le risposte dichiarano sempre la fonte.</dd>
-    <dt>Registra richiesta</dt><dd>Una riga per colloquio: categoria, esito, destinazione. Mai il nome della persona.</dd>
-    <dt>Attrezzoteca</dt><dd>Gli oggetti condivisi della rete. Il prestito si propone qui e conta solo dopo la conferma della Casa che riceve.</dd>
-    <dt>Messaggi interni</dt><dd>Comunicazioni tra Case e Comune. L’assistente non legge e non risponde qui.</dd>
-  </dl>
-  <h3>La sessione</h3>
-  <p>L’accesso dura 12 ore e vale solo per la Casa scelta. Con «Esci» la sessione si chiude subito.</p>
+<section id="aiuto" aria-labelledby="aiuto-titolo" class="blocco-aiuto">
+  <div class="contenitore aiuto-pad">
+    <h2 class="t-h2 aiuto-titolo" id="aiuto-titolo">Aiuto</h2>
+    <p class="t-corpo-ten aiuto-intro">Questa è l’area di lavoro dell’operatore: le quattro funzioni corrispondono alle attività nuove della piattaforma.</p>
+    <dl class="sezione testo-misura">
+      <div><dt class="t-ui-azione">Chiedi</dt><dd class="t-corpo-ten">La stessa assistente della Home, dentro Trasi: nessun salto di sito. Le risposte dichiarano sempre la fonte.</dd></div>
+      <div><dt class="t-ui-azione">Registra richiesta</dt><dd class="t-corpo-ten">Una riga per colloquio: categoria, esito, destinazione. Mai il nome della persona.</dd></div>
+      <div><dt class="t-ui-azione">Attrezzoteca</dt><dd class="t-corpo-ten">Gli oggetti condivisi della rete. Il prestito si propone qui e conta solo dopo la conferma della Casa che riceve.</dd></div>
+      <div><dt class="t-ui-azione">Messaggi interni</dt><dd class="t-corpo-ten">Comunicazioni tra Case e Comune. L’assistente non legge e non risponde qui.</dd></div>
+      <div><dt class="t-ui-azione">La sessione</dt><dd class="t-corpo-ten">L’accesso dura 12 ore e vale solo per la Casa scelta. Con «Esci» la sessione si chiude subito.</dd></div>
+    </dl>
+  </div>
 </section>
 
-<footer class="piede">
-  <p>Trasi · area operatore. La piattaforma non conserva dati personali dei cittadini.</p>
+<footer class="piede-pad">
+  <p class="t-secondaria piede-testo">Trasi · area operatore. La piattaforma non conserva dati personali dei cittadini.</p>
 </footer>
+    </div>
+  </main>
+</div>
 
-<script src="operatore.js?v=2"></script>
+
+<dialog class="finestra" id="dialogo-prestito" aria-labelledby="dialogo-prestito-titolo">
+  <div class="finestra-testa">
+    <h2 class="t-h2" id="dialogo-prestito-titolo">Proponi il prestito</h2>
+    <button class="bottone" data-prominenza="quieto" data-size="md" type="button" data-chiudi aria-label="Chiudi"><svg class="icona" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 4L4 12M4 4l8 8"/></svg></button>
+  </div>
+  <form class="modulo-dialogo finestra-corpo" id="modulo-prestito" method="dialog" novalidate>
+    <p class="t-corpo-ten" id="prestito-oggetto"></p>
+    <p class="riga-campo riga-campo-larga">
+      <label class="etichetta" for="prestito-a-casa">Alla Casa di Quartiere</label>
+      <select class="selettore" id="prestito-a-casa" required></select>
+      <span class="aiuto-campo">Una Casa diversa dalla tua: il prestito va a un’altra Casa.</span>
+    </p>
+    <p class="riga-campo riga-campo-larga">
+      <label class="etichetta" for="prestito-al">Fino a quando</label>
+      <input class="campo" id="prestito-al" type="date" required>
+    </p>
+    <p class="messaggio" data-tipo="errore" id="prestito-errore" role="alert" hidden></p>
+  </form>
+  <div class="finestra-piede">
+    <button class="bottone" data-prominenza="quieto" data-size="lg" type="button" data-annulla>Annulla</button>
+    <button class="bottone" data-prominenza="pieno" data-size="lg" type="submit" form="modulo-prestito">Invia la proposta</button>
+  </div>
+</dialog>
+
+<script src="operatore.js?v=3" type="module"></script>
 </body>
 </html>

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trasi — sistema visuale</title>
+<meta name="description" content="Catalogo dei componenti e dei token del sistema visuale di Trasi.">
+<link rel="stylesheet" href="tokens.css?v=1">
+<link rel="stylesheet" href="sistema.css?v=1">
+<style>
+@layer pagina {
+  .catalogo { display: flex; flex-direction: column; gap: 32px; padding-bottom: 64px; }
+  .blocco { display: flex; flex-direction: column; gap: 12px; }
+  .vetrina { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 16px; border: 1px dashed var(--border-01); border-radius: var(--radius-12); background: var(--background-neutral-01); }
+  .token-tabella td { font-family: var(--font-mono); font-size: 0.75rem; }
+  .campione { display: inline-flex; align-items: center; gap: 8px; }
+  .campione .swatch { width: 2.5rem; height: 1.5rem; border-radius: var(--radius-04); border: 1px solid var(--border-01); }
+  .icone .icona { width: 1.5rem; height: 1.5rem; }
+}
+</style>
+</head>
+<body>
+<a class="salta" href="#corpo">Salta al contenuto</a>
+<header class="testata">
+  <p class="marchio">
+    <span class="marchio-nome">TRASI</span>
+    <span class="marchio-sotto">sistema visuale</span>
+  </p>
+  <nav class="azioni" aria-label="Navigazione">
+    <a class="bottone" data-prominenza="su-scoro" data-size="md" href="/">Home</a>
+  </nav>
+</header>
+<main class="contenitore" id="corpo">
+  <h1 class="t-h1" style="margin:24px 0">Sistema visuale di Trasi</h1>
+  <p class="t-corpo-ten" style="max-width:60ch;margin-bottom:32px">Catalogo dei componenti usati dalle pagine. I token sono in <code class="t-mono">tokens.css</code>, i componenti in <code class="t-mono">sistema.css</code>: questo file mostra solo ciò che le pagine usano davvero.</p>
+
+  <section class="catalogo" aria-label="Colori">
+    <h2 class="t-h2">Neutri e stati (Onyx)</h2>
+    <div class="vetrina" id="campioni-colore"></div>
+    <p class="t-secondaria">Contrasti misurati: tutti i testi ≥ 4,5:1 sul loro fondo (tabella nel report di revisione).</p>
+  </section>
+
+  <section class="catalogo" aria-label="Tipografia">
+    <h2 class="t-h2">Tipografia</h2>
+    <div class="vetrina" style="flex-direction:column;align-items:stretch">
+      <p class="t-hero">heading-h1 · La porta della rete</p>
+      <p class="t-h1">heading-h2 · Oggi a San Bao</p>
+      <p class="t-h2">heading-h3 · Le proposte</p>
+      <p class="t-corpo">main-content-body: l’assistente risponde con luogo, orari e fonte.</p>
+      <p class="t-corpo-ten">main-content-muted: testo di accompagnamento.</p>
+      <p class="t-ui">main-ui-body · etichette e controlli</p>
+      <p class="t-secondaria">secondary-body: note brevi.</p>
+      <p class="fonte">[KB · Rete delle Case di Quartiere · agg. 15/09/2026 · affidabilità 2]</p>
+    </div>
+  </section>
+
+  <section class="catalogo" aria-label="Bottoni">
+    <h2 class="t-h2">Bottoni</h2>
+    <div class="vetrina">
+      <button class="bottone" data-prominenza="pieno" data-size="lg">Primario</button>
+      <button class="bottone" data-prominenza="bordo" data-size="lg">Secondario</button>
+      <button class="bottone" data-prominenza="quieto" data-size="lg">Quieto</button>
+      <button class="bottone" data-prominenza="pieno" data-size="lg" disabled>Disabilitato</button>
+      <button class="bottone" data-prominenza="bordo" data-size="md" data-pericolo>Pericolo</button>
+      <a class="bottone" data-prominenza="pieno" data-size="md" href="#">Come <code>&lt;a&gt;</code></a>
+    </div>
+  </section>
+
+  <section class="catalogo" aria-label="Campi">
+    <h2 class="t-h2">Campi</h2>
+    <div class="vetrina" style="flex-direction:column;align-items:stretch;gap:16px">
+      <p class="riga-campo riga-campo-larga">
+        <label class="etichetta" for="es-campo">Casa di riferimento</label>
+        <input class="campo" id="es-campo" placeholder="Es. San Bao">
+        <span class="aiuto-campo">Si può usare tutto da tastiera.</span>
+      </p>
+      <p class="riga-campo riga-campo-larga">
+        <label class="etichetta" for="es-selettore">Casa</label>
+        <select class="selettore" id="es-selettore"><option>San Bao</option><option>Bozzano</option></select>
+      </p>
+      <p class="riga-campo riga-campo-larga">
+        <label class="etichetta" for="es-area">Domanda</label>
+        <textarea class="area-testo" id="es-area" rows="3"></textarea>
+      </p>
+      <p class="riga-campo riga-campo-larga">
+        <label class="etichetta" for="es-err">Campo con errore</label>
+        <input class="campo" id="es-err" value="12/45/2026" aria-invalid="true" aria-describedby="es-err-msg">
+        <span class="messaggio" data-tipo="errore" id="es-err-msg"><svg class="icona" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 5.3v3.4M8 11h.007M14.67 8A6.67 6.67 0 1 1 1.33 8a6.67 6.67 0 0 1 13.34 0Z"/></svg>La data non si legge: usa il formato 15/09/2026.</span>
+      </p>
+    </div>
+  </section>
+
+  <section class="catalogo" aria-label="Messaggi e stati">
+    <h2 class="t-h2">Messaggi, etichette, provenienza</h2>
+    <div class="vetrina" style="flex-direction:column;align-items:stretch">
+      <p class="messaggio" data-tipo="ok"><svg class="icona" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 4.5L6 12L2.5 8.5"/></svg>Messaggio inviato.</p>
+      <p class="messaggio" data-tipo="attenzione"><svg class="icona" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.8 1.9C7.4 0.9 8.6 0.9 9.2 1.9L14.6 11.1C15.2 12.1 14.7 13.3 14.1 13.3H1.9C1.3 13.3 0.8 12.1 1.4 11.1L6.8 1.9ZM8 5.3V8.7M8 11h.007"/></svg>Servizio non ancora attivo.</p>
+      <p class="messaggio" data-tipo="errore"><svg class="icona" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6.67"/><path d="M8 5.3v3.4M8 11h.007"/></svg>Sessione scaduta: accedi di nuovo.</p>
+      <p><span class="etichetta-stato" data-tipo="attenzione">Servizio non ancora attivo</span> <span class="etichetta-stato">dati provvisori</span></p>
+      <p><span class="fonte">[KB · Rete delle Case di Quartiere · agg. 15/09/2026 · affidabilità 2]</span></p>
+      <p><span class="fonte" data-origine="esterna">[Esterna · OpenStreetMap contributors (ODbL) · consultata 02:21 · non verificata dalla rete]</span></p>
+    </div>
+  </section>
+
+  <section class="catalogo" aria-label="Schede">
+    <h2 class="t-h2">Schede</h2>
+    <div class="vetrina">
+      <a class="scheda scheda-interattiva" style="width:18rem" href="#">
+        <span class="t-ui-azione">CHIEDI</span>
+        <span class="t-corpo-ten">L’assistente della rete, con la fonte citata.</span>
+      </a>
+      <div class="scheda" style="width:18rem">
+        <span class="t-ui-azione">REGISTRA / AGGIORNA</span>
+        <span class="etichetta-stato" data-tipo="attenzione" style="margin-top:8px">Servizio non ancora attivo</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="catalogo" aria-label="Stato vuoto e caricamento">
+    <h2 class="t-h2">Stato vuoto, skeleton, attesa</h2>
+    <div class="vetrina" style="align-items:stretch">
+      <div class="stato-vuoto" style="flex:1">
+        <span class="segno"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14L11.1 11.1M12.6667 7.33333C12.6667 10.2789 10.2789 12.6667 7.33333 12.6667C4.38781 12.6667 2 10.2789 2 7.33333C2 4.38781 4.38781 2 7.33333 2C10.2789 2 12.6667 4.38781 12.6667 7.33333Z"/></svg></span>
+        <span class="titolo">Nessun oggetto trovato</span>
+        <span class="descrizione">La ricerca non ha trovato corrispondenze nell’inventario condiviso.</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px;justify-content:center">
+        <span class="skeleton" style="height:1.25rem;width:70%">Riga in caricamento</span>
+        <span class="skeleton" style="height:1.25rem;width:45%">Riga in caricamento</span>
+        <p class="t-ui-ten" style="display:flex;align-items:center;gap:8px"><span class="attesa" aria-hidden="true"></span> Lettura dei dati in corso…</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="catalogo" aria-label="Tabella">
+    <h2 class="t-h2">Tabella</h2>
+    <div class="scorrevole">
+      <table class="tabella">
+        <caption>Oggetti condivisi della rete</caption>
+        <thead><tr><th scope="col">Oggetto</th><th scope="col">Casa</th><th scope="col">Disponibili</th><th scope="col">Condizione</th><th scope="col">Fonte</th></tr></thead>
+        <tbody>
+          <tr><td>Microfono radio</td><td>San Bao</td><td class="numero">2</td><td>Buona</td><td><span class="fonte">[KB · Rete · agg. 15/09/2026 · affidabilità 2]</span></td></tr>
+          <tr><td>Lavagna portatile</td><td>Molo 12</td><td class="numero">&lt;5</td><td>Da vedere</td><td><span class="fonte" data-origine="esterna">[Esterna · inventario cartaceo · consultata 11:42]</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="catalogo" aria-label="Icone">
+    <h2 class="t-h2">Icone (set Opal, stroke 1.5)</h2>
+    <div class="vetrina icone" id="vetrina-icone"></div>
+  </section>
+</main>
+<script type="module">
+import { ICONE } from "./icone.js";
+const vetrina = document.getElementById("vetrina-icone");
+for (const [nome, svg] of Object.entries(ICONE)) {
+  const figura = document.createElement("figure");
+  figura.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:4px;width:5.5rem";
+  figura.innerHTML = svg + `<figcaption class="t-secondaria">${nome}</figcaption>`;
+  vetrina.appendChild(figura);
+}
+const CAMPIONI = [
+  ["text-05", "testo pieno"], ["text-03", "testo tenue"],
+  ["background-tint-01", "superficie"], ["background-tint-02", "hover"],
+  ["background-neutral-03", "disabled"], ["border-02", "bordo"],
+  ["theme-primary-05", "pieno"], ["status-info-01", "info"],
+  ["status-success-01", "successo"], ["status-warning-01", "attenzione"], ["status-error-01", "errore"],
+];
+const riga = document.getElementById("campioni-colore");
+for (const [tok, uso] of CAMPIONI) {
+  const el = document.createElement("span");
+  el.className = "campione t-secondaria";
+  el.innerHTML = `<span class="swatch" style="background:var(--${tok})"></span>${tok} — ${uso}`;
+  riga.appendChild(el);
+}
+</script>
+</body>
+</html>
