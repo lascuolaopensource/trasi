@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import re
 import subprocess
 import sys
@@ -181,6 +182,53 @@ def test_idempotenza_secondo_run_non_rinvia(db_vivo, psql, ciclo_pulito):
         f"il registro non dichiara l'invio forzato: {ultimo_forzato['dettaglio']}"
     )
 
+
+@pytest.mark.live
+def test_il_ciclo_persiste_il_report_come_oggetto_e_non_lo_riscrive(db_vivo, psql, sql_amministratore, ciclo_pulito):
+    """T13 — dopo il ciclo, `trasi.report` ha **una riga per Casa** (ambito `casa`) con i contenuti del
+    foglio 4.3 e il CSV della Casa; un secondo ciclo dello stesso mese non la riscrive (`automazioni` non
+    ha UPDATE: db/024). Il mese è uno senza dati (2020-01), così la fixture non tocca i report veri e i
+    numeri attesi sono zeri e maschere «—», non stime.
+    """
+    mese = "2020-01"
+    sql_amministratore(f"DELETE FROM trasi.report WHERE mese = DATE '{mese}-01'")
+    try:
+        primo = _esegui("--mese", mese)
+        assert primo.returncode == 0, f"il ciclo è fallito:\n{primo.stderr}"
+        assert "10 righe in trasi.report" in primo.stdout, primo.stdout
+
+        righe = psql(
+            "SELECT r.casa_slug, r.ambito, r.contenuti, t.csv, r.generato_ts, t.flusso_run_id "
+            f"  FROM trasi.v_report r JOIN trasi.report t USING (id) WHERE r.mese = DATE '{mese}-01' ORDER BY casa_slug"
+        )
+        assert len(righe) == LUOGHI
+        assert {r["ambito"] for r in righe} == {"casa"}
+        assert {r["casa_slug"] for r in righe} >= {"san-bao", "bozzano", "tuturano"}
+        contenuti = json.loads(righe[0]["contenuti"])
+        assert {"richieste", "senza_risposta", "per_categoria_esito", "proposte_in_attesa", "proposte_applicate", "schede_in_scadenza"} <= set(contenuti)
+        assert contenuti["richieste"] == 0 and contenuti["per_categoria_esito"] == []
+        assert righe[0]["csv"].splitlines()[0] == "casa,categoria,esito,n"
+        assert all(r["flusso_run_id"] for r in righe), "il report non è legato all'esecuzione che l'ha generato"
+        generato = {r["casa_slug"]: r["generato_ts"] for r in righe}
+
+        secondo = _esegui("--mese", mese, "--forza")
+        assert secondo.returncode == 0, secondo.stderr
+        dopo = psql(f"SELECT casa_slug, generato_ts FROM trasi.v_report WHERE mese = DATE '{mese}-01'")
+        assert len(dopo) == LUOGHI, "il secondo ciclo ha duplicato il report"
+        assert {r["casa_slug"]: r["generato_ts"] for r in dopo} == generato, "il report è stato riscritto"
+    finally:
+        sql_amministratore(f"DELETE FROM trasi.report WHERE mese = DATE '{mese}-01'")
+
+
+def test_il_mese_da_rendicontare_e_quello_appena_chiuso():
+    """Senza `--mese`, il ciclo rendiconta il mese **precedente**: il giorno 3 il mese corrente ha tre
+    giorni di dati, e un report di tre giorni presentato come «il mese» era il difetto misurato (P2.1)."""
+    from datetime import date
+
+    mese = ciclo_mensile._mese_corrente(None)
+    oggi = date.today()
+    assert mese.day == 1
+    assert (mese.year, mese.month) == ((oggi.year, oggi.month - 1) if oggi.month > 1 else (oggi.year - 1, 12))
 
 @pytest.mark.live
 def test_messaggi_rispettano_v6(db_vivo, ciclo_pulito):

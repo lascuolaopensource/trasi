@@ -89,6 +89,19 @@
         <div class="eventi-lista" id="eventi-lista"></div>
       </section>
 
+      <!-- ======================================================== REPORT MENSILE ===============
+           L'ultimo rendiconto leggibile da questa sessione (la propria Casa; tutte per la rete). Lo
+           scrive il ciclo mensile in `trasi.report` (db/024); lo riempie `report-home.js` con
+           `GET /op/report`, la RLS `rep_sel` decide cosa arriva. Si legge e si scarica (.html). -->
+      <section class="blocco filetto report" id="report" aria-labelledby="report-titolo">
+        <div class="blocco-testa">
+          <h2 id="report-titolo">Report mensile</h2>
+          <p>Il rendiconto del mese appena chiuso: richieste, esiti, proposte. Sotto la soglia di riservatezza il numero è «&lt;5».</p>
+        </div>
+        <p class="report-stato" id="report-stato" role="status">Lettura del report in corso…</p>
+        <div class="report-lista" id="report-lista"></div>
+      </section>
+
     </main>
   </div>
 </div>
@@ -98,5 +111,6 @@
 <script src="assets/shell.js?v=2"></script>
 <script src="assets/storico.js?v=2"></script>
 <script src="assets/eventi-home.js?v=1"></script>
+<script src="assets/report-home.js?v=1"></script>
 </body>
 </html>

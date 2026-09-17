@@ -49,3 +49,22 @@
 .eventi-ripete { color: var(--testo-tenue); font-size: var(--t-minuto, 0.9375rem); }
 .eventi-ripete::before { content: "\00b7\00a0"; }
 .eventi-voce .etichetta { flex-basis: 100%; margin-top: 2px; }
+
+/* «Report mensile»: un riquadro per Casa — testa (Casa, mese), i cinque numeri di sintesi in colonna,
+   le celle per categoria ed esito, il collegamento all'export. Niente moduli: si legge e si scarica. */
+.report { margin-top: var(--s-6, 24px); }
+.report-stato { margin: 0; color: var(--testo-tenue); }
+.report-stato[hidden] { display: none; }
+.report-lista { display: grid; gap: var(--s-4, 16px); grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); }
+.report-voce { display: flex; flex-direction: column; gap: var(--s-3, 12px); padding: var(--s-4, 16px); border: 1px solid var(--bordo-tenue, #C9C3B6); border-radius: var(--raggio-piccolo, 4px); }
+.report-voce-testa { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s-3, 12px); }
+.report-titolo { margin: 0; font-size: var(--t-corpo, 1rem); font-weight: 700; }
+.report-mese { margin: 0; color: var(--testo-tenue); text-transform: capitalize; }
+.report-numeri { display: grid; grid-template-columns: 1fr max-content; gap: var(--s-1, 4px) var(--s-3, 12px); margin: 0; }
+.report-numeri dt { color: var(--testo-tenue); }
+.report-numeri dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.report-celle { list-style: none; margin: 0; padding: var(--s-2, 8px) 0 0; border-top: 1px solid var(--bordo-tenue, #C9C3B6); display: flex; flex-direction: column; gap: var(--s-1, 4px); }
+.report-cella { display: flex; justify-content: space-between; gap: var(--s-3, 12px); font-size: var(--t-minuto, 0.9375rem); }
+.report-cella-n { font-variant-numeric: tabular-nums; }
+.report-nota { margin: 0; color: var(--testo-tenue); font-size: var(--t-minuto, 0.9375rem); }
+.report-azioni { margin: 0; }
