@@ -192,6 +192,7 @@ def test_il_ciclo_persiste_il_report_come_oggetto_e_non_lo_riscrive(db_vivo, psq
     """
     mese = "2020-01"
     try:
+        from conftest import pulisci_report_consentito, _esegui_pulizia
         pulisci_report_consentito(f"{mese}-01")
         _esegui_pulizia(registro=True, proposte=False)
         primo = _esegui("--mese", mese)

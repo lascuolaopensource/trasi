@@ -99,7 +99,10 @@ http://{$TRASI_DOMAIN} {
 	# forzando e non a chi la apre — che è chi la usa allo sportello.
 	# Cutover T-UX-20: `operatore.html` è stato assorbito dall'Account (plan-wireframe.md D7).
 	# Il file resta sul disco per i vecchi segnalibri, ma ogni richiesta va alla pagina nuova:
-	# non devono esistere due aree operatore.
+	# non devono esistere due aree operatore. I fratelli di `operatore.html` (js/css e i moduli
+	# della vecchia interfaccia) non hanno una pagina nuova: 410, non un 404 muto.
+	@legacy path /operatore.js /home.js /style.css /assets/operatore.js
+	respond @legacy 410
 	redir /operatore.html /account.html permanent
 
 	handle {
