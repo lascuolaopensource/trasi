@@ -273,6 +273,13 @@ BEGIN
   EXECUTE 'RESET ROLE';
   IF n <> 0 THEN RAISE EXCEPTION 'FAIL T14 — san-bao ha inserito una persona di bozzano: la RLS non isola persona_casa'; END IF;
 
+  -- Una persona di Bozzano c'è davvero (scritta da Bozzano): senza fixture UPDATE e DELETE cross-Casa
+  -- toccherebbero 0 righe per assenza di righe, non per la RLS, e il test passerebbe a vuoto.
+  EXECUTE 'SET ROLE casa_bozzano';
+  INSERT INTO trasi.persona_casa (casa_id, nome, ruolo, consenso_il)
+  VALUES (bozzano, 'Persona di Bozzano (fixture T14)', 'volontario', current_date);
+  EXECUTE 'RESET ROLE';
+
   -- E nemmeno si aggira con un UPDATE delle righe di un'altra Casa.
   EXECUTE 'SET ROLE casa_sanbao';
   BEGIN
@@ -283,5 +290,23 @@ BEGIN
   EXECUTE 'RESET ROLE';
   IF n <> 0 THEN RAISE EXCEPTION 'FAIL T14 — san-bao ha aggiornato % persone di Bozzano', n; END IF;
 
-  RAISE NOTICE 'PASS T14 — persona_casa: INSERT e UPDATE cross-Casa → 42501 (la RLS isola anche i nomi)';
+  -- Né con un DELETE (`pers_del_casa`): cancellare il nome di chi lavora altrove è una scrittura come
+  -- le altre — la revoca la fa la Casa che ha raccolto il consenso.
+  EXECUTE 'SET ROLE casa_sanbao';
+  BEGIN
+    DELETE FROM trasi.persona_casa WHERE casa_id = bozzano;
+    GET DIAGNOSTICS n = ROW_COUNT;
+  EXCEPTION WHEN insufficient_privilege THEN n := 0;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL T14 — san-bao ha cancellato % persone di Bozzano', n; END IF;
+
+  -- La fixture la toglie chi la può toccare: la sua Casa.
+  EXECUTE 'SET ROLE casa_bozzano';
+  DELETE FROM trasi.persona_casa WHERE nome = 'Persona di Bozzano (fixture T14)';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  EXECUTE 'RESET ROLE';
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL T14 — Bozzano non ha potuto cancellare la propria persona (% righe)', n; END IF;
+
+  RAISE NOTICE 'PASS T14 — persona_casa: INSERT, UPDATE e DELETE cross-Casa → 0 righe/42501; la propria Casa cancella (la RLS isola anche i nomi)';
 END $$;

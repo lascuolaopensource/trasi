@@ -4,149 +4,157 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>Trasi — ingresso</title>
-<meta name="description" content="Trasi: la porta della rete delle Case di Quartiere di Brindisi.">
-<link rel="stylesheet" href="style.css?v=2">
+<title>Trasi — accesso della Casa</title>
+<meta name="description" content="Trasi: accesso dell'operatore con le credenziali della Casa di Quartiere.">
+<link rel="stylesheet" href="assets/struttura.css">
+<link rel="stylesheet" href="assets/veste.css">
+<style>
+  /* Veste locale della sola schermata di accesso: non è shell (qui non c'è ancora una sessione,
+     quindi non c'è sidebar). Tre regole, e stanno qui perché non servono a nessun'altra pagina. */
+  .accesso { max-width: 32rem; margin: 0 auto; padding: calc(var(--shell-passo) * 12) calc(var(--shell-passo) * 6); }
+  .accesso .blocco { gap: calc(var(--shell-passo) * 4); }
+  .accesso label { display: block; }
+  .accesso input, .accesso select {
+    width: 100%; min-height: var(--shell-bersaglio); padding: 0 calc(var(--shell-passo) * 3);
+    font: inherit; border-width: var(--contorno, 2px); border-style: solid; border-radius: var(--raggio, 10px);
+  }
+  .accesso input { background: var(--superficie); border-color: var(--bordo); color: var(--testo); }
+  .accesso select { background: var(--superficie); border-color: var(--bordo); color: var(--testo); }
+  .riga-mostra { display: flex; gap: calc(var(--shell-passo) * 2); align-items: flex-end; }
+  .riga-mostra > :first-child { flex: 1; }
+  .messaggio { margin: 0; }
+  .messaggio[hidden] { display: none; }
+  .esito { font-weight: 600; }
+</style>
+>>>>>>> 463fcd1 (feat(ux): il wireframe funzionante a tre pagine — Home, Osservatorio, Account)
 </head>
 <body>
-<!-- Risorse locali, zero CDN. Le destinazioni sono URL protocol-relative (`//host`)
-     o relativi all'origine, senza schema, così `grep -Ec "https?://"` sui src/href
-     resta 0. Il perché di ogni scelta di veste sta in design/readme.md. -->
-<a class="salta" href="#destinazioni">Salta alle destinazioni</a>
+<!-- ============================================================================
+     ACCESSO DELLA CASA (D4: un account per Casa, US-6.1)
 
-<header class="testata">
-  <p class="marchio">
-    <img class="marchio-logo" src="assets/logo-case-di-quartiere.png" alt="" width="203" height="88">
-    <span class="marchio-testo">
-      <span class="marchio-nome">TRASI</span>
-      <span class="marchio-sotto">Rete delle Case di Quartiere di Brindisi</span>
-    </span>
-  </p>
-  <div class="casa">
-    <label class="casa-etichetta" for="selettore-casa">Casa di riferimento</label>
-    <!-- L'elenco delle Case sta solo qui. L'opzione di Tuturano porta la nota
-         «dati provvisori» nel testo: il JS ne ricava il nome per le frasi. -->
-    <select id="selettore-casa">
-      <option value="san-bao" selected>San Bao</option>
-      <option value="bozzano">Centro di Aggregazione Bozzano</option>
-      <option value="buscicchio">Parco Buscicchio</option>
-      <option value="dream">Dream: Laboratorio Creativo</option>
-      <option value="erranti">Accademia degli Erranti</option>
-      <option value="minimus">Minimus</option>
-      <option value="molo12">Molo 12</option>
-      <option value="pop">POP — Piccolo Opificio Popolare</option>
-      <option value="santa-spazio">Santa Spazio Culturale</option>
-      <option value="tuturano">Tuturano — dati provvisori</option>
-    </select>
-    <p class="casa-nota" id="casa-nota" hidden></p>
-  </div>
-  <nav class="azioni" aria-label="Aiuto e uscita">
-    <a class="azione" href="/operatore.html">Area operatore</a>
-    <a class="azione" href="#aiuto">Aiuto</a>
-    <!-- Esci chiude la sessione **dello shim**, non quella di Onyx: prima era un
-         invio del browser a un altro dominio. Il logout ora è
-         `POST /api/shim/logout` (cookie HttpOnly revocato sul database),
-         gestito in `home.js`. -->
-    <button class="azione" type="button" id="pulsante-esci">Esci</button>
-    <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
-  </nav>
-</header>
+     Questa è l'unica pagina senza shell: prima del login non c'è né Casa né sessione, quindi
+     non c'è sidebar da mostrare. Se la sessione è già aperta, la pagina manda alla Home.
 
-<main>
-  <!-- Le due sole cose che cambiano da sole stanno in testa: si leggono prima di
-       scegliere dove andare, non dopo. Il filetto di 4 px a sinistra è il segno di
-       stato del sistema: blu mare per «Oggi», terracotta per la coda. Mai il colore
-       da solo — accanto c'è sempre la parola. -->
-  <section class="fascia" aria-label="Stato di oggi">
-    <p class="oggi" id="oggi" role="status" aria-live="polite" aria-busy="true">Lettura dei dati di oggi in corso…</p>
-    <!-- La lista sotto il conteggio: gli eventi del giorno, titolo e orario, dalla
-         stessa memoria. Non è una regione live (cambia insieme alla riga, che è già
-         annunciata) e sparisce se la lettura fallisce: il conteggio basta. -->
-    <ul class="oggi-eventi" id="oggi-eventi" aria-label="Eventi di oggi" hidden></ul>
+     `401` da qualunque chiamata porta qui; il testo digitato nel compositore della chat vive in
+     memoria (mai `localStorage`, V5) e viene ritrovato al ritorno — vedi `assets/chat.js`.
+     ============================================================================ -->
+<main class="accesso">
 
-    <div class="coda" id="coda" hidden>
-      <p class="coda-testo" id="coda-testo"></p>
-      <!-- Predisposto ma inattivo (B6): NocoDB non ha ancora le basi, quindi il
-           collegamento atterrerebbe su una registrazione. La nota lo dichiara,
-           come per REGISTRA/AGGIORNA. -->
-      <a class="coda-azione" id="coda-azione" data-modello="/nocodb/?casa={casa}&amp;view=da-approvare" href="/nocodb/?casa=san-bao&amp;view=da-approvare">Apri la coda delle proposte</a>
-      <span class="nota">il registro non è ancora attivo: per ora si approvano dalla chat</span>
+  <p class="marchio">TRASI</p>
+  <p class="casa-zona">Rete delle Case di Quartiere di Brindisi</p>
+
+  <div class="blocco filetto" style="margin-top: calc(var(--shell-passo) * 6);">
+    <div class="blocco-testa">
+      <h1 class="titolo-pagina">Accesso della Casa</h1>
     </div>
-  </section>
 
-  <div id="destinazioni">
-    <h1 class="titolo">La porta della rete delle Case di Quartiere</h1>
+    <form id="modulo-accesso" novalidate>
+      <p>
+        <label for="accesso-casa">Casa di riferimento</label>
+        <!-- Le 10 Case, nell'ordine e con i nomi del seed (`db/010_seed_case.sql`). Tuturano porta
+             «dati provvisori» NEL TESTO dell'opzione, mai solo in un colore. -->
+        <select id="accesso-casa" name="casa" required>
+          <option value="buscicchio">Parco Buscicchio</option>
+          <option value="bozzano">Centro di Aggregazione Bozzano</option>
+          <option value="dream">Dream: Laboratorio Creativo</option>
+          <option value="erranti">Accademia degli Erranti</option>
+          <option value="minimus">Minimus</option>
+          <option value="molo12">Molo 12</option>
+          <option value="pop">POP — Piccolo Opificio Popolare</option>
+          <option value="san-bao">San Bao</option>
+          <option value="santa-spazio">Santa Spazio Culturale</option>
+          <option value="tuturano">Tuturano — dati provvisori</option>
+        </select>
+      </p>
 
-    <!-- La gerarchia dice quanto una cosa si usa: CHIEDI decine di volte al giorno,
-         MAPPA e OSSERVATORIO qualche volta, REGISTRA quando capita. Quattro riquadri
-         uguali direbbero una cosa falsa. Vedi guidelines/analisi-architettura-informazione.md §1. -->
-    <a class="destinazione principale" id="riquadro-chiedi" data-modello="/operatore.html?casa={casa}" href="/operatore.html?casa=san-bao">
-      <span class="destinazione-titolo principale-titolo">CHIEDI</span>
-      <span class="destinazione-testo principale-testo">L’assistente della rete: risponde alla persona che hai davanti — dove andare, con quali orari — e dichiara da dove viene ogni informazione.</span>
-      <span class="nota" id="chiedi-nota">si apre nella tua area operatore, con San Bao già impostata</span>
-    </a>
-
-    <div class="coppia">
-      <a class="destinazione" id="riquadro-mappa" data-modello="/metabase/dashboard/4?casa={casa}" href="/metabase/dashboard/4?casa=san-bao">
-        <span class="destinazione-titolo">MAPPA</span>
-        <span class="destinazione-testo">Dove sono i luoghi e le Case vicine, da guardare insieme alla persona.</span>
-      </a>
-      <a class="destinazione" id="riquadro-osservatorio" data-modello="/metabase/dashboard/3?casa={casa}" href="/metabase/dashboard/3?casa=san-bao">
-        <span class="destinazione-intestazione">
-          <span class="destinazione-titolo">OSSERVATORIO</span>
-          <span class="destinazione-contatore" id="osservatorio-contatore" hidden></span>
+      <p class="riga-mostra">
+        <span>
+          <label for="accesso-password">Parola d'ordine della Casa</label>
+          <input id="accesso-password" name="password" type="password" autocomplete="current-password" required>
         </span>
-        <span class="destinazione-testo">I numeri della Casa e le proposte che aspettano una decisione.</span>
-      </a>
-    </div>
+        <button class="azione" type="button" id="pulsante-mostra" aria-pressed="false">Mostra</button>
+      </p>
 
-    <!-- Non è `disabled` (illeggibile e non spiega nulla): è spento, e lo dichiara
-         in parole. Un servizio non attivo che occupa un quarto della pagina insegna
-         che il sistema promette cose che non fa. -->
-    <div class="destinazione spenta" id="riquadro-registra">
-      <span class="destinazione-titolo">REGISTRA / AGGIORNA</span>
-      <span class="destinazione-testo">Schede, eventi e opportunità della Casa.</span>
-      <span class="nota">Fino all’attivazione, le correzioni passano dalle proposte in chat.</span>
-      <span class="etichetta-attenzione">Servizio non ancora attivo</span>
-    </div>
+      <p><button class="bottone bottone--principale" type="submit" id="pulsante-entra">Entra</button></p>
+
+      <!-- Gli stati sono in PAROLE, mai codici: un guasto è un'informazione, non un allarme. -->
+      <p class="messaggio esito" id="accesso-esito" role="status" hidden></p>
+      <p class="messaggio" id="accesso-errore" role="alert" hidden></p>
+    </form>
+
+    <p class="casa-zona">
+      La sessione resta aperta su questo computer finché non si esce. Non conserva dati personali.
+    </p>
   </div>
 
-  <section id="aiuto" aria-labelledby="aiuto-titolo">
-    <h2 id="aiuto-titolo">Aiuto</h2>
-    <p>Trasi è la porta della rete delle Case di Quartiere. Da qui si aprono quattro destinazioni, e ognuna si apre già sulla Casa scelta in alto.</p>
-    <h3>CHIEDI</h3>
-    <p>La chat con l’assistente della rete. Si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali.</p>
-    <h3>MAPPA</h3>
-    <p>I luoghi e le Case della rete su una mappa, da guardare insieme alla persona.</p>
-    <h3>REGISTRA / AGGIORNA</h3>
-    <p>Il registro delle schede, degli eventi e delle opportunità della Casa. Non è ancora attivo: fino all’attivazione le correzioni passano dalle proposte fatte in chat.</p>
-    <h3>OSSERVATORIO</h3>
-    <p>I numeri della Casa e la coda delle proposte che aspettano una decisione. I conteggi troppo piccoli si leggono come «&lt;5»: è una tutela della riservatezza delle persone.</p>
-
-    <h3>Da dove viene l’informazione</h3>
-    <p>Ogni informazione porta un’etichetta. Ce ne sono due, e dicono cose diverse.</p>
-    <p class="esempio"><span class="esempio-etichetta"><strong>KB</strong> Rete delle Case di Quartiere · agg. 15/09/2026 · affidabilità 2</span> <span class="esempio-glossa">la rete lo sa</span></p>
-    <p>La rete lo sa: qualcuno della rete ha verificato questo dato. La data dice quando, il numero da 1 a 3 dice quanto è solida la fonte.</p>
-    <p class="esempio"><span class="esempio-etichetta esterna"><strong>Esterna</strong> OpenStreetMap contributors (ODbL) · consultata 02:21 · non verificata dalla rete</span> <span class="esempio-glossa">trovato fuori, non verificato</span></p>
-    <p>Trovato fuori: viene da una fonte esterna e nessuno della rete l’ha controllato. Si può usare, dicendo alla persona che non è verificato — meglio una telefonata prima di mandarla lì.</p>
-
-    <h3>Le proposte</h3>
-    <p>Trasi non cambia la memoria della rete da sola. Se in chat si segnala che un bar ha chiuso o che un orario è cambiato, nasce una proposta: resta in attesa finché una persona la approva. La riga in alto dice quante ne aspettano una decisione e da quanto tempo. Non c’è una scadenza da rispettare.</p>
-    <h3>La riga «Oggi»</h3>
-    <p>È una lettura della memoria della rete per la Casa scelta: eventi, schede in scadenza, proposte. Sotto il conteggio compaiono gli eventi del giorno, con orario e luogo, nell’ordine in cui iniziano — anche quelli già finiti, perché «oggi» è la giornata intera. Se il servizio dati non risponde entro tre secondi, la riga dice «dati non disponibili»: è un’informazione, non un guasto, e le destinazioni funzionano comunque.</p>
-    <h3>La Casa in alto</h3>
-    <p>Il selettore ricorda la Casa nel browser: al prossimo accesso è già quella. L’unica cosa conservata è il nome breve della Casa, nessun dato personale. Tuturano porta la nota «dati provvisori»: alcune sue schede non sono ancora complete.</p>
-    <h3>Tastiera</h3>
-    <p>Si può usare tutto da tastiera: il tasto Tab passa dal salto alle destinazioni, al selettore della Casa, ad Aiuto ed Esci, poi a CHIEDI, MAPPA, OSSERVATORIO e alla coda delle proposte. Il riquadro giallo indica sempre dove sei.</p>
-
-    <p class="rinvio">La verifica di accessibilità delle tre applicazioni esterne (Onyx, Metabase, NocoDB) è rinviata alla settimana 2 del piano: qui è verificata la sola pagina Trasi Home.</p>
-  </section>
-
-  <footer class="piede">
-    <p>Trasi · rete delle Case di Quartiere di Brindisi. Questa pagina non conserva dati personali: la Casa scelta resta nel browser.</p>
-  </footer>
 </main>
 
-<script src="home.js?v=2"></script>
+<script>
+/* Accesso: `POST /api/shim/login` → cookie HttpOnly, che la pagina non vede né tocca.
+ * Il corpo è `{casa, password}` e basta (`extra="forbid"`: nessun campo in più, V5). */
+(function () {
+  "use strict";
+  var form = document.getElementById("modulo-accesso");
+  var esito = document.getElementById("accesso-esito");
+  var errore = document.getElementById("accesso-errore");
+  var password = document.getElementById("accesso-password");
+  var casa = document.getElementById("accesso-casa");
+
+  /* Se la sessione è già aperta si va alla Home, senza mostrare il modulo.
+   * `location.replace` e non `href`: il tasto «indietro» non deve riportare al modulo. */
+  fetch("/api/shim/me", { credentials: "same-origin" })
+    .then(function (r) { if (r.ok) location.replace("home.html"); })
+    .catch(function () { /* senza shim si resta qui, e il login dirà cosa non va */ });
+
+  document.getElementById("pulsante-mostra").addEventListener("click", function () {
+    var mostra = password.type === "password";
+    password.type = mostra ? "text" : "password";
+    this.setAttribute("aria-pressed", mostra ? "true" : "false");
+    this.textContent = mostra ? "Nascondi" : "Mostra";
+  });
+
+  /* Il nome della Casa scelto, per il testo dell'errore: «per Santa Spazio Culturale». */
+  function nomeScelto() {
+    return casa.options[casa.selectedIndex].textContent.replace(" — dati provvisori", "");
+  }
+
+  form.addEventListener("submit", function (evento) {
+    evento.preventDefault();
+    esito.hidden = true;
+    errore.hidden = true;
+    var scelta = nomeScelto();
+    esito.textContent = "Accesso in corso…";
+    esito.hidden = false;
+
+    fetch("/api/shim/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ casa: casa.value, password: password.value })
+    }).then(function (r) {
+      return r.json().catch(function () { return null; }).then(function (corpo) {
+        if (r.ok) {
+          esito.textContent = "Accesso eseguito per " + scelta + ".";
+          password.value = "";
+          location.replace("home.html");
+          return;
+        }
+        esito.hidden = true;
+        /* Il `detail` dello shim è tecnico («casa o password non valide», «troppi tentativi: …»):
+         * la pagina dice il fatto in parole proprie, senza esporlo. Mai un codice. */
+        var dettaglio = corpo && corpo.detail ? String(corpo.detail) : "";
+        errore.textContent = dettaglio.indexOf("troppi tentativi") >= 0
+          ? "Accesso bloccato per qualche minuto: sono stati fatti troppi tentativi su questa Casa."
+          : "Parola d'ordine non riconosciuta per " + scelta + ".";
+        errore.hidden = false;
+      });
+    }).catch(function () {
+      esito.hidden = true;
+      errore.textContent = "Non è stato possibile contattare Trasi. Riprovare fra qualche istante.";
+      errore.hidden = false;
+    });
+  });
+})();
+</script>
 </body>
 </html>

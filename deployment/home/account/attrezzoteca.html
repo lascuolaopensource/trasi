@@ -1,0 +1,100 @@
+<!-- account/attrezzoteca.html — sezione 5 dell'Account: inventario, prestiti da confermare, movimenti.
+
+     Frammento, **solo markup**: nessuno `<script>` qui dentro (`innerHTML` non lo esegue). Il
+     comportamento si registra in `window.TrasiAccount.avvii["attrezzoteca"]` da
+     `assets/attrezzoteca-op.js`, che `account.html` carica (contratto §5.4).
+
+     Gli endpoint **esistono già** e non si riscrivono (`shim/app/attrezzoteca.py`):
+       * `GET  /op/attrezzoteca`              inventario della rete, con la disponibilità al netto dei
+                                              movimenti confermati in corso;
+       * `GET  /op/movimenti_da_confermare`   i prestiti che aspettano una conferma;
+       * `POST /op/movimento`                 propone un prestito di un oggetto **della propria Casa**;
+       * `POST /op/movimento/{id}/conferma`   conferma la ricezione, rifiuta, o marca il rientro.
+
+     V6: la piattaforma **registra**, non decide. La conferma è della Casa ricevente, il rientro della
+     cedente — la regola sta in `trasi.conferma_movimento` (db/014), e la pagina non ne aggiunge una
+     seconda. Il pulsante «Proponi prestito» compare solo sulle righe degli oggetti della propria Casa,
+     perché `mov_ins_casa` respinge l'INSERT su un oggetto altrui: mostrarlo su ogni riga porterebbe
+     l'operatore a premere l'unico pulsante disponibile e a ricevere un rifiuto.
+
+     SU QUESTO DATABASE L'INVENTARIO È VUOTO (0 oggetti): la pagina dichiara il vuoto, non disegna una
+     tabella di zeri. Il percorso per popolarlo è reale e passa da una proposta (`nuovo_oggetto`), che
+     è il flusso V4 — non un INSERT da qui.
+
+     Gli id sono prefissati `acc-attrezzoteca-…`. -->
+<section class="acc-sezione" data-sezione="attrezzoteca">
+
+  <style>
+    .acc-attrezzoteca-campi { display: flex; flex-wrap: wrap; gap: calc(var(--shell-passo) * 3); align-items: flex-end; max-width: var(--misura-testo, 36rem); }
+    .acc-attrezzoteca-campi label { display: block; }
+    .acc-attrezzoteca-campi input {
+      min-height: var(--shell-bersaglio); padding: 0 calc(var(--shell-passo) * 2); font: inherit;
+      border-width: var(--contorno, 2px); border-style: solid; border-radius: var(--raggio, 10px);
+      background: var(--superficie); border-color: var(--bordo); color: var(--testo);
+    }
+    .acc-attrezzoteca-esito, .acc-attrezzoteca-errore, .acc-attrezzoteca-nota { margin: 0; }
+    .acc-attrezzoteca-errore { color: var(--testo-tenue); }
+    .acc-attrezzoteca-nota { font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+    .acc-attrezzoteca-elenco { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: calc(var(--shell-passo) * 3); }
+    .acc-attrezzoteca-azioni { display: flex; flex-wrap: wrap; gap: calc(var(--shell-passo) * 2); align-items: center; }
+    .acc-attrezzoteca-stato-proprio { font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+  </style>
+
+  <div class="blocco filetto">
+    <div class="blocco-testa">
+      <h2>Attrezzoteca</h2>
+      <p>
+        Gli oggetti condivisi della rete: dove si trovano, in che quantità e in che condizioni. La
+        disponibilità tiene già conto dei prestiti in corso; un prestito diventa effettivo quando la
+        Casa che riceve conferma.
+      </p>
+    </div>
+
+    <form class="acc-attrezzoteca-campi" id="acc-attrezzoteca-modulo-cerca">
+      <span>
+        <label for="acc-attrezzoteca-cerca">Cerca un oggetto</label>
+        <input id="acc-attrezzoteca-cerca" name="q" type="search">
+      </span>
+      <button class="bottone" type="submit" id="acc-attrezzoteca-cerca-invia">Cerca</button>
+    </form>
+
+    <p class="acc-attrezzoteca-esito" id="acc-attrezzoteca-esito" role="status" hidden></p>
+    <p class="acc-attrezzoteca-errore" id="acc-attrezzoteca-errore" role="alert" hidden></p>
+  </div>
+
+  <div class="blocco filetto">
+    <div class="blocco-testa">
+      <h3>Inventario della rete</h3>
+      <p>La colonna della disponibilità è al netto dei prestiti confermati ancora in corso.</p>
+    </div>
+    <p class="acc-attrezzoteca-nota" id="acc-attrezzoteca-stato-inventario" role="status">Lettura in corso…</p>
+    <table class="tabella" id="acc-attrezzoteca-tabella">
+      <caption>Oggetti condivisi della rete, con la Casa che li tiene, la quantità e le condizioni.</caption>
+      <thead>
+        <tr>
+          <th scope="col">Oggetto</th>
+          <th scope="col">Casa</th>
+          <th scope="col">Disponibili</th>
+          <th scope="col">Condizioni</th>
+          <th scope="col">Provenienza</th>
+          <th scope="col">Azione</th>
+        </tr>
+      </thead>
+      <tbody id="acc-attrezzoteca-corpo-inventario"></tbody>
+    </table>
+    <p class="vuoto" id="acc-attrezzoteca-vuoto-inventario" hidden></p>
+  </div>
+
+  <div class="blocco filetto filetto--coda">
+    <div class="blocco-testa">
+      <h3>Prestiti da confermare</h3>
+      <p>
+        I movimenti che aspettano una conferma, dal più vecchio. La conferma della ricezione spetta alla
+        Casa che riceve; il rientro spetta alla Casa che ha prestato.
+      </p>
+    </div>
+    <p class="acc-attrezzoteca-nota" id="acc-attrezzoteca-stato-movimenti" role="status">Lettura in corso…</p>
+    <ul class="acc-attrezzoteca-elenco" id="acc-attrezzoteca-elenco-movimenti"></ul>
+  </div>
+
+</section>

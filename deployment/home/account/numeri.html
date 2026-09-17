@@ -1,0 +1,155 @@
+<!-- account/numeri.html — sezione 2 dell'Account: i numeri della Casa (§4.3.1 del piano).
+
+     Frammento, **solo markup**: nessuno `<script>` qui dentro (`innerHTML` non lo esegue). Il
+     comportamento sta in `assets/grafici.js`, che `account.html` carica e che si registra in
+     `window.TrasiAccount.avvii["numeri"]`; `account.js` lo chiama dopo aver inserito questo
+     frammento in `#acc-vista` (contratto §5.4).
+
+     Regole di resa che questo file dichiara e il modulo rispetta:
+       * barre **orizzontali** con la parola e il numero in testa, mai torte;
+       * nessun colore che porti significato: la barra è in `currentColor`, il numero sta nel testo;
+       * sotto la soglia di riservatezza si legge `<5` e la frase che lo spiega — il numero grezzo
+         non è mai arrivato al browser, quindi non c'è nulla da nascondere qui;
+       * ogni grafico ha la sua `<table>` equivalente e **visibile**: l'SVG è decorativo
+         (`aria-hidden`) e non contiene testo, quindi non contiene nessun numero;
+       * dove non ci sono dati si legge il **vuoto dichiarato**, mai un grafico a zero.
+
+     Gli id sono prefissati `acc-numeri-…` (contratto §5.3): due sezioni non possono collidere. -->
+<section class="acc-sezione" data-sezione="numeri">
+
+  <!-- Veste della sezione, con il prefisso `acc-numeri-` e nient'altro (contratto §3). Sta **qui** e
+       non in `struttura.css`/`veste.css`, che sono della shell: quei due file sono condivisi da tutte
+       le sezioni, e aggiungervi le classi di una sola sezione significherebbe toccare il file di un
+       altro per una cosa mia. Un `<style>` dentro il frammento è markup come il resto, si applica
+       quando il frammento entra in `#acc-vista` e sparisce quando la sezione cambia: nessuna regola
+       sopravvive alla sezione che l'ha portata. -->
+  <style>
+    .acc-numeri-filtro fieldset { border: 0; margin: 0; padding: 0; }
+    .acc-numeri-filtro legend { font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+    .acc-numeri-periodi, .acc-numeri-date { display: flex; flex-wrap: wrap; gap: calc(var(--shell-passo) * 3); align-items: flex-end; }
+    .acc-numeri-date label { display: block; }
+    .acc-numeri-date input { min-height: var(--shell-bersaglio); padding: 0 calc(var(--shell-passo) * 2); font: inherit; }
+    .acc-numeri-periodi button[aria-pressed="true"] { background: var(--mare-notte); color: var(--testo-su-scuro); border-color: var(--mare-notte); }
+    .acc-numeri-stato, .acc-numeri-errore, .acc-numeri-periodo, .acc-numeri-nota { margin: 0; }
+    .acc-numeri-errore { color: var(--testo-tenue); }
+    .acc-numeri-periodo { font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+
+    /* La barra: una cella stretta, e l'SVG che la riempie. `currentColor`: il colore lo decide la
+       veste, non il grafico — nessun colore porta significato (D9). */
+    .acc-numeri-grafico { color: var(--azione); }
+    .acc-numeri-tabella { margin-top: calc(var(--shell-passo) * 2); }
+    .acc-numeri-tabella caption { text-align: left; color: var(--testo-tenue); font-size: var(--t-minuto, 0.9375rem); padding-bottom: calc(var(--shell-passo) * 2); }
+    .acc-numeri-tabella th[scope="row"] { font-weight: 400; overflow-wrap: anywhere; }
+    .acc-numeri-cella-barra { width: 45%; min-width: 4rem; }
+    .acc-numeri-barra { display: block; width: 100%; }
+    .acc-numeri-cella-valore { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* Il conteggio non mostrato: la parola «<5» è nel testo, e il corsivo è il secondo canale.
+       Nessun colore — un colore porterebbe da solo il significato, e non è ammesso. */
+    .acc-numeri-sotto-soglia { font-style: italic; }
+    .acc-numeri-nota-riga { color: var(--testo-tenue); }
+  </style>
+
+  <div class="blocco filetto">
+    <div class="blocco-testa">
+      <h2>Numeri</h2>
+      <p>
+        Il funzionamento della Casa nel periodo scelto, dai registri dei colloqui, dal calendario e
+        dall'attrezzoteca. I conteggi sotto la soglia di riservatezza non sono mostrati.
+      </p>
+    </div>
+
+    <!-- Filtro periodo: tre scelte rapide e le due date. Il default è «ultimi 30 giorni» (§5.3). -->
+    <form class="acc-numeri-filtro" id="acc-numeri-filtro">
+      <fieldset>
+        <legend>Periodo</legend>
+
+        <p class="acc-numeri-periodi">
+          <button class="azione" type="button" id="acc-numeri-30" aria-pressed="true">Ultimi 30 giorni</button>
+          <button class="azione" type="button" id="acc-numeri-90" aria-pressed="false">Ultimi 90 giorni</button>
+          <button class="azione" type="button" id="acc-numeri-365" aria-pressed="false">Ultimi 12 mesi</button>
+        </p>
+
+        <p class="acc-numeri-date">
+          <span>
+            <label for="acc-numeri-dal">Dal</label>
+            <input type="date" id="acc-numeri-dal" name="dal">
+          </span>
+          <span>
+            <label for="acc-numeri-al">Al</label>
+            <input type="date" id="acc-numeri-al" name="al">
+          </span>
+          <button class="bottone" type="submit" id="acc-numeri-applica">Applica</button>
+        </p>
+      </fieldset>
+    </form>
+
+    <!-- Stato di attesa: `aria-busy` lo alza il modulo, e la frase è quella del contratto §3.4. -->
+    <p class="acc-numeri-stato" id="acc-numeri-stato" role="status" hidden></p>
+    <p class="acc-numeri-errore" id="acc-numeri-errore" role="alert" hidden></p>
+
+    <!-- Il periodo effettivamente letto, in parole: dice cosa si sta guardando senza doverlo dedurre. -->
+    <p class="acc-numeri-periodo" id="acc-numeri-periodo"></p>
+  </div>
+
+  <!-- Un blocco per grafico. Il contenuto lo scrive `assets/grafici.js`: qui c'è la struttura,
+       così un guasto del modulo lascia una pagina leggibile e non una pagina vuota. -->
+  <div class="blocco filetto" id="acc-numeri-richieste_categoria">
+    <div class="blocco-testa">
+      <h3>Richieste registrate</h3>
+      <p>Quante richieste sono state registrate, in totale e per categoria. In ordine dalla più frequente.</p>
+    </div>
+    <div class="acc-numeri-grafico" data-grafico></div>
+  </div>
+
+  <div class="blocco filetto" id="acc-numeri-esito">
+    <div class="blocco-testa">
+      <h3>Esito dei colloqui</h3>
+      <p>Come si sono chiusi i colloqui registrati nel periodo. Sono elencati tutti gli esiti: quelli senza casi valgono zero.</p>
+    </div>
+    <div class="acc-numeri-grafico" data-grafico></div>
+  </div>
+
+  <div class="blocco filetto" id="acc-numeri-destinazioni">
+    <div class="blocco-testa">
+      <h3>Dove sono state indirizzate le persone</h3>
+      <p>Le destinazioni dei colloqui chiusi con un indirizzamento altrove, in ordine di frequenza.</p>
+    </div>
+    <div class="acc-numeri-grafico" data-grafico></div>
+  </div>
+
+  <div class="blocco filetto" id="acc-numeri-eventi">
+    <div class="blocco-testa">
+      <h3>Eventi in programma</h3>
+      <p>Gli eventi della Casa non ancora annullati e non ancora cominciati, con i tre più vicini nel tempo.</p>
+    </div>
+    <div class="acc-numeri-grafico" data-grafico></div>
+  </div>
+
+  <div class="blocco filetto" id="acc-numeri-scadenze_proposte">
+    <div class="blocco-testa">
+      <h3>Schede in scadenza e proposte</h3>
+      <p>Le schede di servizio vicine alla scadenza e le proposte che aspettano una decisione.</p>
+    </div>
+    <div class="acc-numeri-grafico" data-grafico></div>
+  </div>
+
+  <div class="blocco filetto" id="acc-numeri-attrezzoteca">
+    <div class="blocco-testa">
+      <h3>Uso dell'attrezzoteca</h3>
+      <p>I movimenti andati a buon fine per ciascun oggetto della Casa, nel periodo scelto.</p>
+    </div>
+    <div class="acc-numeri-grafico" data-grafico></div>
+  </div>
+
+  <!-- La frase che spiega il simbolo, una volta per la sezione: sta qui e non ripetuta sotto ogni
+       grafico, ed è **generata** dal valore letto dal database (non scritta a mano: la soglia è una
+       policy, `[P] k_anonimato`, e cambierebbe senza che questa pagina venga toccata). -->
+  <div class="blocco filetto filetto--spento">
+    <p class="acc-numeri-nota" id="acc-numeri-nota-riservatezza"></p>
+    <p class="acc-numeri-nota">
+      Il conteggio viene dai registri della rete e non contiene dati personali: nessun nome, nessun
+      recapito, nessun codice.
+    </p>
+  </div>
+
+</section>

@@ -35,6 +35,7 @@ dell'operatore», ed è esattamente quello che viene calcolato.
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -44,7 +45,7 @@ from asyncpg.exceptions import (
     InsufficientPrivilegeError,
     RaiseError,
 )
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import pii
@@ -123,8 +124,15 @@ TIPI_PROPOSTA = (
     "nuova_opportunita",
     "promuovi_esterno",
     "modifica_orari_casa",
+    # i tre dell'attrezzoteca (US-5.x): nascita/modifica/ritiro di `oggetto`. Il DB li ammette da
+    # `db/006` §10b (CHECK `proposta_tipo_check`), ma qui mancavano: un `proponi_modifica` col tipo
+    # giusto riceveva 422 prima ancora di creare la proposta — la scheda !NEW 5 era metà percorso
+    # («l'inventario si popola con una proposta accolta», deployment/home/attrezzoteca-op.js).
+    "nuovo_oggetto",
+    "modifica_oggetto",
+    "ritira_oggetto",
 )
-ENTITA_DOMINIO = ("luogo", "scheda_servizio", "evento", "opportunita", "casa")
+ENTITA_DOMINIO = ("luogo", "scheda_servizio", "evento", "opportunita", "casa", "oggetto")
 GIORNI = ("lun", "mar", "mer", "gio", "ven", "sab", "dom")
 
 
@@ -145,7 +153,7 @@ class RichiestaIn(BaseModel):
     esito: Literal[ESITI]  # type: ignore[valid-type]
     destinazione_id: int | None = Field(default=None, ge=1)
     destinazione_nota: str | None = Field(default=None, min_length=1)
-    # Le tre fasce del foglio 4.4 (db/026): **facoltative** e a vocabolario chiuso. L'assenza è
+    # Le tre fasce del foglio 4.4 (db/028): **facoltative** e a vocabolario chiuso. L'assenza è
     # legittima («non ho chiesto») e i valori ammessi sono gli stessi del CHECK del database, così un
     # valore fuori elenco è un 422 parlante e non un 500 da CHECK. Non sono dati identificativi: sono
     # classi, e i loro conteggi escono solo mascherati da `v_fasce_cittadino`.
@@ -231,6 +239,14 @@ class PayloadProposta(BaseModel):
     referente_ruolo: str | None = None
     validata_il: date | None = None
 
+    # I campi di `oggetto` (attrezzoteca, US-5.x): gli stessi nomi della whitelist dei rami F di
+    # `db/006_fn_proposte.sql` (nuovo_oggetto/modifica_oggetto/ritira_oggetto). Senza, la proposta
+    # per un attrezzo nuovo riceveva «payload.quantita: Extra inputs are not permitted» — l'inventario
+    # della rete era inarrivabile dal percorso utente.
+    quantita: int | None = Field(default=None, ge=1)
+    condizione: Literal["integro", "danneggiato", "mancante_di_parti"] | None = None  # type: ignore[valid-type]
+    attivo: bool | None = None
+
 
 class ProponiModificaIn(BaseModel):
     """Il corpo di `proponi_modifica`."""
@@ -295,7 +311,7 @@ async def registra_richiesta(
     verifica comunque che la riga appartenga alla Casa corrente — la seconda barriera, non la prima.
 
     **Le fasce (`fascia_eta`, `genere`, `provenienza`) non sono dati identificativi**: sono classi a
-    vocabolario chiuso (db/026) e i loro conteggi escono solo mascherati da `trasi.v_fasce_cittadino` —
+    vocabolario chiuso (db/028) e i loro conteggi escono solo mascherati da `trasi.v_fasce_cittadino` —
     sotto la soglia `[P] k_anonimato` il numero non esiste. Resteranno fuori da ogni superficie che
     esponga righe di sportello: nessuna vista le porta riga per riga. Chiedi le fasce **solo se l'operatore
     le ha chieste alla persona**: un campo vuoto è una risposta legittima, un dato indovinato no.
@@ -416,13 +432,13 @@ ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa", "persona")
 #: mantenere a mano: è lo stesso criterio di least-privilege visto dai due lati, e un campo in più qui
 #: produrrebbe un `42501` — cioè un rifiuto del database, non una scrittura.
 #:
-#: Per `persona` (db/027): il **nome è l'unico dato personale che questa operazione accetta**, ed è il
+#: Per `persona` (db/029): il **nome è l'unico dato personale che questa operazione accetta**, ed è il
 #: punto della decisione del gruppo Processi (2026-09-17, forma C): le persone della Casa entrano nella
 #: knowledge base — e quindi in chat — **solo con il consenso dell'interessata**. Per questo
 #: `consenso` è **obbligatorio e deve essere `true` alla creazione**: un'operazione che creasse una
 #: persona senza dichiarare il consenso sarebbe una scrittura di un nome in attesa di una promessa.
 #: La revoca non passa da qui: è `DELETE` della persona (la RLS la concede alla propria Casa), e il
-#: flusso export cancella il documento da Onyx. Vedi `db/027_persone_casa.sql`.
+#: flusso export cancella il documento da Onyx. Vedi `db/029_persone_casa.sql`.
 COLONNE_DIRETTE: dict[str, tuple[str, ...]] = {
     "scheda_servizio": ("titolo", "descrizione", "categoria", "orari", "referente_ruolo", "scadenza", "url"),
     "opportunita": ("titolo", "descrizione", "categoria", "scadenza", "url"),
@@ -467,7 +483,7 @@ class SalvaDatoIn(BaseModel):
     # (e quindi citabile in chat) riaprirebbe per la porta di servizio ciò che V5 tiene fuori. Vedi `db/025`.
     indirizzo: str | None = None
     edificio: str | None = None
-    # I campi del foglio 1.1 «Persone» (solo `entita="persona"`), db/027. `nome` è l'unico dato
+    # I campi del foglio 1.1 «Persone» (solo `entita="persona"`), db/029. `nome` è l'unico dato
     # personale ammesso da questa operazione, ed è condizionato: vedi `COLONNE_DIRETTE["persona"]`.
     nome: str | None = Field(default=None, min_length=3, max_length=120)
     ruolo: str | None = Field(default=None, min_length=2, max_length=80)
@@ -487,19 +503,32 @@ class SalvaDatoIn(BaseModel):
         """
         if self.entita == "opportunita" and self.orari is not None:
             raise ValueError("orari non si applica a «opportunita»: è una colonna di scheda_servizio")
-        if self.entita not in ("casa", "persona") and (self.titolo is None or not self.titolo.strip()):
-            # `titolo` è obbligatorio per scheda/opportunità ed è `NOT NULL` nello schema: senza questo
-            # controllo l'assenza diventerebbe un `NotNullViolation` tradotto in un 500, invece del 422
-            # parlante che il contratto dichiara.
-            raise ValueError(f"titolo è obbligatorio per «{self.entita}»")
+        if (
+            self.entita not in ("casa", "persona")
+            and self.id is None
+            and (self.titolo is None or not self.titolo.strip())
+        ):
+            # `titolo` è obbligatorio **alla creazione** di scheda/opportunità: è `NOT NULL` nello schema, e
+            # senza questo controllo l'assenza diventerebbe un `NotNullViolation` tradotto in un 500, invece
+            # del 422 parlante che il contratto dichiara. Con `id` è un aggiornamento parziale: chi corregge la
+            # sola `descrizione` non deve riscrivere il titolo (misurato: lo pretendeva, e ogni UPDATE senza
+            # titolo era un 422 — la via «correggi la scheda» era in pratica «riscrivi la scheda»).
+            raise ValueError(f"titolo è obbligatorio per creare «{self.entita}»")
         if self.entita == "persona":
             # `consenso` non è un campo tra gli altri: è la condizione che rende legittimo scrivere il
             # nome di una persona. Alla creazione deve essere `true` esplicito — l'assenza non è
             # interpretabile come consenso — e la colonna `consenso_il` del database timbra quando.
+            # Con `id`, `consenso=false` è la **revoca** (db/029 `revoca_il`): la riga resta, esce dalla
+            # KB al prossimo export. `consenso=true` con `id` non ha senso — il consenso si dà una volta,
+            # alla registrazione — e si rifiuta invece di essere ignorato.
             if self.id is None and self.consenso is not True:
                 raise ValueError(
                     "creare una persona richiede consenso=true: il nome entra nella knowledge base "
-                    "(quindi in chat) solo con il consenso dell'interessata (db/027)"
+                    "(quindi in chat) solo con il consenso dell'interessata (db/029)"
+                )
+            if self.id is not None and self.consenso is True:
+                raise ValueError(
+                    "il consenso si registra alla creazione; per revocarlo invia consenso=false con l'id"
                 )
             if any(v is not None for v in (self.titolo, self.descrizione, self.categoria,
                                            self.orari, self.referente_ruolo, self.scadenza, self.url,
@@ -509,6 +538,12 @@ class SalvaDatoIn(BaseModel):
                     "«persona» accetta solo nome, ruolo, competenze, informativa e consenso"
                 )
             return self
+        # Fuori da `persona`, `consenso` non ha significato — e la dottrina di questo validatore è che un
+        # campo fuori posto è un 422, non un campo ignorato. Misurato (revisione): era accettato e
+        # ignorato in silenzio, quindi «consenso: false» su una scheda rispondeva 201.
+        if self.consenso is not None or self.nome is not None or self.ruolo is not None \
+                or self.competenze is not None or self.informativa is not None:
+            raise ValueError("nome/ruolo/competenze/informativa/consenso si applicano solo a «persona»")
         if self.entita == "casa":
             if self.id is not None:
                 raise ValueError("«casa» non vuole id: la Casa è quella dell'identità, un ruolo una Casa")
@@ -545,8 +580,9 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
       crea dallo sportello, e `id` non è ammesso perché la Casa è quella di chi scrive, non una da scegliere.
       Si scrivono solo gli orari e i recapiti — cioè esattamente le colonne che `db/002` concede al ruolo
       della Casa (`UPDATE (orari, orari_eccezioni, orari_provvisori, email_digest)`).
-    * `persona` (db/027) — INSERT o UPDATE come una scheda, **con il consenso richiesto dal validatore**:
-      il nome entra nella KB, e la revoca è la cancellazione della riga.
+    * `persona` (db/029) — INSERT o UPDATE come una scheda, **con il consenso richiesto dal validatore**:
+      il nome entra nella KB; la revoca è `consenso=false` con `id` (timbra `revoca_il`, la riga resta ed
+      esce dalla KB), la cancellazione della riga è l'altra via ammessa alla Casa.
 
     **Chi garantisce cosa.** La RLS: `scheda_ins_casa`/`scheda_upd_casa` (e le omologhe su `opportunita`,
     `casa` e `persona`) impongono `casa_id = casa_corrente()`. La scrittura su un dato di un'altra Casa non
@@ -558,17 +594,13 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
     if sess.casa_id is None:
         raise errore(403, DETAIL_RUOLO_NON_CONSENTITO)
 
-    # Il filtro anti-PII sui **valori** (V5/§12). Per `persona` il campo `nome` è l'unica eccezione
-    # dichiarata in tutto lo shim: è ciò che la decisione C del gruppo Processi ha chiesto di registrare,
-    # ed è condizionato dal consenso (validatore sopra). Un nome non è comunque un'email, un telefono o
-    # un codice fiscale — il filtro non lo riconosce, ma l'eccezione è esplicita perché visibile: nessun
-    # altro campo di nessun'altra operazione la riceve. Gli altri campi testuali di `persona`
-    # (`ruolo`, `competenze`, `informativa`) restano **dentro** il filtro: un telefono incollato lì
-    # sarebbe un dato personale pubblicato in KB.
-    campi_pii = corpo.model_dump(exclude_unset=True, mode="json")
-    if corpo.entita == "persona":
-        campi_pii.pop("nome", None)
-    pii.rifiuta_se_presente(campi_pii)
+    # Il filtro anti-PII sui **valori** (V5/§12), su tutto il corpo — `nome` di persona **compreso**. Il
+    # nome è ciò che la decisione C del gruppo Processi ha chiesto di registrare, ed è condizionato dal
+    # consenso (validatore sopra): ma non è un'email, un telefono o un codice fiscale, quindi il filtro
+    # non lo tocca — e se lo tocca, è perché nel campo «nome» è stato incollato qualcos'altro, che è
+    # esattamente il caso in cui deve sparare. Escluderlo (come faceva la prima versione) non serviva a
+    # far passare un nome: apriva solo un varco per un recapito travestito da nome.
+    pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
 
     tabella = corpo.entita
     orari = corpo.orari.model_dump(exclude_unset=True, mode="json") if corpo.orari else None
@@ -598,21 +630,25 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
         # --- `scheda_servizio` / `opportunita` / `persona`: INSERT o UPDATE ------------------
         elif corpo.id is None:
             # Il nome dell'entità nel corpo non è sempre il nome della tabella: `persona` (il dato del
-            # foglio 1.1) vive in `persona_casa` (db/027). La mappa è qui, non nel chiamante.
+            # foglio 1.1) vive in `persona_casa` (db/029). La mappa è qui, non nel chiamante.
             if tabella == "persona":
                 tabella = "persona_casa"
             # `casa_id` dall'identità; `aggiornato_ts`/`aggiornato_da` li timbra il trigger. Le colonne
             # scritte sono l'elenco chiuso di COLONNE_DIRETTE: nessun nome di colonna dal chiamante.
+            # **La chiave è `corpo.entita`, la tabella è `tabella`**: sono la stessa stringa tranne che per
+            # persona/persona_casa, e confondere le due ha rotto una via per volta — `["persona"]` fisso
+            # rompeva le schede (500 su titolo NOT NULL), `[tabella]` rompeva le persone (KeyError). I due
+            # test live di `test_scritture` le esercitano entrambe.
             colonne = ["casa_id"]
             valori = [sess.casa_id]
-            for nome in COLONNE_DIRETTE["persona"]:
+            for nome in COLONNE_DIRETTE[corpo.entita]:
                 valore = valore_di(nome)
                 if valore is not None:
                     colonne.append(nome)
                     valori.append(valore)
             # `consenso_il` è la colonna che `v_kb_export` filtra: vale la data locale alla creazione e
             # non è nel corpo, perché è un fatto del database — chi crea una persona ha già dichiarato
-            # il consenso (il validatore lo impone). Vedi `db/027_persone_casa.sql`.
+            # il consenso (il validatore lo impone). Vedi `db/029_persone_casa.sql`.
             if tabella == "persona_casa":
                 colonne.append("consenso_il")
                 valori.append(_oggi())
@@ -629,10 +665,18 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
             if tabella == "persona":
                 tabella = "persona_casa"
             assegnazioni, valori = [], []
-            for nome in COLONNE_DIRETTE["persona"]:
+            for nome in COLONNE_DIRETTE[corpo.entita]:
                 if nome in inviati:
                     valori.append(valore_di(nome))
                     assegnazioni.append(f"{nome} = ${len(valori)}")
+            # La **revoca** del consenso (db/029): `consenso=false` con `id` timbra `revoca_il`. La riga resta
+            # (art. 17: la Casa può anche cancellarla, ma la revoca è il caso comune) ed esce da
+            # `v_kb_export` subito; il prossimo export toglie il documento da Onyx. Il validatore ha già
+            # escluso `consenso=true` con `id` e `consenso` fuori da `persona`. Misurato (revisione): prima
+            # `consenso=false` era ignorato e la risposta era 201 — una revoca creduta fatta e non avvenuta.
+            if tabella == "persona_casa" and corpo.consenso is False:
+                valori.append(_oggi())
+                assegnazioni.append(f"revoca_il = ${len(valori)}")
             if not assegnazioni:
                 raise errore(422, "parametri non ammessi — nessun campo da aggiornare oltre a entita e id")
             valori.append(corpo.id)
@@ -649,7 +693,9 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
         # `approva_proposta` — «0 righe» è un rifiuto, non un errore interno.
         raise errore(403, DETAIL_RIGA_NON_DELLA_CASA)
 
-    return {"id": corpo.id, "entita": tabella, "creato": False}
+    # `corpo.entita`, non `tabella`: il contratto dichiara «l'entità come dichiarata nella richiesta», e per
+    # `persona` la tabella (`persona_casa`) non è nell'enum di `RispostaSalvaDato`.
+    return {"id": corpo.id, "entita": corpo.entita, "creato": False}
 
 
 # --- `proponi_modifica` ---------------------------------------------------------------------------------------
@@ -846,3 +892,244 @@ def _oggi() -> date:
     from .vicinanza import oggi_locale
 
     return oggi_locale()
+
+
+# --- Attrezzoteca in chat (scheda !NEW 5): i cinque strumenti della rete condivisa -------------
+#
+# La specifica del servizio (dialoghi della scheda) chiede all'assistente quattro cose che i soli
+# endpoint `/op` (browser) non coprivano: cercare l'inventario, prenotare per un periodo futuro con
+# i conflitti dichiarati, registrare lo spostamento e chiudere il cerchio (conferma/rientro/condizione),
+# leggere l'uso. Sono letture e movimenti operativi: `oggetto` resta memoria della rete (nascita/modifica
+# solo via proposta — `proponi_modifica` col tipo `nuovo_oggetto`/`modifica_oggetto`/`ritira_oggetto`,
+# ammesso da `db/006` §10b), `movimento` resta evento operativo con conferma della ricevente (V6).
+#
+# La regola di chi decide sta **nel database** (`trasi.conferma_movimento`, `rifiuta_movimento`,
+# `riporta_oggetto`): qui si chiama la funzione e si riporta l'esito o l'errore parlante.
+
+
+class MovimentoIn(BaseModel):
+    """Il corpo di `registra_movimento`: l'oggetto e la Casa che lo riceve, come per `POST /op/movimento`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    oggetto_id: int = Field(ge=1)
+    a_casa: str = Field(min_length=1, description="Slug della Casa destinataria (es. bozzano).")
+    dal: date | None = Field(default=None, description="Data inizio prestito ISO AAAA-MM-GG; se omessa, oggi.")
+    al: date | None = Field(default=None, description="Data rientro prevista ISO AAAA-MM-GG.")
+
+
+class PrenotaIn(BaseModel):
+    """Il corpo di `prenota_oggetto`: le due date sono obbligatorie (prenotare è fissare un periodo)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    oggetto_id: int = Field(ge=1)
+    a_casa: str = Field(min_length=1)
+    dal: date
+    al: date
+    motivazione: str | None = Field(default=None, max_length=80)
+
+
+class DecidiMovimentoIn(BaseModel):
+    """Il corpo di `conferma_movimento`: niente = conferma; `rifiuta` è terminale; `rientro` chiede la condizione."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    azione: Literal["conferma", "rifiuta", "rientro"] | None = None
+    condizione_rientro: Literal["integro", "danneggiato", "mancante_di_parti"] | None = None  # type: ignore[valid-type]
+
+
+@router.get(**_argomenti("attrezzoteca"))
+async def attrezzoteca(
+    q: str | None = Query(default=None, description="Nome o descrizione dell'oggetto (vuoto = tutto l'inventario)."), sess: Sessione = Depends(sessione)
+) -> dict[str, Any]:
+    """GET attrezzoteca — l'inventario di rete da `v_inventario` (US-5.1), con ricerca flessibile.
+
+    La ricerca espande il termine con i sinonimi registrati (`trasi.termine_espanso`, tabella
+    `sinonimo_ricerca` estendibile dal TI senza deploy): «seggiole» trova le sedie, «proiettori»
+    trova il proiettore, «ciabatta» trova l'estensione elettrica. Il fallback trigramma
+    (`similarity` su testo senza accenti) copre i refusi e le parole incomplete: «proietto»
+    trova comunque il proiettore. Il nome, la descrizione e la Casa sono tutti campi di ricerca.
+    """
+    testo = (q or "").strip() or None
+    if testo is None:
+        righe = await sess.fetch(
+            """
+            SELECT oggetto_id, nome, descrizione, casa_slug, quantita, quantita_fuori,
+                   quantita_disponibile, condizione, fonte_nome, badge_fonte
+              FROM trasi.v_inventario
+             ORDER BY casa_slug, nome
+            """
+        )
+    else:
+        righe = await sess.fetch(
+            """
+            SELECT DISTINCT oggetto_id, nome, descrizione, casa_slug, quantita, quantita_fuori,
+                   quantita_disponibile, condizione, fonte_nome, badge_fonte
+              FROM trasi.v_inventario
+             CROSS JOIN LATERAL unnest(trasi.termine_espanso($1)) AS t(termino)
+             WHERE nome ILIKE '%' || t.termino || '%'
+                OR COALESCE(descrizione, '') ILIKE '%' || t.termino || '%'
+                OR casa_slug ILIKE '%' || t.termino || '%'
+             ORDER BY casa_slug, nome
+            """,
+            testo,
+        )
+    return {
+        "items": [
+            {
+                "oggetto_id": r["oggetto_id"],
+                "nome": r["nome"],
+                "descrizione": r["descrizione"],
+                "casa": r["casa_slug"],
+                "quantita": r["quantita"],
+                "quantita_fuori": r["quantita_fuori"],
+                "quantita_disponibile": r["quantita_disponibile"],
+                "condizione": r["condizione"],
+                "fonte": r["fonte_nome"],
+                "badge": r["badge_fonte"],
+            }
+            for r in righe
+        ]
+    }
+
+
+@router.post(**_argomenti("prenota_oggetto"), status_code=201)
+async def prenota_oggetto(corpo: PrenotaIn, sess: Sessione = Depends(sessione)) -> dict[str, Any]:
+    """POST prenota_oggetto — `trasi.prenota_oggetto` (db/026): prenotazione anticipata con i conflitti
+    nel ritorno. Il conflitto non è un rifiuto (V6): si registra e si dichiara all'operatore."""
+    pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
+    try:
+        riga = await sess.fetchval(
+            "SELECT trasi.prenota_oggetto($1, $2, $3::date, $4::date, $5)",
+            corpo.oggetto_id,
+            corpo.a_casa,
+            corpo.dal,
+            corpo.al,
+            sess.ruolo,
+        )
+    except RaiseError as exc:
+        raise errore(409, str(exc).strip()) from exc
+    except Exception as exc:  # noqa: BLE001 — la traduzione è di `_rifiuta_violazione`
+        _rifiuta_violazione(exc)
+    return json.loads(riga) if isinstance(riga, str) else riga
+
+
+@router.post(**_argomenti("registra_movimento"), status_code=201)
+async def registra_movimento(corpo: MovimentoIn, sess: Sessione = Depends(sessione)) -> dict[str, Any]:
+    """POST registra_movimento — lo spostamento parte dalla Casa della sessione (INSERT diretto in
+    stato 'proposto', eccezione V4 documentata); la conferma è della Casa ricevente."""
+    pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
+    try:
+        riga = await sess.fetchrow(
+            """
+            INSERT INTO trasi.movimento (oggetto_id, da_casa_id, a_casa_id, dal, al, stato)
+            VALUES ($1, trasi.casa_corrente(), (SELECT c.id FROM trasi.casa c WHERE c.slug = $2),
+                    COALESCE($3::date, current_date), $4::date, 'proposto')
+            RETURNING id, stato::text AS stato
+            """,
+            corpo.oggetto_id,
+            corpo.a_casa,
+            corpo.dal,
+            corpo.al,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _rifiuta_violazione(exc)
+    if riga is None:
+        raise errore(422, f"Casa destinataria sconosciuta: «{corpo.a_casa}»")
+    return {"movimento_id": riga["id"], "stato": riga["stato"]}
+
+
+@router.post(**_argomenti("conferma_movimento"))
+async def conferma_movimento(
+    movimento_id: int, corpo: DecidiMovimentoIn | None = None, sess: Sessione = Depends(sessione)
+) -> dict[str, Any]:
+    """POST conferma_movimento — la decisione spetta a chi il dominio nomina: la ricevente per conferma e
+    rifiuto, la cedente (o la rete) per il rientro. La verifica del ruolo sta nella funzione del DB."""
+    azione = (corpo.azione if corpo else None) or "conferma"
+    try:
+        if azione == "conferma":
+            await sess.execute("SELECT trasi.conferma_movimento($1, $2)", movimento_id, sess.ruolo)
+            stato = "confermato"
+        elif azione == "rifiuta":
+            await sess.execute("SELECT trasi.rifiuta_movimento($1, $2)", movimento_id, sess.ruolo)
+            stato = "rifiutato"
+        else:
+            if corpo is None or not corpo.condizione_rientro:
+                raise errore(
+                    422,
+                    "parametri non ammessi — con azione=rientro serve condizione_rientro "
+                    "(integro | danneggiato | mancante_di_parti)",
+                )
+            # La sospensione (`sospendi`) qui non è esposta: è la scelta della Casa cedente al rientro
+            # dall'endpoint `/op` (dialogo «trapano TR04»); per la chat il rientro registra la condizione,
+            # e la sospensione passa da una proposta `modifica_oggetto` (attivo=false) se l'operatore la
+            # chiede esplicitamente — è memoria della rete, non un effetto collaterale.
+            await sess.execute(
+                "SELECT trasi.riporta_oggetto($1, $2, $3, false)",
+                movimento_id,
+                sess.ruolo,
+                corpo.condizione_rientro,
+            )
+            stato = "rientrato"
+    except RaiseError as exc:
+        # «Non spetta a te» e «transizione impossibile» arrivano parlanti dal database: vanno al chiamante.
+        raise errore(409, str(exc).strip()) from exc
+    except Exception as exc:  # noqa: BLE001
+        _rifiuta_violazione(exc)
+    return {"movimento_id": movimento_id, "stato": stato}
+
+
+@router.get(**_argomenti("uso_oggetti"))
+async def uso_oggetti(sess: Sessione = Depends(sessione)) -> dict[str, Any]:
+    """GET uso_oggetti — `v_uso_oggetti` (fascia basso/medio/alto dalle soglie di rete, US-5.4) e i
+    rientri in ritardo (confermati con `al` passata e non rientrati)."""
+    righe = await sess.fetch(
+        """
+        SELECT oggetto_id, nome, casa_slug, condizione, n_movimenti_12m, ultimo_movimento_ts, fascia_uso
+          FROM trasi.v_uso_oggetti
+         ORDER BY fascia_uso DESC, n_movimenti_12m DESC, nome
+        """
+    )
+    ritardi = await sess.fetch(
+        """
+        SELECT m.id AS movimento_id, m.oggetto_id, o.nome AS oggetto,
+               cda.slug AS da_casa, ca.slug AS a_casa, m.dal, m.al,
+               (current_date - m.al) AS giorni_ritardo
+          FROM trasi.movimento m
+          JOIN trasi.oggetto o ON o.id = m.oggetto_id
+          JOIN trasi.casa cda ON cda.id = m.da_casa_id
+          JOIN trasi.casa ca  ON ca.id  = m.a_casa_id
+         WHERE m.stato = 'confermato'
+           AND m.al IS NOT NULL
+           AND m.al < current_date
+         ORDER BY giorni_ritardo DESC, m.id
+        """
+    )
+    return {
+        "uso": [
+            {
+                "oggetto_id": r["oggetto_id"],
+                "nome": r["nome"],
+                "casa": r["casa_slug"],
+                "condizione": r["condizione"],
+                "n_movimenti_12m": r["n_movimenti_12m"],
+                "ultimo_movimento": r["ultimo_movimento_ts"].isoformat() if r["ultimo_movimento_ts"] else None,
+                "fascia_uso": r["fascia_uso"],
+            }
+            for r in righe
+        ],
+        "in_ritardo": [
+            {
+                "movimento_id": r["movimento_id"],
+                "oggetto_id": r["oggetto_id"],
+                "oggetto": r["oggetto"],
+                "da_casa": r["da_casa"],
+                "a_casa": r["a_casa"],
+                "dal": r["dal"].isoformat(),
+                "al": r["al"].isoformat(),
+                "giorni_ritardo": r["giorni_ritardo"],
+            }
+            for r in ritardi
+        ],
+    }

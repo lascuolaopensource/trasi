@@ -704,6 +704,130 @@ def test_registra_richiesta_non_scrive_su_altra_casa(client_reale):
     assert asyncio.run(conta()) == prima
 
 
+@pytest.mark.live
+def test_salva_dato_scheda_crea_e_aggiorna_nella_casa_dell_operatore(client_reale):
+    """La via diretta per la scheda della propria Casa funziona davvero: INSERT 201, UPDATE 200, riga nel database.
+
+    Il test esiste perché la sua assenza è costata un difetto: i rami INSERT/UPDATE per scheda e opportunità
+    iteravano `COLONNE_DIRETTE["persona"]` invece di quelle dell'entità richiesta — ogni scheda nuova cadeva con
+    `NotNullViolation` su `titolo` (500) e ogni aggiornamento era un 422 «nessun campo da aggiornare» — e la suite
+    era verde, perché nessun test chiamava `salva_dato` per una scheda. La risposta dichiara l'**entità richiesta**
+    (`scheda_servizio`), non la tabella: è l'enum di `RispostaSalvaDato`.
+    """
+    if not client_reale:
+        pytest.skip("database non raggiungibile")
+
+    creazione = _post(
+        client_reale,
+        ambiente.EMAIL_SANBAO,
+        "salva_dato",
+        {"entita": "scheda_servizio", "titolo": "Sportello prova salva_dato", "descrizione": "Scheda di prova."},
+    )
+    assert creazione.status_code == 201, creazione.text
+    corpo = creazione.json()
+    assert corpo["entita"] == "scheda_servizio"
+    assert corpo["creato"] is True
+    scheda_id = corpo["id"]
+
+    try:
+        aggiornamento = _post(
+            client_reale,
+            ambiente.EMAIL_SANBAO,
+            "salva_dato",
+            {"entita": "scheda_servizio", "id": scheda_id, "descrizione": "Scheda di prova, aggiornata."},
+        )
+        assert aggiornamento.status_code == 201, aggiornamento.text  # il contratto dichiara 201 per entrambe le forme: `creato` distingue
+        assert aggiornamento.json() == {"id": scheda_id, "entita": "scheda_servizio", "creato": False}
+
+        async def verifica() -> None:
+            conn = await ambiente.connessione(ruolo="casa_sanbao")
+            try:
+                riga = await conn.fetchrow(
+                    "SELECT casa_id, titolo, descrizione FROM trasi.scheda_servizio WHERE id = $1", scheda_id
+                )
+                assert riga is not None, "la scheda salvata non è visibile al ruolo della Casa"
+                assert riga["casa_id"] == await ambiente.id_casa(ambiente.SLUG_SANBAO)
+                assert riga["titolo"] == "Sportello prova salva_dato"
+                assert riga["descrizione"] == "Scheda di prova, aggiornata."
+            finally:
+                await conn.close()
+
+        asyncio.run(verifica())
+    finally:
+
+        async def ripulisci() -> None:
+            conn = await ambiente.connessione_amministratore()
+            try:
+                await conn.execute("DELETE FROM trasi.scheda_servizio WHERE id = $1", scheda_id)
+            finally:
+                await conn.close()
+
+        asyncio.run(ripulisci())
+
+
+@pytest.mark.live
+def test_salva_dato_persona_il_consenso_apre_e_la_revoca_chiude_la_kb(client_reale):
+    """Il ciclo del consenso osservato dal lato che conta: la vista che alimenta la knowledge base.
+
+    Senza `consenso=true` la persona non si crea (422). Con il consenso si crea ed **è** in `v_kb_export`.
+    `consenso=false` con `id` è la revoca: la riga resta ma **esce** da `v_kb_export` subito — quindi al prossimo
+    export sparisce da Onyx e l'assistente non può più citarla. `consenso` fuori da `persona` è un 422, non un
+    campo ignorato (misurato: era ignorato, e «consenso: false» su una scheda rispondeva 201).
+    """
+    if not client_reale:
+        pytest.skip("database non raggiungibile")
+
+    senza = _post(client_reale, ambiente.EMAIL_SANBAO, "salva_dato",
+                  {"entita": "persona", "nome": "Prova Consenso", "ruolo": "volontaria"})
+    assert senza.status_code == 422, senza.text
+    assert "consenso" in senza.json()["detail"]
+
+    fuori_posto = _post(client_reale, ambiente.EMAIL_SANBAO, "salva_dato",
+                        {"entita": "scheda_servizio", "titolo": "Scheda", "consenso": False})
+    assert fuori_posto.status_code == 422, fuori_posto.text
+    assert "persona" in fuori_posto.json()["detail"]
+
+    creazione = _post(client_reale, ambiente.EMAIL_SANBAO, "salva_dato",
+                      {"entita": "persona", "nome": "Prova Consenso", "ruolo": "volontaria",
+                       "informativa": "informativa v1 · test", "consenso": True})
+    assert creazione.status_code == 201, creazione.text
+    assert creazione.json()["entita"] == "persona" and creazione.json()["consenso"] is True
+    persona_id = creazione.json()["id"]
+
+    async def in_kb() -> bool:
+        conn = await ambiente.connessione_amministratore()
+        try:
+            return await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM trasi.v_kb_export WHERE doc_id = $1)", f"trasi:persona:{persona_id}"
+            )
+        finally:
+            await conn.close()
+
+    try:
+        assert asyncio.run(in_kb()) is True, "con il consenso la persona deve stare nella vista della KB"
+
+        revoca = _post(client_reale, ambiente.EMAIL_SANBAO, "salva_dato",
+                       {"entita": "persona", "id": persona_id, "consenso": False})
+        assert revoca.status_code == 201, revoca.text
+        assert revoca.json() == {"id": persona_id, "entita": "persona", "creato": False}
+        assert asyncio.run(in_kb()) is False, "dopo la revoca la persona non deve più stare nella vista della KB"
+
+        # Il consenso non si «ridà» con un UPDATE: la promessa si registra alla creazione.
+        ridato = _post(client_reale, ambiente.EMAIL_SANBAO, "salva_dato",
+                       {"entita": "persona", "id": persona_id, "consenso": True})
+        assert ridato.status_code == 422, ridato.text
+    finally:
+
+        async def ripulisci() -> None:
+            conn = await ambiente.connessione_amministratore()
+            try:
+                await conn.execute("DELETE FROM trasi.persona_casa WHERE id = $1", persona_id)
+            finally:
+                await conn.close()
+
+        asyncio.run(ripulisci())
+
+
 async def _ripulisci(*ids: int) -> None:
     """Rimuove le proposte di prova (via connessione amministrativa: nessun ruolo applicativo ha `DELETE`)."""
     await ambiente.pulisci(*ids)

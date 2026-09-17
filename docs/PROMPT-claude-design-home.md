@@ -63,8 +63,8 @@ E c'è un secondo meccanismo che ti riguarda: il sistema **non modifica mai la m
 ## Vincoli non negoziabili
 
 - **Accessibilità WCAG 2.1 AA**: contrasto testo ≥ 4,5:1, focus sempre visibile, navigazione completa da tastiera, testo base ≥ 16 px. Oggi è rispettata (contrasto minimo misurato 7,99:1) e **non va peggiorata**.
-- **Zero dipendenze esterne**: niente CDN, niente font remoti, nessuna richiesta a domini terzi. La pagina deve funzionare anche se la rete esterna è irraggiungibile. Quindi: font di sistema, icone in SVG inline o caratteri, nessuna libreria.
-- **Peso contenuto**: ≤ 30 KB totali (oggi 21 KB). È una pagina di servizio che deve aprirsi subito su un tablet vecchio.
+- **Zero dipendenze esterne**: niente CDN, niente font remoti, nessuna richiesta a domini terzi. La pagina deve funzionare anche se la rete esterna è irraggiungibile. Il font Commissioner è incluso localmente, con fallback di sistema; icone in SVG inline o caratteri, nessuna libreria.
+- **Peso contenuto**: ≤ 30 KB di codice statico, oltre al font locale (~1 MB) caricato con `font-display: swap`. È una pagina di servizio che deve aprirsi subito su un tablet vecchio.
 - **Nessun dato personale**: l'unica informazione conservata è lo slug della Casa nel browser.
 - **Nessun imperativo verso le persone**: il sistema osserva e suggerisce, non impartisce compiti. Vale anche per i testi dell'interfaccia.
 - **Lingua: italiano semplice.** Chi la usa non è tecnico e ha una persona davanti.

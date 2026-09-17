@@ -37,17 +37,21 @@ umask 077
   printf 'export PGDATABASE=%s\n' "${PGDATABASE:-trasi_db}"
   printf 'export PGPASSWORD=%s\n' "${PGPASSWORD:-}"
   printf 'export TRASI_DB_VIA=%s\n' "${TRASI_DB_VIA:-diretta}"
-  # Le credenziali verso Onyx (F3 export KB): `cron` non eredita l'ambiente del container, e senza
-  # queste variabili `export_kb.py` esce con «PAT Onyx assente» a ogni notte — verificato il 17/09,
-  # con `export_kb.log` che registra il fallimento e la KB ferma. Le variabili arrivano dal compose
-  # (`ONYX_API_URL`, `ONYX_TRASI_KB_API_KEY`, `ONYX_KB_CC_PAIR_ID`) e qui vengono riproposte al job
-  # solo se impostate, così sul host — dove non esistono — il file resta come prima.
-  if [ -n "${ONYX_API_URL:-}" ]; then printf 'export ONYX_API_URL=%s\n' "$ONYX_API_URL"; fi
-  if [ -n "${ONYX_TRASI_KB_API_KEY:-}" ]; then printf 'export ONYX_TRASI_KB_API_KEY=%s\n' "$ONYX_TRASI_KB_API_KEY"; fi
-  if [ -n "${ONYX_KB_CC_PAIR_ID:-}" ]; then printf 'export ONYX_KB_CC_PAIR_ID=%s\n' "$ONYX_KB_CC_PAIR_ID"; fi
-  # Il cc_pair dei documenti esterni (fonti_documenti.py): nel container `shim/.onyx-kb.json` non c'è,
-  # quindi l'unica via è l'ambiente (il compose overlay la dichiara).
-  if [ -n "${ONYX_DOCUMENTI_CC_PAIR_ID:-}" ]; then printf 'export ONYX_DOCUMENTI_CC_PAIR_ID=%s\n' "$ONYX_DOCUMENTI_CC_PAIR_ID"; fi
+  # Le credenziali di Onyx e l'SMTP: cron **non eredita l'ambiente del container**, e `job.sh` carica
+  # solo questo file. Senza queste righe `export_kb.py` alle 01:00 muore con «PAT Onyx assente»
+  # (misurato: nessuna riga in `flusso_run`, KB ferma ai 32 documenti del 16/09 mentre la vista ne
+  # aveva 43), e gli alert perdono l'SMTP. Stesso file, stessa umask, stesso non-stampare-nessun-valore.
+  printf 'export ONYX_API_URL=%s\n'           "${ONYX_API_URL:-}"
+  printf 'export ONYX_TRASI_KB_API_KEY=%s\n'  "${ONYX_TRASI_KB_API_KEY:-}"
+  printf 'export ONYX_KB_CC_PAIR_ID=%s\n'     "${ONYX_KB_CC_PAIR_ID:-}"
+  # Il cc_pair dei documenti esterni (fonti_documenti.py, domenica 01:30): nel container
+  # `shim/.onyx-kb.json` non c'è (l'immagine copia solo `flussi/`), quindi l'unica via è l'ambiente.
+  printf 'export ONYX_DOCUMENTI_CC_PAIR_ID=%s\n' "${ONYX_DOCUMENTI_CC_PAIR_ID:-}"
+  printf 'export TRASI_SMTP_HOST=%s\n'        "${TRASI_SMTP_HOST:-}"
+  printf 'export TRASI_SMTP_PORT=%s\n'        "${TRASI_SMTP_PORT:-}"
+  printf 'export TRASI_SMTP_USER=%s\n'        "${TRASI_SMTP_USER:-}"
+  printf 'export TRASI_SMTP_PASSWORD=%s\n'    "${TRASI_SMTP_PASSWORD:-}"
+  printf 'export TRASI_SMTP_FROM=%s\n'        "${TRASI_SMTP_FROM:-}"
 } > /run/trasi/env
 # **Il proprietario deve essere `automazioni`, non root.** L'entrypoint gira come root (cron lo
 # richiede) e creerebbe il file con il proprio uid: `chmod 600` lo renderebbe leggibile **solo da
@@ -91,6 +95,7 @@ case "$identita" in
     exit 1
     ;;
 esac
+
 if psql -X -q -tAc "SELECT 1 FROM trasi.flusso_run LIMIT 0" >/dev/null 2>&1; then
   echo "automazioni: registro flusso_run accessibile"
 else
@@ -101,7 +106,7 @@ fi
 # --- 4. Prova offline dei flussi ------------------------------------------------------------
 # `--help` costruisce tutti gli argomenti e importa tutti i moduli: un `sys.path` sbagliato o una
 # dipendenza mancante si vedono qui. Nessuna chiamata di rete, nessuna scrittura.
-for flusso in export_kb.py fonti_ical.py fonti_http.py fonti_documenti.py alert.py; do
+for flusso in export_kb.py fonti_ical.py fonti_http.py alert.py; do
   if python3 "/app/flussi/$flusso" --help >/dev/null 2>&1; then
     echo "automazioni: $flusso → importabile"
   else

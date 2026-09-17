@@ -130,7 +130,7 @@ CREATE INDEX IF NOT EXISTS richiesta_fasce_idx ON trasi.richiesta (casa_id, fasc
 --
 -- **`n` è NULL sotto soglia.** La colonna grezza `cnt` vive dentro il CTE e **non compare fra le
 -- colonne di uscita**: chi interroga la vista non ha un secondo canale da cui rileggere il numero che
--- la soglia vieta. È la stessa proprietà di `fn_statistiche_casa` (db/022) e la ragione è che una
+-- la soglia vieta. È la stessa proprietà di `v_report_mensile` (db/004) e la ragione è che una
 -- mascheratura aggirabile con un `SELECT *` non è una mascheratura.
 --
 -- Le righe `non_dichiarat*` NON sono un buco da nascondere: è il conteggio di chi non ha risposto, e

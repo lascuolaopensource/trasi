@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Trasi — Osservatorio</title>
+<meta name="description" content="Trasi: la mappa dei luoghi della rete delle Case di Quartiere di Brindisi, con l'elenco equivalente e la scheda del luogo.">
+<link rel="stylesheet" href="assets/struttura.css?v=1">
+<link rel="stylesheet" href="assets/veste.css?v=1">
+<!-- `mappa.css` è dell'Osservatorio: griglia a due colonne, altezza della tela Leaflet, segni dei
+     tre livelli di pin, evidenza della voce scelta. Classi proprie, prefisso `mappa-` (§3 del
+     contratto): non è veste, è il comportamento di questa pagina. -->
+<link rel="stylesheet" href="assets/mappa.css?v=1">
+<!-- `leaflet.css` dal **vendor** (BSD-2, `vendor/leaflet/LICENSE`): zero CDN. Le immagini dei
+     marcatori le raggiunge con percorsi relativi (`images/marker-icon.png`), quindi il foglio va
+     servito dalla sua cartella — è la ragione per cui il vendor ha una struttura sua. -->
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=1">
+</head>
+<body>
+
+<!-- ============================================================ IL GUSCIO =====================
+     Copiato **una volta** da `_shell.html` (CONTRATTO-shell.md §2). I tre segnaposto li riempie
+     `shell.js`: `#shell-casa`, `#shell-zona`, `#shell-pannello`. Il pannello contestuale
+     dell'Osservatorio è la **chat compatta**: `shell.js` lo popola con «Apri nella Home» e
+     `#chat-compatta`. -->
+<a class="salta" href="#contenuto">Salta al contenuto</a>
+
+<div class="guscio">
+  <aside class="sidebar" id="sidebar" aria-label="Navigazione e pannello">
+    <div class="sidebar-testata">
+      <p class="marchio">TRASI</p>
+      <p class="casa-nome" id="shell-casa">accesso in corso…</p>
+      <p class="casa-zona" id="shell-zona"></p>
+    </div>
+
+    <nav class="nav" aria-label="Destinazioni">
+      <a class="nav-voce" href="index.html">Home</a>
+      <a class="nav-voce" href="osservatorio.html">Osservatorio</a>
+      <a class="nav-voce" href="account.html">Account</a>
+    </nav>
+
+    <div class="pannello" id="shell-pannello" aria-label="Pannello contestuale"></div>
+
+    <div class="sidebar-piede">
+      <a class="azione" href="aiuto.html">Aiuto</a>
+      <button class="azione" type="button" id="shell-esci">Esci</button>
+      <p class="privacy">Non conserva dati personali.</p>
+    </div>
+  </aside>
+
+  <div class="area">
+    <button class="menu-bottone" type="button" id="shell-menu" aria-expanded="false" aria-controls="sidebar">Menu</button>
+
+    <main class="contenuto" id="contenuto">
+
+      <!-- ==================================================== OSSERVATORIO — tre viste =========
+           Mappa, elenco e scheda vivono nello **stesso file** (§4.2). Elenco e scheda si alternano
+           nella colonna destra; la mappa **resta sempre** al suo posto, anche con la scheda aperta.
+           Chi accende e spegne è `mappa.js`: il markup qui è la forma di tutte e tre. -->
+
+      <div class="mappa" id="mappa" aria-busy="true">
+
+        <div class="blocco-testa">
+          <h1 class="titolo-pagina" id="mappa-titolo">Osservatorio</h1>
+          <!-- La riga dichiara i numeri veri appena arrivano: conteggi, raggio della Casa, stato
+               delle fonti esterne. Prima dice che sta leggendo, poi dice il fatto. -->
+          <p class="mappa-conteggio" id="mappa-conteggio">Lettura in corso…</p>
+        </div>
+
+        <!-- Stato di dati non disponibili — testo **verbatim** (§7 del contratto, preso da WCAG.md
+             §3.3.1). Vuoto e `hidden` all'avvio: una regione live vuota non si annuncia. -->
+        <p class="mappa-stato mappa-stato--attenzione" id="mappa-errore" role="status" hidden></p>
+
+        <div class="mappa-griglia">
+
+          <!-- ------------------------------------------------ colonna sinistra: la mappa -->
+          <div class="mappa-mappa">
+            <!-- La mappa. `aria-hidden` sul canvas Leaflet non è possibile (Leaflet lo gestisce),
+                 quindi il ruolo lo dichiara il contenitore: è **decorativa per chi usa la
+                 tastiera**, e l'equivalente è l'elenco a fianco (§4.2.1). La chiave da tastiera è
+                 il `<div>` stesso, che è focalizzabile e ha una descrizione. -->
+            <div class="mappa-tela" id="mappa-tela" tabindex="0" role="region"
+                 aria-label="Mappa dei luoghi della rete. L'elenco a fianco è la stessa informazione, con le stesse voci nello stesso ordine, e si può usare da tastiera."
+                 aria-describedby="mappa-attribuzione"></div>
+
+            <!-- Attribuzione OSM: riga in parole, nel flusso del documento, visibile senza
+                 scorrere (policy OSM §2). Mai un'icona, mai dietro un toggle. -->
+            <p class="mappa-attribuzione" id="mappa-attribuzione">© OpenStreetMap contributors (ODbL)</p>
+
+            <!-- Riga di stato dello sfondo: se i tile non si caricano la mappa resta leggibile e
+                 lo dice. Vuota all'avvio. -->
+            <p class="mappa-stato" id="mappa-sfondo" role="status" hidden></p>
+
+            <!-- Legenda in parole: tre voci, una per livello di pin. Il simbolo è testo, e la
+                 parola dice chi lo sa (V3). -->
+            <div class="blocco">
+              <h2 class="titolo-pagina">Legenda</h2>
+              <ul class="mappa-legenda">
+                <li>
+                  <span class="mappa-simbolo mappa-pin--casa" aria-hidden="true">■</span>
+                  <span>■ Casa della rete — la rete lo sa</span>
+                </li>
+                <li>
+                  <span class="mappa-simbolo mappa-pin--luogo" aria-hidden="true">●</span>
+                  <span>● luogo della rete — la rete lo sa</span>
+                </li>
+                <li>
+                  <span class="mappa-simbolo mappa-pin--esterna" aria-hidden="true">○</span>
+                  <span>○ trovato su OpenStreetMap — trovato fuori, non verificato dalla rete</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Filtri per tipo. Le Case e i luoghi della rete sono attivi all'avvio; i tipi dei
+                 POI esterni restano spenti finché l'operatore non li accende: ognuno costa una
+                 interrogazione a OpenStreetMap, e una mappa che parte interrogando sei tipi paga
+                 sei volte ciò che non ha ancora chiesto nessuno. -->
+            <fieldset class="mappa-filtri" id="mappa-filtri">
+              <legend>Filtri per tipo</legend>
+              <span class="mappa-filtro">
+                <input type="checkbox" id="filtro-case" data-livello="casa" checked>
+                <label for="filtro-case">Case della rete (10)</label>
+              </span>
+              <span class="mappa-filtro">
+                <input type="checkbox" id="filtro-luoghi" data-livello="luogo" checked>
+                <label for="filtro-luoghi">Luoghi della rete (22)</label>
+              </span>
+              <!-- I tipi dei POI esterni: le caselle le costruisce `elenco.js` dal vocabolario dello
+                   shim, così l'elenco ammesso è uno solo e non due copie da tenere allineate. -->
+              <span class="mappa-filtro">
+                <input type="checkbox" id="filtro-esterni" data-livello="esterna">
+                <label for="filtro-esterni">Punti trovati fuori (OpenStreetMap)</label>
+              </span>
+              <div class="mappa-filtro" id="mappa-tipi-esterni"></div>
+              <span class="mappa-filtro">
+                <input type="checkbox" id="filtro-aperto">
+                <label for="filtro-aperto">Solo aperti adesso</label>
+              </span>
+            </fieldset>
+          </div>
+
+          <!-- ------------------------------------------------ colonna destra: elenco | scheda -->
+          <div class="mappa-lato" id="mappa-lato">
+
+            <!-- VISTA 2 — l'elenco equivalente. È la forma da tastiera e da stampa della mappa:
+                 stessa informazione, stesso ordine (distanza), stessa azione (aprire la scheda).
+                 Il titolo è un `<h2>` perché l'elenco è una sezione, non un ripiego. -->
+            <section class="mappa-elenco-pezzo" id="mappa-elenco-pezzo" aria-labelledby="mappa-elenco-titolo">
+              <div class="blocco-testa">
+                <h2 class="titolo-pagina" id="mappa-elenco-titolo">Elenco dei luoghi</h2>
+                <p class="mappa-conteggio" id="mappa-elenco-conteggio"></p>
+              </div>
+              <ul class="mappa-elenco" id="mappa-elenco" aria-label="Luoghi della mappa, nell'ordine di distanza dalla Casa"></ul>
+              <p class="mappa-vuoto" id="mappa-vuoto" hidden>Nessun luogo con i filtri attivi. Le caselle sopra decidono che cosa compare.</p>
+            </section>
+
+            <!-- VISTA 3 — la scheda del luogo. `hidden` finché non si sceglie una voce; **accanto**
+                 alla mappa, mai al suo posto (§4.2.2). Il contenuto lo compone `scheda.js`. -->
+            <section class="mappa-scheda blocco filetto" id="mappa-scheda" aria-labelledby="mappa-scheda-titolo" hidden>
+              <button class="azione mappa-scheda-chiudi" type="button" id="mappa-scheda-chiudi">← Torna all'elenco</button>
+              <div id="mappa-scheda-corpo"></div>
+            </section>
+
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- `shell.js` **prima**: espone `window.Trasi` (sessione, `api()`, pannello). Senza, nessuno
+     degli altri moduli può parlare con lo shim. `leaflet.js` dal vendor, poi i tre moduli della
+     pagina, nell'ordine in cui si usano: `mappa.js` disegna e seleziona, `elenco.js` costruisce
+     le voci, `scheda.js` compone il pannello. -->
+<script src="assets/shell.js?v=1"></script>
+<script src="vendor/leaflet/leaflet.js?v=1"></script>
+<script src="assets/mappa.js?v=1"></script>
+<script src="assets/elenco.js?v=1"></script>
+<script src="assets/scheda.js?v=1"></script>
+</body>
+</html>
