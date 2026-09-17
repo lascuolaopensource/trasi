@@ -36,8 +36,8 @@ def _operazioni(contratto: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def test_contratto_espone_le_tredici_operazioni_attese(contratto):
-    """Il contratto contiene esattamente le tredici operazioni attese, ai percorsi e metodi attesi."""
+def test_contratto_espone_le_quattordici_operazioni_attese(contratto):
+    """Il contratto contiene esattamente le quattordici operazioni attese, ai percorsi e metodi attesi."""
     trovate = {
         operazione["operationId"]: (metodo, path)
         for path, elemento in contratto["paths"].items()

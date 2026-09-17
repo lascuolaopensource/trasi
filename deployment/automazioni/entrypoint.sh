@@ -45,6 +45,9 @@ umask 077
   if [ -n "${ONYX_API_URL:-}" ]; then printf 'export ONYX_API_URL=%s\n' "$ONYX_API_URL"; fi
   if [ -n "${ONYX_TRASI_KB_API_KEY:-}" ]; then printf 'export ONYX_TRASI_KB_API_KEY=%s\n' "$ONYX_TRASI_KB_API_KEY"; fi
   if [ -n "${ONYX_KB_CC_PAIR_ID:-}" ]; then printf 'export ONYX_KB_CC_PAIR_ID=%s\n' "$ONYX_KB_CC_PAIR_ID"; fi
+  # Il cc_pair dei documenti esterni (fonti_documenti.py): nel container `shim/.onyx-kb.json` non c'è,
+  # quindi l'unica via è l'ambiente (il compose overlay la dichiara).
+  if [ -n "${ONYX_DOCUMENTI_CC_PAIR_ID:-}" ]; then printf 'export ONYX_DOCUMENTI_CC_PAIR_ID=%s\n' "$ONYX_DOCUMENTI_CC_PAIR_ID"; fi
 } > /run/trasi/env
 # **Il proprietario deve essere `automazioni`, non root.** L'entrypoint gira come root (cron lo
 # richiede) e creerebbe il file con il proprio uid: `chmod 600` lo renderebbe leggibile **solo da

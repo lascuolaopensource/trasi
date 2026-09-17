@@ -1,4 +1,13 @@
 casa,categoria,esito,n
+bozzano,abitare,non_trovata,<5
 bozzano,interculturale,inviata_altrove,<5
+bozzano,lavoro,inviata_altrove,<5
+bozzano,orientamento,risolta,9
+buscicchio,lavoro,risolta,<5
+buscicchio,servizi_sociali,inviata_altrove,<5
+molo12,fiscale_isee,risolta,<5
+pop,eventi_attivita,risolta,<5
 san-bao,fiscale_isee,inviata_altrove,<5
-san-bao,orientamento,risolta,408
+san-bao,orientamento,risolta,486
+san-bao,salute,risolta,<5
+tuturano,ascolto_solitudine,risolta,<5
