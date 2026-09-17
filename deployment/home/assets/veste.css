@@ -96,16 +96,24 @@
 }
 
 /* ---- da design/tokens/tipografia.css ---- */
-/* Tipografia — Trasi.
-   Il testo dell'interfaccia usa lo stack di sistema: resta leggibile senza scaricare un carattere
-   aggiuntivo. Il monospaziato resta riservato alle etichette di provenienza, che si citano verbatim.
-   Il logo «Case di Quartiere» è un'immagine. */
+/* Tipografia — Trasi, con il carattere di marca.
+   Commissioner (variabile, SIL OFL) è nella web root (`assets/CommissionerVF.ttf`, sorgente
+   `design/assets/`): la dashboard lo usa per corpo e titoli con `font-weight` variabile, così il
+   marchio è quello anche a video e non solo sui PDF. Lo stack di sistema resta nel ripiego
+   (`--font-sistema`) e nel `swap`: se il file non arriva, la pagina non resta senza testo. Il
+   monospaziato resta riservato alle etichette di provenienza, che si citano verbatim. */
+@font-face {
+  font-family: "Commissioner";
+  src: url("/assets/CommissionerVF.ttf") format("truetype");
+  font-display: swap;
+}
 :root {
   --font-sistema: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --font-marca: "Commissioner", var(--font-sistema);
 
-  --font-corpo: var(--font-sistema);
-  --font-titoli: var(--font-sistema);
+  --font-corpo: var(--font-marca);
+  --font-titoli: var(--font-marca);
   --font-etichette: var(--font-mono); /* etichette di provenienza: si citano verbatim */
 
   --peso-normale: 400; /* @kind font */
@@ -200,12 +208,6 @@
   :root { --durata-immediata: 0ms; /* @kind other */ --durata: 0ms; /* @kind other */ }
 }
 
-/* ==================== VESTE VERA E PROPRIA ==================== */
-
-:root {
-  --font-corpo: var(--font-sistema);
-  --testo-corrente: var(--testo);
-}
 
 body {
   background: var(--sfondo);
