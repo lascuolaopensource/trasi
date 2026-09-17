@@ -604,6 +604,58 @@ paths:
           $ref: '#/components/responses/ParametriNonAmmessi'
         '501':
           $ref: '#/components/responses/NonImplementato'
+  /report_mensile:
+    get:
+      operationId: report_mensile
+      tags:
+      - kb
+      summary: 'Restituisce il report mensile di monitoraggio del servizio come pagina HTML stampabile (A4), costruita dai
+        dati aggregati della rete: richieste per Casa, categoria ed esito (celle sotto la soglia di k-anonimato mostrate
+        come `<5`), indicatori di confronto fra Case e proposte aperte. Usalo SOLO quando l''operatore o la PA chiede il
+        report mensile (rendiconto del servizio, monitoraggio per il Comune): è una pagina pronta da stampare o salvare
+        come PDF dal browser, non un riepilogo da citare in chat.'
+      parameters:
+      - name: mese
+        in: query
+        required: true
+        description: 'Mese del report, formato ISO `YYYY-MM` (es. `2026-09`). È la chiave del rendiconto mensile.'
+        schema:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}$'
+      - name: ambito
+        in: query
+        required: false
+        description: '`osservatorio` (default): aggregato di rete k-anonimo, l''unico ammesso dalle pagine pubbliche. `casa`:
+          rendiconto della propria Casa con numeri pieni, visibile solo all''operatore della Casa (o a rete/TI).'
+        schema:
+          type: string
+          default: osservatorio
+          enum:
+          - osservatorio
+          - casa
+      - name: casa
+        in: query
+        required: false
+        description: 'Slug della Casa per il rendiconto `ambito=casa`. Se omesso, si usa la Casa dell''operatore autenticato
+          (dall''identità); per i ruoli senza Casa (es. rete) con ambito `casa` è obbligatorio.'
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: 'Report mensile HTML A4 stampabile. Solo `text/html`, come il biglietto: nessun JSON.'
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
   /cerca_web:
     get:
       operationId: cerca_web

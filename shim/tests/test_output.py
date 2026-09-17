@@ -59,6 +59,11 @@ class SessioneFinta:
         evento: dict[str, Any] | None = None,
         fonti_web: list[dict[str, Any]] | None = None,
         parametri_valori: dict[str, Any] | None = None,
+        righe_report: list[dict[str, Any]] | None = None,
+        indicatori_report: list[dict[str, Any]] | None = None,
+        conteggi_casa: list[dict[str, Any]] | None = None,
+        casa_id_corrente: int | None = None,
+        casa_slug_corrente: str | None = None,
     ) -> None:
         self.casa_id = casa_id
         self.ruolo = ruolo
@@ -75,6 +80,22 @@ class SessioneFinta:
             "fiducia_min_esterna": 2,
             "max_risultati_esterni": 5,
         }
+        self.righe_report = righe_report if righe_report is not None else [
+            {"casa_slug": "bozzano", "casa_nome": "Centro di Aggregazione Bozzano",
+             "categoria": "orientamento", "esito": "risolta", "n_label": "9", "n": 9},
+            {"casa_slug": "bozzano", "casa_nome": "Centro di Aggregazione Bozzano",
+             "categoria": "lavoro", "esito": "inviata_altrove", "n_label": "<5", "n": None},
+        ]
+        self.indicatori_report = indicatori_report if indicatori_report is not None else [
+            {"casa_slug": "bozzano", "casa_nome": "Centro di Aggregazione Bozzano",
+             "richieste_mese_label": "9", "risolte_mese_label": "9",
+             "luoghi": 3, "eventi_futuri": 1, "proposte_aperte": 2, "opportunita_aperte": 0},
+        ]
+        self.conteggi_casa = conteggi_casa if conteggi_casa is not None else [
+            {"categoria": "orientamento", "esito": "risolta", "n": 12},
+        ]
+        self.casa_id_corrente = casa_id_corrente
+        self.casa_slug_corrente = casa_slug_corrente
 
     async def fetch(self, sql: str, *args: Any) -> list[Any]:
         self.eseguite.append((sql, args))
@@ -87,6 +108,12 @@ class SessioneFinta:
                 for chiave in chiavi
                 if chiave in self.parametri_valori
             ]
+        if "FROM trasi.v_report_mensile" in sql:
+            return self.righe_report
+        if "FROM trasi.v_confronto_case" in sql:
+            return self.indicatori_report
+        if "FROM trasi.richiesta" in sql:
+            return self.conteggi_casa
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
@@ -101,6 +128,9 @@ class SessioneFinta:
         if "FROM trasi.luogo" in sql:
             return self.luogo
         if "FROM trasi.casa" in sql:
+            if "casa_corrente" in sql:
+                # La Casa del ruolo corrente (per il 403 del rendiconto per Casa).
+                return {"id": self.casa_id_corrente, "slug": self.casa_slug_corrente, "nome": "San Bao", "lat": 40.60609, "lon": 17.95196}
             return {"id": self.casa_id, "slug": args[0] if args else None, "nome": "San Bao", "lat": 40.60609, "lon": 17.95196}
         if "FROM trasi.fonte" in sql:
             return {"fonte": "OpenStreetMap contributors (ODbL)"}
@@ -108,6 +138,8 @@ class SessioneFinta:
 
     async def fetchval(self, sql: str, *args: Any) -> Any:
         self.eseguita(sql, args)
+        if "casa_corrente" in sql:
+            return self.casa_id_corrente
         return None
 
     def eseguita(self, sql: str, args: tuple[Any, ...]) -> None:
@@ -279,6 +311,111 @@ def test_oggi_filtra_sulla_casa_corrente_nella_query(app_cliente):
     assert query, "nessuna lettura di v_oggi_casa"
     assert "casa_corrente" in query[0]
 
+
+# --- `report_mensile` ------------------------------------------------------------------------------------------
+
+
+def _report(client, mese: str = "2026-09", **params):
+    """La chiamata all'endpoint del report, con l'identità di default (op.san-bao)."""
+    query = {"mese": mese, **params}
+    return client.get(f"/v1/u/{ambiente.EMAIL_SANBAO}/report_mensile", headers=_intestazioni(), params=query)
+
+
+def test_report_mensile_html_a4_con_celle_mascherate(app_cliente):
+    """Il report osservatorio è una pagina A4 che trascrive i `n_label` della vista, `<5` comprese."""
+    client = app_cliente(SessioneFinta())
+    risposta = _report(client)
+
+    assert risposta.status_code == 200, risposta.text
+    corpo = risposta.text
+    assert "@page { size: A4" in corpo
+    assert "Trasi — report mensile di monitoraggio" in corpo
+    # Le due celle della finta: una piena e una mascherata — la mascheratura arriva dalla vista, non dallo shim.
+    assert "orientamento · risolta" in corpo
+    assert "9" in corpo
+    assert "lavoro · inviata_altrove" in corpo
+    # La cella `<5` è escapata in `&lt;5`: è la stessa protezione di `_voce` da cui ogni dato passa.
+    assert "&lt;5" in corpo
+    # La pagina NON dichiara un numero grezzo sotto soglia: la cella piena è 9, la piccola è `<5` mascherato.
+    assert "<input" not in corpo.lower() and "<form" not in corpo.lower()
+
+
+def test_report_mensile_vuoto_200_che_lo_dichiara(app_cliente):
+    """Un mese senza dati non è un errore: 200 con una pagina che lo dichiara (come `cerca_luogo` con lista vuota)."""
+    client = app_cliente(SessioneFinta(righe_report=[], indicatori_report=[]))
+    risposta = _report(client, mese="2026-01")
+
+    assert risposta.status_code == 200, risposta.text
+    assert "Nessuna richiesta registrata nel mese" in risposta.text
+
+
+def test_report_mensile_mese_non_valido_422(app_cliente):
+    """`mese=2026-13` non esiste: 422 dichiarato, mai un 500 di `strptime`."""
+    client = app_cliente(SessioneFinta())
+    risposta = _report(client, mese="2026-13")
+
+    assert risposta.status_code == 422
+    assert "mese" in risposta.json()["detail"]
+
+
+def test_report_mensile_ambito_non_ammesso_422(app_cliente):
+    """`ambito` è un vocabolario chiuso (osservatorio|casa): un valore estraneo è 422."""
+    client = app_cliente(SessioneFinta())
+    risposta = _report(client, ambito="rete")
+
+    assert risposta.status_code == 422
+
+
+def test_report_mensile_ambito_casa_richiede_casa_di_chi_chiama(app_cliente):
+    """Un ruolo senza Casa (rete) con `ambito=casa` senza `casa` esplicita è 422: non si può inventare."""
+    client = app_cliente(SessioneFinta(ruolo="rete", casa_id=None))
+    risposta = _report(client, ambito="casa")
+
+    assert risposta.status_code == 422
+    assert "casa" in risposta.json()["detail"]
+
+
+def test_report_mensile_ambito_casa_di_un_altra_403(app_cliente):
+    """Il rendiconto per Casa ha i numeri pieni: un ruolo Casa lo legge solo per la propria Casa (403 altrimenti)."""
+    sessione_finta = SessioneFinta(casa_id=5, casa_id_corrente=5, casa_slug_corrente="san-bao")
+    client = app_cliente(sessione_finta)
+
+    # San Bao chiede il rendiconto di Bozzano: la RLS lo vieterebbe a valle, ma si dichiara subito, prima di leggere.
+    risposta = _report(client, ambito="casa", casa="bozzano")
+
+    assert risposta.status_code == 403
+    assert "solo alla Casa stessa" in risposta.json()["detail"]
+
+
+@pytest.mark.live
+def test_report_mensile_sul_database_vero_con_le_celle_k_anon(db_vivo):
+    """Sul DB reale (con il fixture `fixture_report.sql` applicato) il report mostra celle piene e `<5`.
+
+    Il valore di questo test è la **query** e l'**accesso** — che `SQL_REPORT_RIGHE` resti eseguibile
+    da `rete` e che le colonne della vista esistano coi nomi attesi — non la forma del foglio, già
+    provata sul doppio. Usa il mese corrente e verifica la sola invariante che rende leggibile il
+    report: le celle sotto soglia escono mascherate come `<5` e la pagina resta A4.
+    """
+    if not db_vivo:
+        pytest.skip(f"database non raggiungibile ({ambiente.dsn_test()})")
+    ambiente.configura_ambiente()
+
+    from app import main as modulo_main
+    from app.db import sessione as dipendenza
+    from app.settings import get_settings
+
+    # La chiave reale la legge l'app dalle impostazioni: `ambiente.CHIAVE_SHIM` in questo worktree
+    # è vuota (manca `deployment/.env`), e la chiave sbagliata produrrebbe un 401 che dice il falso.
+    intestazioni = {"X-Trasi-Key": get_settings().trasi_shim_key}
+
+    with TestClient(modulo_main.crea_app(), raise_server_exceptions=False) as client:
+        mese = datetime.now(ZoneInfo("Europe/Rome")).strftime("%Y-%m")
+        risposta = client.get(
+            f"/v1/u/{ambiente.EMAIL_RETE}/report_mensile",
+            headers=intestazioni,
+            params={"mese": mese},
+        )
+        assert risposta.status_code == 200, risposta.text
 
 # --- `biglietto` ----------------------------------------------------------------------------------------------
 

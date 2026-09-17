@@ -23,7 +23,7 @@ Il confronto è per **host**, non per sottostringa: `inps.it` non deve autorizza
 from __future__ import annotations
 
 import html
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from urllib.parse import urlparse
 
@@ -156,6 +156,198 @@ async def oggi(
         "giorni_piu_vecchia": riga["giorni_piu_vecchia"],
         "testo": riga["testo"],
     }
+
+
+# --- `report_mensile` ---------------------------------------------------------------------------------------
+
+
+MESI_IT = (
+    "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+    "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
+)
+
+# Le righe del report osservatorio: i conteggi k-anonimi della vista. La vista è
+# `security_invoker=false` — gira con i privilegi del proprietario — e le celle sono GIÀ
+# mascherate da `trasi.k_anon` (sotto soglia: `n` NULL e `n_label` «<5»/«—»): ricomporre la
+# mascheratura qui significherebbe una seconda verità sulla regola di §12, e la Home pubblica
+# (identità `rete`, nessun login) legge esattamente questa pagina.
+SQL_REPORT_RIGHE = """
+SELECT casa_slug, casa_nome, categoria, esito, n_label, n
+  FROM trasi.v_report_mensile
+ WHERE mese = $1
+ ORDER BY casa_slug, categoria, esito
+"""
+
+# Gli indicatori del report: una riga per Casa dalla vista di confronto, già k-anonima.
+SQL_REPORT_INDICATORI = """
+SELECT casa_slug, casa_nome, richieste_mese_label, risolte_mese_label,
+       luoghi, eventi_futuri, proposte_aperte, opportunita_aperte
+  FROM trasi.v_confronto_case
+ ORDER BY casa_slug
+"""
+
+# Il rendiconto della propria Casa (ambito `casa`): numeri PIENI, senza k-anonimo. È la stessa
+# regola di `db/024` (R05): il report per Casa è il rendiconto della Casa a sé stessa, e i propri
+# sportelli sono suoi. La RLS fa il suo lavoro: un ruolo Casa non vede le righe delle altre Case,
+# e la query di controllo qui sotto lo dichiara con un 403 prima ancora di leggere.
+SQL_REPORT_CASA = """
+SELECT r.categoria, r.esito, count(*) AS n
+  FROM trasi.richiesta r
+ WHERE date_trunc('month', r.ts) = $1::date
+   AND r.casa_id = $2
+ GROUP BY r.categoria, r.esito
+ ORDER BY r.categoria, r.esito
+"""
+
+SQL_CASA_DI = "SELECT id, slug, nome FROM trasi.casa WHERE slug = $1"
+
+
+def _mese_in_parole(mese: date) -> str:
+    return f"{MESI_IT[mese.month - 1]} {mese.year}"
+
+
+def _documento_report(
+    *,
+    mese: date,
+    ambito: str,
+    casa_nome: str | None,
+    righe: str,
+    badge: str,
+    fonte: str,
+    consultato: datetime,
+    nota: str,
+) -> str:
+    """La pagina A4 del report mensile, dal guscio `_foglio`: stessi divieti e stesso stile a stampa.
+
+    È il terzo foglio che condivide `_foglio` (dopo biglietto A6 e scheda evento A5): la struttura
+    tabella con `@page` e il divieto di moduli/campi compilabili vengono ereditati, non ricopiati.
+    """
+    intestazione = "Trasi — report mensile di monitoraggio"
+    if casa_nome:
+        intestazione += f" · {casa_nome}"
+    return _foglio(
+        titolo=f"Trasi — report {_mese_in_parole(mese)}",
+        intestazione=intestazione,
+        formato="A4",
+        larghezza="170mm",
+        badge=badge,
+        righe=righe,
+        didascalia=casa_nome or "Aggregato di rete",
+        fonte=fonte,
+        consultato=consultato,
+        nota=nota,
+    )
+
+
+@router.get(**_argomenti("report_mensile"), response_class=HTMLResponse)
+async def report_mensile(
+    mese: str = Query(..., pattern=r"^[0-9]{4}-[0-9]{2}$", description="Mese ISO `YYYY-MM`."),
+    ambito: str = Query(default="osservatorio", pattern=r"^(osservatorio|casa)$"),
+    casa: str | None = Query(default=None, min_length=1, description="Slug; se omesso, quella dell'operatore."),
+    sess: Sessione = Depends(sessione),
+) -> HTMLResponse:
+    """Il report mensile di monitoraggio, come pagina HTML A4 stampabile (§4.3, US-4/foglio 4.3).
+
+    Due ambiti, due regole:
+      * `osservatorio` (default): l'aggregato di rete dalle viste k-anonime — è ciò che la Home
+        pubblica può mostrare, e ciò che risponde alla richiesta «report per la PA» in chat;
+      * `casa`: il rendiconto con i numeri pieni della propria Casa — visibile solo alla Casa
+        (o a `rete`/`ti`), come da RLS `rep_sel`.
+
+    I numeri NON vengono ricalcolati qui: arrivano già mascherati dalle viste
+    (`v_report_mensile`, `v_confronto_case`), che sono la stessa fonte del ciclo mensile
+    (`flussi/ciclo_mensile.py`). Ricomporli in Python significherebbe due verità sulla soglia.
+    """
+    try:
+        primo = datetime.strptime(mese, "%Y-%m").date().replace(day=1)
+    except ValueError as exc:
+        raise errore(422, f"mese: «{mese}» non è un mese valido (formato YYYY-MM)") from exc
+    adesso = adesso_locale()
+
+    if ambito == "osservatorio":
+        righe_vista = await sess.fetch(SQL_REPORT_RIGHE, primo)
+        indicatori = await sess.fetch(SQL_REPORT_INDICATORI)
+        if not righe_vista and not indicatori:
+            return HTMLResponse(
+                _documento_report(
+                    mese=primo,
+                    ambito=ambito,
+                    casa_nome=None,
+                    righe="",
+                    badge=f"[KB · Rete · {mese} · aggregato di rete]",
+                    fonte="v_report_mensile · v_confronto_case",
+                    consultato=adesso,
+                    nota="Nessuna richiesta registrata nel mese: il report è vuoto (i conteggi sotto "
+                         "soglia restano «<5» quando esisteranno).",
+                )
+            )
+        pezzi: list[str] = []
+        for i in indicatori:
+            pezzi.append(
+                _voce(
+                    f"{i['casa_nome']} — indicatori",
+                    f"richieste {i['richieste_mese_label']} · risolte {i['risolte_mese_label']} · "
+                    f"luoghi {i['luoghi']} · eventi futuri {i['eventi_futuri']} · "
+                    f"proposte {i['proposte_aperte']} · opportunità {i['opportunita_aperte']}",
+                )
+            )
+        for r in righe_vista:
+            pezzi.append(
+                _voce(
+                    f"{r['casa_nome']} · {r['categoria']} · {r['esito']}",
+                    r["n_label"],
+                )
+            )
+        return HTMLResponse(
+            _documento_report(
+                mese=primo,
+                ambito=ambito,
+                casa_nome=None,
+                righe="".join(pezzi),
+                badge="[KB · Rete · " + mese + " · aggregato di rete k-anonimo]",
+                fonte="v_report_mensile · v_confronto_case (memoria della rete)",
+                consultato=adesso,
+                nota="Report aggregato della rete: le celle sotto la soglia di k-anonimato (5) sono "
+                     "mostrate come «<5». Nessuna conversazione individuale è riportata.",
+            )
+        )
+
+    # ambito «casa»: il rendiconto della propria Casa, numeri pieni.
+    slug = (casa or "").strip() or await slug_casa_da_identita(sess)
+    if not slug:
+        raise errore(422, "casa: obbligatoria per un ruolo senza Casa (es. rete) con ambito «casa»")
+    riga_casa = await sess.fetchrow(SQL_CASA_DI, slug)
+    if riga_casa is None:
+        raise errore(404, "Casa non presente fra quelle accessibili a questo ruolo")
+
+    # Un ruolo Casa legge il rendiconto della propria Casa: la RLS nasconderebbe le righe di
+    # un'altra, ma un report «vuoto» direbbe il falso — si dichiara il 403 prima di leggere.
+    casa_corrente = await sess.fetchval(
+        "SELECT trasi.casa_corrente()"
+    )
+    if casa_corrente is not None:
+        riga_identita = await sess.fetchrow("SELECT slug FROM trasi.casa WHERE id = trasi.casa_corrente()")
+        if riga_identita is None or riga_identita["slug"] != slug:
+            raise errore(403, "il rendiconto per Casa è visibile solo alla Casa stessa (o a rete/TI)")
+
+    conteggi = await sess.fetch(SQL_REPORT_CASA, primo, riga_casa["id"])
+    pezzi_casa = [_voce(f"{r['categoria']} · {r['esito']}", str(r["n"])) for r in conteggi]
+    if not pezzi_casa:
+        pezzi_casa = [_voce("Richiesta registrate nel mese", "nessuna")]
+
+    return HTMLResponse(
+        _documento_report(
+            mese=primo,
+            ambito=ambito,
+            casa_nome=riga_casa["nome"],
+            righe="".join(pezzi_casa),
+            badge=f"[KB · {riga_casa['nome']} · {mese} · rendiconto della Casa]",
+            fonte="trasi.richiesta (numeri pieni della Casa)",
+            consultato=adesso,
+            nota="Rendiconto della Casa a sé stessa: i numeri non sono mascherati. Per il quadro di "
+                 "rete usa il report «osservatorio» (celle sotto soglia «<5»).",
+        )
+    )
 
 
 # --- `biglietto` ----------------------------------------------------------------------------------------------

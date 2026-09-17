@@ -21,6 +21,10 @@ OPERAZIONI_ATTESE: tuple[tuple[str, str, str], ...] = (
     ("approva_proposta", "post", "/approva_proposta"),
     ("biglietto", "get", "/biglietto"),
     ("oggi", "get", "/oggi"),
+    # Il report mensile di monitoraggio in HTML stampabile: la pagina che l'operatore (o la PA in
+    # chat) apre per stampare/salvare il rendiconto. Complementare al canale `/pa/` del browser:
+    # questo è il tool del LLM, contratto congelato (2026-09-17).
+    ("report_mensile", "get", "/report_mensile"),
     ("cerca_web", "get", "/cerca_web"),
 )
 

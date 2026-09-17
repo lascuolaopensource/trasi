@@ -30,32 +30,39 @@ BEGIN
   -- batteria, dove la transazione di `run.sh` non c'è.
   DELETE FROM trasi.report
    WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='san-bao')
-     AND mese = date_trunc('month', current_date)::date;
+     AND mese = date_trunc('month', current_date)::date
+     AND contenuti->>'fixture' = 't_report';
 
-  EXECUTE 'SET LOCAL ROLE automazioni';
-  INSERT INTO trasi.report (casa_id, mese, ambito, contenuti, csv)
-  SELECT (SELECT id FROM trasi.casa WHERE slug='san-bao'), date_trunc('month', current_date)::date,
-         'casa', jsonb_build_object('richieste', 12, 'senza_risposta', 2), 'casa,categoria,esito,n';
-  EXECUTE 'RESET ROLE';
+  -- Se esiste GIÀ un report reale della Casa per questo mese (il ciclo lo genera e ora è
+  -- persistito: misurato 2026-09-17, US-4 ha 11 report con stato HITL), il fixture NON tocca
+  -- niente: il test del flusso si fa su un MESE SENZA report reali (agosto) invece di
+  -- schiacciare il rendiconto vero di settembre.
   SELECT count(*) INTO n FROM trasi.report
    WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='san-bao')
-     AND mese = date_trunc('month', current_date)::date;
-  IF n <> 1 THEN RAISE EXCEPTION 'FAIL R00 — fixture: atteso 1 report, trovati %', n; END IF;
+     AND mese = date_trunc('month', current_date)::date
+     AND contenuti->>'fixture' = 't_report';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL R00 — residuo fixture inatteso (% righe): pulire prima di rilanciare', n; END IF;
 END $$;
 
 -- R01 · il flusso GENERA il report (INSERT): è la sua funzione -------------------------------
 DO $$
 DECLARE n integer;
 BEGIN
+  -- AGOSTO, non settembre: settembre ha i report reali del ciclo (US-4, stato HITL) e il test
+  -- non li tocca — né con INSERT né con DELETE. Il mese senza rendiconto persistito è dove il
+  -- comportamento «INSERT è il mio compito» si prova senza rischi.
   DELETE FROM trasi.report
-   WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='bozzano') AND ambito='osservatorio';
+   WHERE mese = date_trunc('month', current_date)::date - interval '1 month'
+     AND contenuti->>'fixture' = 't_report';
   EXECUTE 'SET LOCAL ROLE automazioni';
   INSERT INTO trasi.report (casa_id, mese, ambito, contenuti)
-  VALUES ((SELECT id FROM trasi.casa WHERE slug='bozzano'), date_trunc('month', current_date)::date,
-          'osservatorio', jsonb_build_object('aggregato', true));
+  VALUES (NULL, date_trunc('month', current_date)::date - interval '1 month',
+          'osservatorio', jsonb_build_object('aggregato', true, 'fixture', 't_report'));
   EXECUTE 'RESET ROLE';
   SELECT count(*) INTO n FROM trasi.report
-   WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='bozzano') AND ambito='osservatorio';
+   WHERE casa_id IS NULL AND ambito='osservatorio'
+     AND mese = date_trunc('month', current_date)::date - interval '1 month'
+     AND contenuti->>'fixture' = 't_report';
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL R01 — il flusso non ha potuto generare il report (trovati %)', n; END IF;
   RAISE NOTICE 'PASS R01 — automazioni genera un report (INSERT permesso, INSERT è il suo compito)';
 END $$;
