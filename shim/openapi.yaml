@@ -231,6 +231,38 @@ paths:
                   minLength: 1
                   description: Destinazione in testo libero quando non è un luogo della rete (es. un POI esterno `osm:node:…`
                     o un servizio non censito).
+                fascia_eta:
+                  type: string
+                  enum:
+                  - 0-13
+                  - 14-17
+                  - 18-29
+                  - 30-44
+                  - 45-59
+                  - 60-74
+                  - 75+
+                  - non_dichiarata
+                  description: 'Fascia d''età della persona ricevuta (foglio 4.4), **facoltativa**. Chiedila solo se
+                    l''operatore l''ha chiesta alla persona: un campo vuoto è una risposta legittima. Classi, mai
+                    l''età esatta; i conteggi escono solo mascherati dalla soglia di k-anonimato (sotto 5: «<5»).'
+                genere:
+                  type: string
+                  enum:
+                  - donna
+                  - uomo
+                  - altro
+                  - non_dichiarato
+                  description: 'Genere dichiarato dalla persona (foglio 4.4), **facoltativo**. «non_dichiarato» è una
+                    risposta, non un buco: non indovinare.'
+                provenienza:
+                  type: string
+                  enum:
+                  - italia
+                  - ue
+                  - extra_ue
+                  - non_dichiarata
+                  description: 'Area di provenienza (foglio 4.4), **facoltativa**: Italia, UE, extra-UE. Non il Paese e
+                    non la nazionalità: serve a decidere se stanziare un mediatore culturale, non a identificare nessuno.'
       responses:
         '201':
           description: Richiesta registrata.
@@ -447,6 +479,7 @@ paths:
               additionalProperties: false
               required:
               - entita
+              - consenso
               properties:
                 entita:
                   type: string
@@ -454,8 +487,9 @@ paths:
                   - scheda_servizio
                   - opportunita
                   - casa
-                  description: 'Cosa si scrive: una scheda di servizio, un''opportunità, oppure gli orari/recapiti
-                    della Casa stessa.'
+                  - persona
+                  description: 'Cosa si scrive: una scheda di servizio, un''opportunità, gli orari/recapiti della
+                    Casa stessa, oppure una **persona della Casa** (foglio 1.1, db/027).'
                 id:
                   type: integer
                   minimum: 1
@@ -520,6 +554,36 @@ paths:
                   type: string
                   description: 'Solo per `entita=casa`: denominazione dell''immobile (es. "Ex scuola elementare"), come
                     lo conosce il quartiere. Aiuta chi non arriva dall''indirizzo.'
+                nome:
+                  type: string
+                  minLength: 3
+                  maxLength: 120
+                  description: 'Solo per `entita=persona`: nome della persona **come vuole che sia citato** (es. "Maria
+                    Rossi"), dal foglio 1.1. È l''unico dato personale che un''operazione di questo contratto accetta, e
+                    entra nella knowledge base — quindi in chat — **solo con il consenso dell''interessata**: chiedi
+                    conferma all''operatore prima di usarlo. Nessun recapito: email e telefoni sono respinti.'
+                ruolo:
+                  type: string
+                  minLength: 2
+                  maxLength: 80
+                  description: 'Solo per `entita=persona`: il ruolo presso la Casa (es. "psicologa di comunità"). Non è
+                    il nome: la scheda di un servizio porta `referente_ruolo`, questa porta chi ricopre il ruolo.'
+                competenze:
+                  type: array
+                  items:
+                    type: string
+                  description: 'Solo per `entita=persona`: competenze della persona (es. ["mediazione linguistica",
+                    "supporto ISEE"]). Facoltativo.'
+                informativa:
+                  type: string
+                  maxLength: 200
+                  description: 'Solo per `entita=persona`: riferimento all''informativa data alla persona (es. "informativa
+                    v1 · 2026-09-17"). Facoltativo ma raccomandato: è la prova di dove il nome può comparire.'
+                consenso:
+                  type: boolean
+                  description: 'Solo per `entita=persona` e **obbligatorio `true` alla creazione**: dichiara che la persona
+                    ha acconsentito a comparire nella KB e in chat. Il database timbra la data; la revoca è la
+                    cancellazione della persona, che il flusso di export rimuove da Onyx.'
       responses:
         '201':
           description: Dato salvato nella memoria della rete.
@@ -596,6 +660,47 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RispostaOggi'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /statistiche:
+    get:
+      operationId: statistiche
+      tags:
+      - kb
+      summary: 'Restituisce le statistiche mensili delle richieste di orientamento di una Casa di Quartiere, per ambito
+        (categoria) ed esito, con i conteggi già mascherati secondo il k-anonimato della rete. Usalo quando l''operatore
+        chiede quante richieste ha seguito la Casa, come sono andate, dove sono state inviate o un confronto nel tempo
+        («quante richieste quest''anno?», «il mese scorso?»). I numeri arrivano dalla stessa vista che alimenta il
+        report della rete: riporta `n_label` e `testo` così come sono, senza ricalcolare nulla.'
+      parameters:
+      - name: casa
+        in: query
+        required: false
+        description: Slug della Casa di Quartiere. Se omesso, si usa la Casa dell'operatore autenticato (dall'identità); è
+          obbligatorio solo per i ruoli senza Casa (es. rete).
+        schema:
+          type: string
+          minLength: 1
+      - name: mese
+        in: query
+        required: false
+        description: Mese richiesto in formato `AAAA-MM`; se omesso si intende il mese corrente (fuso Europe/Rome).
+        schema:
+          type: string
+          pattern: '^\d{4}-\d{2}$'
+      responses:
+        '200':
+          description: Statistiche mensili della Casa richiesta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaStatistiche'
         '401':
           $ref: '#/components/responses/ChiaveShimNonValida'
         '403':
@@ -1298,6 +1403,61 @@ components:
           type: string
           description: 'Riepilogo già formattato per la Home, da riportare così com''è (es. «Oggi a San Bao: 2 eventi · 1
             scheda in scadenza · 3 proposte»).'
+    ItemStatisticheAmbito:
+      type: object
+      additionalProperties: false
+      required:
+      - categoria
+      - esito
+      - n
+      - n_label
+      description: 'Una riga del report mensile: una categoria, un esito, il conteggio mascherato.'
+      properties:
+        categoria:
+          type: string
+          description: 'Ambito della richiesta (vocabolario chiuso di `richiesta.categoria`: orientamento, fiscale_isee,
+            servizi_sociali, lavoro, abitare, salute, interculturale, ascolto_solitudine, eventi_attivita, altro).'
+        esito:
+          type: string
+          description: 'Esito delle richieste dell''ambito (vocabolario `richiesta.esito`: risolta, inviata_altrove,
+            non_trovata, rinviata).'
+        n:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: 'Numero di richieste, quando la soglia di k-anonimato lo permette; `null` altrimenti. È il **solo**
+            campo ammesso per il numero: il numero vero sotto soglia non esce dal database.'
+        n_label:
+          type: string
+          description: 'Conteggio già mascherato, da riportare così com''è: il numero («375»), «<5» sotto la soglia di
+            k-anonimato, «—» se non ce ne sono.'
+    RispostaStatistiche:
+      type: object
+      additionalProperties: false
+      required:
+      - casa
+      - mese
+      - ambiti
+      - testo
+      description: Statistiche mensili delle richieste della Casa, dalla stessa vista del report della rete (k-anonimato
+        incluso).
+      properties:
+        casa:
+          type: string
+          description: Slug della Casa interrogata.
+        mese:
+          type: string
+          description: Mese riferito dai dati, in formato `AAAA-MM`.
+        ambiti:
+          type: array
+          description: 'Righe del mese per categoria ed esito. Vuota se la Casa non ha registrato richieste nel mese: non
+            è un errore, è un mese senza attività.'
+          items:
+            $ref: '#/components/schemas/ItemStatisticheAmbito'
+        testo:
+          type: string
+          description: 'Riepilogo già formattato del mese, da riportare così com''è (es. «San Bao · settembre 2026: 375
+            richieste risolte, <5 inviate ad altro servizio»).'
     RispostaCercaWeb:
       type: object
       additionalProperties: false

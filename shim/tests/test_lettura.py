@@ -250,3 +250,23 @@ def test_l_operatore_della_rete_vede_gli_eventi_di_ogni_casa(client, db_vivo):
 
     assert risposta.status_code == 200
     assert risposta.json()["casa"] == "bozzano"
+
+
+@pytest.mark.live
+@pytest.mark.parametrize("casa", ["Parco Buscicchio", "buscicchio", "BUSCICCHIO", "Centro di Aggregazione Bozzano"])
+def test_eventi_oggi_riconosce_la_casa_dal_nome(client, db_vivo, casa):
+    """Un operatore di San Bao che chiede «Parco Buscicchio» riceve Buscicchio, non San Bao.
+
+    Il modello riempie `casa` con il **nome** della Casa, non con lo slug. Fino al 2026-09-17 uno slug
+    sconosciuto faceva ripiegare in silenzio sulla Casa dell'operatore: POP chiedeva gli eventi di San Bao
+    e riceveva i propri, e l'operatore concludeva di non poter leggere le altre Case. Il ripiego resta per
+    un testo che non è una Casa (v. `test_vicino_a_casa_inesistente_ricade_sull_identita`).
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?casa={casa}")
+
+    assert risposta.status_code == 200
+    atteso = "bozzano" if "Bozzano" in casa else "buscicchio"
+    assert risposta.json()["casa"] == atteso, f"«{casa}» deve risolversi in {atteso}, non nella Casa dell'operatore"

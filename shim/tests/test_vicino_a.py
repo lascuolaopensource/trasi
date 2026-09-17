@@ -778,13 +778,14 @@ def test_vicino_a_rete_senza_casa_422(client, db_vivo):
 
 @pytest.mark.live
 def test_vicino_a_nome_casa_al_posto_dello_slug(client, db_vivo):
-    """Il modello passa il NOME della Casa invece dello slug: si ricade sull'identità, non si fallisce.
+    """Il modello passa il NOME della Casa invece dello slug: la Casa viene riconosciuta dal nome.
 
     È il caso reale osservato dal tunnel: `casa=«Centro di Aggregazione Bozzano»` — il nome, non
-    `bozzano`. Con il 422 l'assistente dichiarava un guasto inesistente; ora risponde.
-
-    La Casa usata è quella dell'**identità**, che per questo test è `op.san-bao` (il default di
-    `_vicino_a`): il nome nel parametro viene ignorato, e la risposta deve dirlo.
+    `bozzano`. Con il 422 l'assistente dichiarava un guasto inesistente; dal 2026-09-17 (commit
+    61df9d8) la risoluzione per nome ha sostituito il ripiego silenzioso sull'identità: ripiegare
+    faceva ricevere all'operatore di POP gli eventi di San Bao, e l'operatore concludeva di non
+    poter leggere le altre Case. Il ripiego resta per un testo che non è nessuna Casa
+    (`test_vicino_a_casa_inesistente_ricade_sull_identita`).
     """
     if not db_vivo:
         pytest.skip("database non raggiungibile")
@@ -792,4 +793,6 @@ def test_vicino_a_nome_casa_al_posto_dello_slug(client, db_vivo):
     risposta = _vicino_a(client, "casa=Centro+di+Aggregazione+Bozzano&tipo=bar")
 
     assert risposta.status_code == 200
-    assert risposta.json()["casa"] == "san-bao", "deve valere la Casa dell'identità, non il nome passato"
+    assert risposta.json()["casa"] == "bozzano", (
+        "la Casa nominata per nome deve risolversi nel suo slug, non ripiegare sull'identità"
+    )

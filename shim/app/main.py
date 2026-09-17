@@ -48,6 +48,7 @@ FIRMA_OPERAZIONI: tuple[tuple[str, str], ...] = (
     ("approva_proposta", "POST"),
     ("biglietto", "GET"),
     ("oggi", "GET"),
+    ("statistiche", "GET"),
     ("cerca_web", "GET"),
 )
 
@@ -130,7 +131,7 @@ def crea_app() -> FastAPI:
         version="0.1.0",
         description=(
             "Shim d'integrazione fra Onyx e la memoria della rete delle Case di Quartiere di Brindisi. "
-            "Serve le nove operazioni del contratto congelato in B0, all'indirizzo "
+            "Serve le operazioni del contratto congelato in B0, all'indirizzo "
             f"{url_server()}; la RLS del database è l'unica autorità sui permessi."
         ),
         servers=[{"url": url_server()}],

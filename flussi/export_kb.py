@@ -26,19 +26,18 @@ Configurazione (nessun segreto in questo file, né in output):
     ONYX_TRASI_KB_API_KEY   PAT Onyx con permesso `MANAGE_CONNECTORS` (in `deployment/.env`, mode 600).
     ONYX_KB_CC_PAIR_ID      cc_pair di destinazione; se assente, letto da `shim/.onyx-kb.json`.
 
-Trasporto dati: `docker compose exec db_trasi psql` con `COPY … TO STDOUT WITH CSV HEADER` — nessuna
-dipendenza Python oltre la stdlib, stessa via usata da `db/apply.sh`. Se lo script verrà eseguito *dentro*
-un container (cron di B4) quel trasporto andrà riconciliato con la rete `trasi_net`.
+Trasporto dati: la `COPY … TO STDOUT WITH CSV HEADER` di `psql` via `flussi/comune.leggi()` — nessuna
+dipendenza Python oltre la stdlib, e il doppio trasporto (`docker compose exec` da host, `psql` diretto
+dentro il container `automazioni`, dove `docker` non esiste) è lo stesso di tutti i flussi. Prima del
+2026-09-17 questo file chiamava `docker compose` a prescindere: nel cron di B4 il job moriva con
+«`docker` non disponibile» e la KB restava ferma senza che nessun log lo dicesse.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
-import io
 import json
 import os
-import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -46,7 +45,6 @@ import urllib.request
 from pathlib import Path
 
 RADICE = Path(__file__).resolve().parent.parent
-COMPOSE = RADICE / "deployment" / "docker-compose.yml"
 ENV_DEPLOY = RADICE / "deployment" / ".env"
 ONYX_KB_JSON = RADICE / "shim" / ".onyx-kb.json"
 
@@ -114,30 +112,19 @@ def _config() -> tuple[str, str, int]:
 
 
 def leggi_vista() -> list[dict[str, str]]:
-    """Righe di `v_kb_export` come lista di dizionari (tutti valori stringa o vuoti)."""
-    sql = (
-        f"COPY (SELECT {', '.join(COLONNE)} FROM {VISTA} ORDER BY doc_id) "
-        "TO STDOUT WITH CSV HEADER"
-    )
-    cmd = [
-        "docker", "compose", "-f", str(COMPOSE), "exec", "-T", "db_trasi",
-        "psql", "-U", "postgres", "-d", "trasi_db", "-X", "-q", "-c", sql,
-    ]
-    try:
-        esito = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    except FileNotFoundError as exc:
-        raise ExportErrore(f"`docker` non disponibile: {exc}") from exc
-    if esito.returncode != 0:
-        raise ExportErrore(
-            f"lettura di {VISTA} fallita (exit {esito.returncode}): {esito.stderr.strip()}"
-        )
+    """Righe di `v_kb_export` come lista di dizionari (tutti valori stringa o vuoti).
 
-    righe = list(csv.DictReader(io.StringIO(esito.stdout)))
-    attese = set(COLONNE)
-    mancanti = attese - set(righe[0].keys() if righe else attese)
-    if mancanti:
-        raise ExportErrore(f"{VISTA}: colonne attese assenti: {sorted(mancanti)}")
-    return [{k: (v or "") for k, v in riga.items()} for riga in righe]
+    Via `flussi/comune.leggi()`: è la stessa `COPY … TO STDOUT WITH CSV HEADER` che c'era qui,
+    ma con il trasporto scelto da `TRASI_DB_VIA` — `docker compose exec` da host, `psql` diretto
+    dentro il container `automazioni`, dove `docker` non esiste e questo flusso altrimenti muore.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from comune import FlussoErrore, leggi
+
+    try:
+        return leggi(f"SELECT {', '.join(COLONNE)} FROM {VISTA} ORDER BY doc_id")
+    except FlussoErrore as exc:
+        raise ExportErrore(str(exc)) from exc
 
 
 # --------------------------------------------------------------------------- pubblicazione

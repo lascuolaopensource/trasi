@@ -351,3 +351,39 @@ async def slug_casa_da_identita(sess: "Sessione") -> str:
         return ""
     slug = await sess.fetchval("SELECT slug FROM trasi.casa WHERE id = $1", sess.casa_id)
     return slug or ""
+
+
+# Il nome della Casa come lo scrive un modello («San Bao», «Bozzano», «parco buscicchio»): prima lo slug
+# esatto, poi lo slug ricostruito dal nome (spazi → trattini), poi il nome per intero, infine il nome che
+# **contiene** il testo. L'ultimo passo accetta solo un risultato univoco: «Casa» sta in più nomi e non
+# deve scegliere a caso.
+SQL_RISOLVI_CASA = """
+WITH t AS (SELECT lower(trim($1)) AS testo)
+SELECT c.slug
+  FROM trasi.casa c, t
+ WHERE c.slug = t.testo
+    OR c.slug = replace(t.testo, ' ', '-')
+    OR lower(c.nome) = t.testo
+ LIMIT 1
+"""
+SQL_RISOLVI_CASA_CONTIENE = """
+SELECT c.slug FROM trasi.casa c WHERE lower(c.nome) LIKE '%' || lower(trim($1)) || '%'
+"""
+
+
+async def risolvi_slug_casa(sess: "Sessione", testo: str) -> str | None:
+    """Lo slug della Casa nominata in `testo`, oppure `None` se non è una Casa (o non è univoca).
+
+    Esiste perché il modello, vedendo `casa` nel contratto, lo riempie con il **nome** («San Bao») e non con lo
+    slug («san-bao»). Prima di questa funzione uno slug sconosciuto faceva ripiegare sulla Casa dell'operatore
+    in silenzio: l'operatore di POP chiedeva gli eventi di San Bao e riceveva i propri, credendo di non poter
+    vedere le altre Case (2026-09-17). Il ripiego resta per chi chiama senza una Casa riconoscibile; qui si
+    prova prima a capire quale Casa intendeva.
+    """
+    if not testo or not testo.strip():
+        return None
+    slug = await sess.fetchval(SQL_RISOLVI_CASA, testo)
+    if slug:
+        return slug
+    candidati = [r["slug"] for r in await sess.fetch(SQL_RISOLVI_CASA_CONTIENE, testo)]
+    return candidati[0] if len(candidati) == 1 else None

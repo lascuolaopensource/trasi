@@ -61,7 +61,7 @@ ORDER=(000_roles.sql 001_schema.sql 002_rls.sql 003_parametri.sql 004_views.sql
        005_rls_proposta.sql 010_seed_case.sql 011_seed_fonti.sql 012_seed_luoghi.sql
        013_credenziali.sql 014_attrezzoteca.sql 015_messaggi.sql
        006_fn_proposte.sql 016_viste_new.sql 007_dash.sql 008_eventi.sql
-       024_report.sql 025_campi_processi.sql)
+       024_report.sql 025_campi_processi.sql 028_fasce_cittadino.sql 029_persone_casa.sql)
 
 # filtri opzionali da riga di comando (prefissi)
 FILTERS=("$@")

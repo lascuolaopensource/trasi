@@ -21,6 +21,9 @@ OPERAZIONI_ATTESE: tuple[tuple[str, str, str], ...] = (
     ("approva_proposta", "post", "/approva_proposta"),
     ("biglietto", "get", "/biglietto"),
     ("oggi", "get", "/oggi"),
+    # Le statistiche mensili delle richieste (v_report_mensile, k-anonimato): la lettura aggregata
+    # che la chat non aveva — l'assistente non poteva rispondere a «quante richieste quest'anno?».
+    ("statistiche", "get", "/statistiche"),
     ("cerca_web", "get", "/cerca_web"),
 )
 
