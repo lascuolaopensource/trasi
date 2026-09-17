@@ -97,6 +97,11 @@ http://{$TRASI_DOMAIN} {
 	# rende la rivalidazione un 304). Senza, Cloudflare e i browser tengono `.js`/`.css`
 	# per ore con la loro euristica, e una modifica alla Home compare a chi la ricarica
 	# forzando e non a chi la apre — che è chi la usa allo sportello.
+	# Cutover T-UX-20: `operatore.html` è stato assorbito dall'Account (plan-wireframe.md D7).
+	# Il file resta sul disco per i vecchi segnalibri, ma ogni richiesta va alla pagina nuova:
+	# non devono esistere due aree operatore.
+	redir /operatore.html /account.html permanent
+
 	handle {
 		root * /srv/home
 		header Cache-Control "no-cache"

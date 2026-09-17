@@ -91,9 +91,14 @@
   });
 
   $("pulsante-esci").addEventListener("click", function () {
-    chiama("/logout", { method: "POST" }).catch(function () { /* la sessione lato server scade da sé */ });
-    mostra($("esito-uscita"), "Sessione chiusa.");
-    fuoriSessione();
+    /* Lo stesso difetto corretto in `shell.js`: navigare o nascondere la vista prima che lo
+       shim risponda cancella la richiesta in volo, e il cookie resta valido. */
+    chiama("/logout", { method: "POST" })
+      .catch(function () { /* la sessione lato server scade da sé */ })
+      .then(function () {
+        mostra($("esito-uscita"), "Sessione chiusa.");
+        fuoriSessione();
+      });
   });
 
   /* ------------------------------------------------------------ linguette */

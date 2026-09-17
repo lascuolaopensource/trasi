@@ -14,8 +14,8 @@
  *
  * TRE COSE CHE QUESTO FILE NON FA, e sono scelte, non omissioni.
  *
- * 1. **Non usa `localStorage`.** V5: nel browser resta solo lo slug della Casa, e lo conserva
- *    `home.js` da sempre. La conversazione corrente vive in una variabile di modulo e, quando è un
+ * 1. **Non usa `localStorage`.** V5: nel browser resta solo lo slug della Casa (che la pagina di
+ *    accesso manda nell'URL). La conversazione corrente vive in una variabile di modulo e, quando è un
  *    fatto condivisibile, nell'URL (`?c=<id>`) — che è il posto giusto: si può incollare, e
  *    ricaricando la pagina si riapre la stessa conversazione.
  * 2. **Non conserva la domanda quando fallisce.** Un `422` è un testo rifiutato, un `503` è un

@@ -76,8 +76,9 @@
     if (nome) nome.textContent = casa.nome || casa.casa;
     var zona = document.getElementById("shell-zona");
     if (zona) {
-      // «dati provvisori» sta nel TESTO, mai in un colore (vincolo del progetto).
-      zona.textContent = (casa.zona || "") + (casa.dati_provvisori ? " · dati provvisori" : "");
+      /* «dati provvisori» sta nel TESTO, mai in un colore (vincolo del progetto). «Zona» dichiarata
+         in parole: il nome del quartiere da solo («La Rosa») non dice cosa è. */
+      zona.textContent = (casa.zona ? "Zona " + casa.zona : "") + (casa.dati_provvisori ? " · dati provvisori" : "");
     }
   }
 
@@ -133,8 +134,14 @@
     var b = document.getElementById("shell-esci");
     if (!b) return;
     b.addEventListener("click", function () {
-      api("/logout", { method: "POST" }).catch(function () { /* la sessione lato server scade da sé */ });
-      location.href = "index.html";
+      /* Il logout DEVE partire prima di navigare: `location.href` subito dopo avrebbe
+         cancellato la richiesta in volo (il cookie non revocato, la sessione viva).
+         Si naviga quando lo shim risponde; se la richiesta fallisce, si naviga comunque —
+         la sessione lato server scade da sé, e restare su una pagina che crede di essere
+         uscita sarebbe peggio. */
+      api("/logout", { method: "POST" })
+        .catch(function () { /* la sessione lato server scade da sé */ })
+        .then(function () { location.href = "index.html"; });
     });
   }
 
