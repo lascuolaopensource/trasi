@@ -131,7 +131,7 @@ def test_le_persone_esistono_solo_nello_schema_che_esige_consenso(contratto):
     assert {"nome", "consenso", "informativa"} <= set(proprieta), (
         "lo schema che ammette il nome di una persona deve anche prevedere consenso e informativa"
     )
-    descrizione = proprieta["consenso"]["description"]
+    descrizione = proprieta["consenso"]["description"].lower()
     assert "persona" in descrizione and "obbligatorio" in descrizione, (
         "il contratto deve dire all'assistente che `consenso` è obbligatorio per `entita=persona`: "
         f"«{descrizione}»"

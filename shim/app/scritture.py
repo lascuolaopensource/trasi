@@ -145,7 +145,7 @@ class RichiestaIn(BaseModel):
     esito: Literal[ESITI]  # type: ignore[valid-type]
     destinazione_id: int | None = Field(default=None, ge=1)
     destinazione_nota: str | None = Field(default=None, min_length=1)
-    # Le tre fasce del foglio 4.4 (db/026): **facoltative** e a vocabolario chiuso. L'assenza è
+    # Le tre fasce del foglio 4.4 (db/028): **facoltative** e a vocabolario chiuso. L'assenza è
     # legittima («non ho chiesto») e i valori ammessi sono gli stessi del CHECK del database, così un
     # valore fuori elenco è un 422 parlante e non un 500 da CHECK. Non sono dati identificativi: sono
     # classi, e i loro conteggi escono solo mascherati da `v_fasce_cittadino`.
@@ -295,7 +295,7 @@ async def registra_richiesta(
     verifica comunque che la riga appartenga alla Casa corrente — la seconda barriera, non la prima.
 
     **Le fasce (`fascia_eta`, `genere`, `provenienza`) non sono dati identificativi**: sono classi a
-    vocabolario chiuso (db/026) e i loro conteggi escono solo mascherati da `trasi.v_fasce_cittadino` —
+    vocabolario chiuso (db/028) e i loro conteggi escono solo mascherati da `trasi.v_fasce_cittadino` —
     sotto la soglia `[P] k_anonimato` il numero non esiste. Resteranno fuori da ogni superficie che
     esponga righe di sportello: nessuna vista le porta riga per riga. Chiedi le fasce **solo se l'operatore
     le ha chieste alla persona**: un campo vuoto è una risposta legittima, un dato indovinato no.
@@ -416,13 +416,13 @@ ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa", "persona")
 #: mantenere a mano: è lo stesso criterio di least-privilege visto dai due lati, e un campo in più qui
 #: produrrebbe un `42501` — cioè un rifiuto del database, non una scrittura.
 #:
-#: Per `persona` (db/027): il **nome è l'unico dato personale che questa operazione accetta**, ed è il
+#: Per `persona` (db/029): il **nome è l'unico dato personale che questa operazione accetta**, ed è il
 #: punto della decisione del gruppo Processi (2026-09-17, forma C): le persone della Casa entrano nella
 #: knowledge base — e quindi in chat — **solo con il consenso dell'interessata**. Per questo
 #: `consenso` è **obbligatorio e deve essere `true` alla creazione**: un'operazione che creasse una
 #: persona senza dichiarare il consenso sarebbe una scrittura di un nome in attesa di una promessa.
 #: La revoca non passa da qui: è `DELETE` della persona (la RLS la concede alla propria Casa), e il
-#: flusso export cancella il documento da Onyx. Vedi `db/027_persone_casa.sql`.
+#: flusso export cancella il documento da Onyx. Vedi `db/029_persone_casa.sql`.
 COLONNE_DIRETTE: dict[str, tuple[str, ...]] = {
     "scheda_servizio": ("titolo", "descrizione", "categoria", "orari", "referente_ruolo", "scadenza", "url"),
     "opportunita": ("titolo", "descrizione", "categoria", "scadenza", "url"),
@@ -467,7 +467,7 @@ class SalvaDatoIn(BaseModel):
     # (e quindi citabile in chat) riaprirebbe per la porta di servizio ciò che V5 tiene fuori. Vedi `db/025`.
     indirizzo: str | None = None
     edificio: str | None = None
-    # I campi del foglio 1.1 «Persone» (solo `entita="persona"`), db/027. `nome` è l'unico dato
+    # I campi del foglio 1.1 «Persone» (solo `entita="persona"`), db/029. `nome` è l'unico dato
     # personale ammesso da questa operazione, ed è condizionato: vedi `COLONNE_DIRETTE["persona"]`.
     nome: str | None = Field(default=None, min_length=3, max_length=120)
     ruolo: str | None = Field(default=None, min_length=2, max_length=80)
@@ -502,10 +502,17 @@ class SalvaDatoIn(BaseModel):
             # `consenso` non è un campo tra gli altri: è la condizione che rende legittimo scrivere il
             # nome di una persona. Alla creazione deve essere `true` esplicito — l'assenza non è
             # interpretabile come consenso — e la colonna `consenso_il` del database timbra quando.
+            # Con `id`, `consenso=false` è la **revoca** (db/029 `revoca_il`): la riga resta, esce dalla
+            # KB al prossimo export. `consenso=true` con `id` non ha senso — il consenso si dà una volta,
+            # alla registrazione — e si rifiuta invece di essere ignorato.
             if self.id is None and self.consenso is not True:
                 raise ValueError(
                     "creare una persona richiede consenso=true: il nome entra nella knowledge base "
-                    "(quindi in chat) solo con il consenso dell'interessata (db/027)"
+                    "(quindi in chat) solo con il consenso dell'interessata (db/029)"
+                )
+            if self.id is not None and self.consenso is True:
+                raise ValueError(
+                    "il consenso si registra alla creazione; per revocarlo invia consenso=false con l'id"
                 )
             if any(v is not None for v in (self.titolo, self.descrizione, self.categoria,
                                            self.orari, self.referente_ruolo, self.scadenza, self.url,
@@ -515,6 +522,12 @@ class SalvaDatoIn(BaseModel):
                     "«persona» accetta solo nome, ruolo, competenze, informativa e consenso"
                 )
             return self
+        # Fuori da `persona`, `consenso` non ha significato — e la dottrina di questo validatore è che un
+        # campo fuori posto è un 422, non un campo ignorato. Misurato (revisione): era accettato e
+        # ignorato in silenzio, quindi «consenso: false» su una scheda rispondeva 201.
+        if self.consenso is not None or self.nome is not None or self.ruolo is not None \
+                or self.competenze is not None or self.informativa is not None:
+            raise ValueError("nome/ruolo/competenze/informativa/consenso si applicano solo a «persona»")
         if self.entita == "casa":
             if self.id is not None:
                 raise ValueError("«casa» non vuole id: la Casa è quella dell'identità, un ruolo una Casa")
@@ -551,8 +564,9 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
       crea dallo sportello, e `id` non è ammesso perché la Casa è quella di chi scrive, non una da scegliere.
       Si scrivono solo gli orari e i recapiti — cioè esattamente le colonne che `db/002` concede al ruolo
       della Casa (`UPDATE (orari, orari_eccezioni, orari_provvisori, email_digest)`).
-    * `persona` (db/027) — INSERT o UPDATE come una scheda, **con il consenso richiesto dal validatore**:
-      il nome entra nella KB, e la revoca è la cancellazione della riga.
+    * `persona` (db/029) — INSERT o UPDATE come una scheda, **con il consenso richiesto dal validatore**:
+      il nome entra nella KB; la revoca è `consenso=false` con `id` (timbra `revoca_il`, la riga resta ed
+      esce dalla KB), la cancellazione della riga è l'altra via ammessa alla Casa.
 
     **Chi garantisce cosa.** La RLS: `scheda_ins_casa`/`scheda_upd_casa` (e le omologhe su `opportunita`,
     `casa` e `persona`) impongono `casa_id = casa_corrente()`. La scrittura su un dato di un'altra Casa non
@@ -564,17 +578,13 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
     if sess.casa_id is None:
         raise errore(403, DETAIL_RUOLO_NON_CONSENTITO)
 
-    # Il filtro anti-PII sui **valori** (V5/§12). Per `persona` il campo `nome` è l'unica eccezione
-    # dichiarata in tutto lo shim: è ciò che la decisione C del gruppo Processi ha chiesto di registrare,
-    # ed è condizionato dal consenso (validatore sopra). Un nome non è comunque un'email, un telefono o
-    # un codice fiscale — il filtro non lo riconosce, ma l'eccezione è esplicita perché visibile: nessun
-    # altro campo di nessun'altra operazione la riceve. Gli altri campi testuali di `persona`
-    # (`ruolo`, `competenze`, `informativa`) restano **dentro** il filtro: un telefono incollato lì
-    # sarebbe un dato personale pubblicato in KB.
-    campi_pii = corpo.model_dump(exclude_unset=True, mode="json")
-    if corpo.entita == "persona":
-        campi_pii.pop("nome", None)
-    pii.rifiuta_se_presente(campi_pii)
+    # Il filtro anti-PII sui **valori** (V5/§12), su tutto il corpo — `nome` di persona **compreso**. Il
+    # nome è ciò che la decisione C del gruppo Processi ha chiesto di registrare, ed è condizionato dal
+    # consenso (validatore sopra): ma non è un'email, un telefono o un codice fiscale, quindi il filtro
+    # non lo tocca — e se lo tocca, è perché nel campo «nome» è stato incollato qualcos'altro, che è
+    # esattamente il caso in cui deve sparare. Escluderlo (come faceva la prima versione) non serviva a
+    # far passare un nome: apriva solo un varco per un recapito travestito da nome.
+    pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
 
     tabella = corpo.entita
     orari = corpo.orari.model_dump(exclude_unset=True, mode="json") if corpo.orari else None
@@ -604,21 +614,25 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
         # --- `scheda_servizio` / `opportunita` / `persona`: INSERT o UPDATE ------------------
         elif corpo.id is None:
             # Il nome dell'entità nel corpo non è sempre il nome della tabella: `persona` (il dato del
-            # foglio 1.1) vive in `persona_casa` (db/027). La mappa è qui, non nel chiamante.
+            # foglio 1.1) vive in `persona_casa` (db/029). La mappa è qui, non nel chiamante.
             if tabella == "persona":
                 tabella = "persona_casa"
             # `casa_id` dall'identità; `aggiornato_ts`/`aggiornato_da` li timbra il trigger. Le colonne
             # scritte sono l'elenco chiuso di COLONNE_DIRETTE: nessun nome di colonna dal chiamante.
+            # **La chiave è `corpo.entita`, la tabella è `tabella`**: sono la stessa stringa tranne che per
+            # persona/persona_casa, e confondere le due ha rotto una via per volta — `["persona"]` fisso
+            # rompeva le schede (500 su titolo NOT NULL), `[tabella]` rompeva le persone (KeyError). I due
+            # test live di `test_scritture` le esercitano entrambe.
             colonne = ["casa_id"]
             valori = [sess.casa_id]
-            for nome in COLONNE_DIRETTE[tabella]:
+            for nome in COLONNE_DIRETTE[corpo.entita]:
                 valore = valore_di(nome)
                 if valore is not None:
                     colonne.append(nome)
                     valori.append(valore)
             # `consenso_il` è la colonna che `v_kb_export` filtra: vale la data locale alla creazione e
             # non è nel corpo, perché è un fatto del database — chi crea una persona ha già dichiarato
-            # il consenso (il validatore lo impone). Vedi `db/027_persone_casa.sql`.
+            # il consenso (il validatore lo impone). Vedi `db/029_persone_casa.sql`.
             if tabella == "persona_casa":
                 colonne.append("consenso_il")
                 valori.append(_oggi())
@@ -635,10 +649,18 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
             if tabella == "persona":
                 tabella = "persona_casa"
             assegnazioni, valori = [], []
-            for nome in COLONNE_DIRETTE[tabella]:
+            for nome in COLONNE_DIRETTE[corpo.entita]:
                 if nome in inviati:
                     valori.append(valore_di(nome))
                     assegnazioni.append(f"{nome} = ${len(valori)}")
+            # La **revoca** del consenso (db/029): `consenso=false` con `id` timbra `revoca_il`. La riga resta
+            # (art. 17: la Casa può anche cancellarla, ma la revoca è il caso comune) ed esce da
+            # `v_kb_export` subito; il prossimo export toglie il documento da Onyx. Il validatore ha già
+            # escluso `consenso=true` con `id` e `consenso` fuori da `persona`. Misurato (revisione): prima
+            # `consenso=false` era ignorato e la risposta era 201 — una revoca creduta fatta e non avvenuta.
+            if tabella == "persona_casa" and corpo.consenso is False:
+                valori.append(_oggi())
+                assegnazioni.append(f"revoca_il = ${len(valori)}")
             if not assegnazioni:
                 raise errore(422, "parametri non ammessi — nessun campo da aggiornare oltre a entita e id")
             valori.append(corpo.id)

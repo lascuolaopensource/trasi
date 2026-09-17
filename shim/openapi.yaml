@@ -488,7 +488,7 @@ paths:
                   - casa
                   - persona
                   description: 'Cosa si scrive: una scheda di servizio, un''opportunità, gli orari/recapiti della
-                    Casa stessa, oppure una **persona della Casa** (foglio 1.1, db/027).'
+                    Casa stessa, oppure una **persona della Casa** (foglio 1.1, db/029).'
                 id:
                   type: integer
                   minimum: 1
@@ -580,9 +580,10 @@ paths:
                     v1 · 2026-09-17"). Facoltativo ma raccomandato: è la prova di dove il nome può comparire.'
                 consenso:
                   type: boolean
-                  description: 'Solo per `entita=persona` e **obbligatorio `true` alla creazione**: dichiara che la persona
-                    ha acconsentito a comparire nella KB e in chat. Il database timbra la data; la revoca è la
-                    cancellazione della persona, che il flusso di export rimuove da Onyx.'
+                  description: 'Solo per `entita=persona`. **Obbligatorio `true` alla creazione**: dichiara che la
+                    persona ha acconsentito a comparire nella KB e in chat (il database timbra la data). Con `id`,
+                    `false` è la **revoca**: la persona esce dalla KB e il flusso di export la rimuove da Onyx.
+                    Per le altre entità non è ammesso.'
       responses:
         '201':
           description: Dato salvato nella memoria della rete.

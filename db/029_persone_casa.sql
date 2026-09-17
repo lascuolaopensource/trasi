@@ -168,7 +168,8 @@ CREATE POLICY pers_del_casa ON trasi.persona_casa FOR DELETE
   USING (casa_id = casa_corrente());
 
 -- `metabase_ro` non c'è, per la stessa ragione di `richiesta` (db/002): i nomi non sono un dato di
--- dashboard. La KB è il canale di pubblicazione, non il cruscotto.
+-- dashboard. La KB è il canale di pubblicazione, non il cruscotto. Né `automazioni` né `applicatore`:
+-- l'export KB legge dalla vista (owner), e la persona non passa dal ciclo delle proposte.
 
 -- ---------------------------------------------------------------------------
 -- 3. GRANT
@@ -176,14 +177,22 @@ CREATE POLICY pers_del_casa ON trasi.persona_casa FOR DELETE
 GRANT SELECT ON trasi.persona_casa TO
   casa_santaspazio, casa_molo12, casa_erranti, casa_buscicchio, casa_sanbao,
   casa_minimus, casa_pop, casa_bozzano, casa_dream, casa_tuturano, rete, ti,
-  shim_rw, applicatore;
+  shim_rw;
 GRANT INSERT, UPDATE, DELETE ON trasi.persona_casa TO
   casa_santaspazio, casa_molo12, casa_erranti, casa_buscicchio, casa_sanbao,
   casa_minimus, casa_pop, casa_bozzano, casa_dream, casa_tuturano, ti;
 GRANT USAGE ON SEQUENCE trasi.persona_casa_id_seq TO
   casa_santaspazio, casa_molo12, casa_erranti, casa_buscicchio, casa_sanbao,
-  casa_minimus, casa_pop, casa_bozzano, casa_dream, casa_tuturano, ti,
-  shim_rw, applicatore;
+  casa_minimus, casa_pop, casa_bozzano, casa_dream, casa_tuturano, ti, shim_rw;
+-- **La REVOKE è necessaria, non ridondante**: `db/002` ha `ALTER DEFAULT PRIVILEGES … GRANT SELECT ON
+-- TABLES` per i ruoli di lettura, quindi una tabella nuova nasce leggibile da `metabase_ro`,
+-- `automazioni` e `applicatore` **prima** che questo file dica la sua. Misurato sul DB condiviso dopo
+-- la prima applicazione: `has_table_privilege('metabase_ro','trasi.persona_casa','SELECT') = true`
+-- mentre il commento qui sopra diceva il contrario. La RLS (nessuna policy per quei ruoli → nessuna
+-- riga) li teneva comunque fuori, ma un privilegio che il file nega e il catalogo concede è un
+-- presidio di carta: si revoca e si verifica sotto.
+REVOKE ALL ON trasi.persona_casa FROM metabase_ro, automazioni, applicatore;
+REVOKE ALL ON SEQUENCE trasi.persona_casa_id_seq FROM metabase_ro, automazioni, applicatore;
 
 -- ---------------------------------------------------------------------------
 -- 3b. L'impronta di scrittura (stessa di luogo/scheda/casa)
@@ -311,6 +320,17 @@ BEGIN
       RAISE EXCEPTION '029_persone_casa: v_kb_export ha perso l''entita % (definizione incompleta)', v_ente;
     END IF;
   END LOOP;
+
+  -- I ruoli che non devono leggere i nomi non hanno il privilegio — al catalogo, non nel commento.
+  -- Il default privilege di db/002 lo riconcede a ogni tabella nuova: senza questa asserzione la
+  -- REVOKE sopra potrebbe sparire in una riscrittura e nessun test se ne accorgerebbe (la RLS
+  -- maschererebbe il sintomo).
+  SELECT string_agg(r, ', ') INTO v_missing
+  FROM unnest(ARRAY['metabase_ro','automazioni','applicatore']) AS r
+  WHERE has_table_privilege(r, 'trasi.persona_casa', 'SELECT');
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION '029_persone_casa: % legge trasi.persona_casa — i nomi non sono un dato di dashboard né di flusso', v_missing;
+  END IF;
 
   SELECT count(*) INTO v_n FROM trasi.persona_casa;
   RAISE NOTICE '029_persone_casa applicato: persona_casa (nome, ruolo, competenze, consenso, revoca) · '
