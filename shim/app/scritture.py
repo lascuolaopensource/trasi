@@ -487,11 +487,17 @@ class SalvaDatoIn(BaseModel):
         """
         if self.entita == "opportunita" and self.orari is not None:
             raise ValueError("orari non si applica a «opportunita»: è una colonna di scheda_servizio")
-        if self.entita not in ("casa", "persona") and (self.titolo is None or not self.titolo.strip()):
-            # `titolo` è obbligatorio per scheda/opportunità ed è `NOT NULL` nello schema: senza questo
-            # controllo l'assenza diventerebbe un `NotNullViolation` tradotto in un 500, invece del 422
-            # parlante che il contratto dichiara.
-            raise ValueError(f"titolo è obbligatorio per «{self.entita}»")
+        if (
+            self.entita not in ("casa", "persona")
+            and self.id is None
+            and (self.titolo is None or not self.titolo.strip())
+        ):
+            # `titolo` è obbligatorio **alla creazione** di scheda/opportunità: è `NOT NULL` nello schema, e
+            # senza questo controllo l'assenza diventerebbe un `NotNullViolation` tradotto in un 500, invece
+            # del 422 parlante che il contratto dichiara. Con `id` è un aggiornamento parziale: chi corregge la
+            # sola `descrizione` non deve riscrivere il titolo (misurato: lo pretendeva, e ogni UPDATE senza
+            # titolo era un 422 — la via «correggi la scheda» era in pratica «riscrivi la scheda»).
+            raise ValueError(f"titolo è obbligatorio per creare «{self.entita}»")
         if self.entita == "persona":
             # `consenso` non è un campo tra gli altri: è la condizione che rende legittimo scrivere il
             # nome di una persona. Alla creazione deve essere `true` esplicito — l'assenza non è
@@ -605,7 +611,7 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
             # scritte sono l'elenco chiuso di COLONNE_DIRETTE: nessun nome di colonna dal chiamante.
             colonne = ["casa_id"]
             valori = [sess.casa_id]
-            for nome in COLONNE_DIRETTE["persona"]:
+            for nome in COLONNE_DIRETTE[tabella]:
                 valore = valore_di(nome)
                 if valore is not None:
                     colonne.append(nome)
@@ -629,7 +635,7 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
             if tabella == "persona":
                 tabella = "persona_casa"
             assegnazioni, valori = [], []
-            for nome in COLONNE_DIRETTE["persona"]:
+            for nome in COLONNE_DIRETTE[tabella]:
                 if nome in inviati:
                     valori.append(valore_di(nome))
                     assegnazioni.append(f"{nome} = ${len(valori)}")
@@ -649,7 +655,9 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
         # `approva_proposta` — «0 righe» è un rifiuto, non un errore interno.
         raise errore(403, DETAIL_RIGA_NON_DELLA_CASA)
 
-    return {"id": corpo.id, "entita": tabella, "creato": False}
+    # `corpo.entita`, non `tabella`: il contratto dichiara «l'entità come dichiarata nella richiesta», e per
+    # `persona` la tabella (`persona_casa`) non è nell'enum di `RispostaSalvaDato`.
+    return {"id": corpo.id, "entita": corpo.entita, "creato": False}
 
 
 # --- `proponi_modifica` ---------------------------------------------------------------------------------------

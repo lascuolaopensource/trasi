@@ -479,7 +479,6 @@ paths:
               additionalProperties: false
               required:
               - entita
-              - consenso
               properties:
                 entita:
                   type: string
@@ -1308,18 +1307,25 @@ components:
         id:
           type: integer
           minimum: 1
-          description: Identificativo del dato salvato (per `entita=casa`, l'identificativo della Casa dell'operatore).
+          nullable: true
+          description: 'Identificativo del dato salvato. Per `entita=casa` è `null`: la Casa è quella dell''identità
+            dell''operatore e non ha un id da restituire.'
         entita:
           type: string
           enum:
           - scheda_servizio
           - opportunita
           - casa
+          - persona
           description: L'entità salvata, come dichiarata nella richiesta.
         creato:
           type: boolean
           description: '`true` se il dato è stato creato, `false` se aggiornato. Per `entita=casa` è sempre `false`:
             la Casa esiste già.'
+        consenso:
+          type: boolean
+          description: 'Solo per `entita=persona` alla creazione: `true` conferma che il consenso è stato registrato
+            e che il nome entrerà nella knowledge base al prossimo export.'
     RispostaProponiModifica:
       type: object
       additionalProperties: false

@@ -704,6 +704,67 @@ def test_registra_richiesta_non_scrive_su_altra_casa(client_reale):
     assert asyncio.run(conta()) == prima
 
 
+@pytest.mark.live
+def test_salva_dato_scheda_crea_e_aggiorna_nella_casa_dell_operatore(client_reale):
+    """La via diretta per la scheda della propria Casa funziona davvero: INSERT 201, UPDATE 200, riga nel database.
+
+    Il test esiste perché la sua assenza è costata un difetto: i rami INSERT/UPDATE per scheda e opportunità
+    iteravano `COLONNE_DIRETTE["persona"]` invece di quelle dell'entità richiesta — ogni scheda nuova cadeva con
+    `NotNullViolation` su `titolo` (500) e ogni aggiornamento era un 422 «nessun campo da aggiornare» — e la suite
+    era verde, perché nessun test chiamava `salva_dato` per una scheda. La risposta dichiara l'**entità richiesta**
+    (`scheda_servizio`), non la tabella: è l'enum di `RispostaSalvaDato`.
+    """
+    if not client_reale:
+        pytest.skip("database non raggiungibile")
+
+    creazione = _post(
+        client_reale,
+        ambiente.EMAIL_SANBAO,
+        "salva_dato",
+        {"entita": "scheda_servizio", "titolo": "Sportello prova salva_dato", "descrizione": "Scheda di prova."},
+    )
+    assert creazione.status_code == 201, creazione.text
+    corpo = creazione.json()
+    assert corpo["entita"] == "scheda_servizio"
+    assert corpo["creato"] is True
+    scheda_id = corpo["id"]
+
+    try:
+        aggiornamento = _post(
+            client_reale,
+            ambiente.EMAIL_SANBAO,
+            "salva_dato",
+            {"entita": "scheda_servizio", "id": scheda_id, "descrizione": "Scheda di prova, aggiornata."},
+        )
+        assert aggiornamento.status_code == 201, aggiornamento.text  # il contratto dichiara 201 per entrambe le forme: `creato` distingue
+        assert aggiornamento.json() == {"id": scheda_id, "entita": "scheda_servizio", "creato": False}
+
+        async def verifica() -> None:
+            conn = await ambiente.connessione(ruolo="casa_sanbao")
+            try:
+                riga = await conn.fetchrow(
+                    "SELECT casa_id, titolo, descrizione FROM trasi.scheda_servizio WHERE id = $1", scheda_id
+                )
+                assert riga is not None, "la scheda salvata non è visibile al ruolo della Casa"
+                assert riga["casa_id"] == await ambiente.id_casa(ambiente.SLUG_SANBAO)
+                assert riga["titolo"] == "Sportello prova salva_dato"
+                assert riga["descrizione"] == "Scheda di prova, aggiornata."
+            finally:
+                await conn.close()
+
+        asyncio.run(verifica())
+    finally:
+
+        async def ripulisci() -> None:
+            conn = await ambiente.connessione_amministratore()
+            try:
+                await conn.execute("DELETE FROM trasi.scheda_servizio WHERE id = $1", scheda_id)
+            finally:
+                await conn.close()
+
+        asyncio.run(ripulisci())
+
+
 async def _ripulisci(*ids: int) -> None:
     """Rimuove le proposte di prova (via connessione amministrativa: nessun ruolo applicativo ha `DELETE`)."""
     await ambiente.pulisci(*ids)

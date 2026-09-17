@@ -100,31 +100,44 @@ def test_nessuno_schema_prevede_campi_per_dati_personali(contratto):
 
 
 def test_le_persone_esistono_solo_nello_schema_che_esige_consenso(contratto):
-    """La persona (nome + ruolo + consenso) è ammessa in un solo schema, e il consenso è parte del corpo.
+    """Il nome di una persona si può **scrivere** in un solo schema, e lì il consenso è parte del corpo.
 
     La decisione C (gruppo Processi) apre una porta: il nome di un **operatore** può finire in chat. La
     sorveglianza giusta non è sul generico `nome` — che è il nome di un *luogo* in `ItemVicinanza`,
-    `ItemLuogo` e `PayloadProposta` — è sulla **coppia** che identifica una persona: `ruolo` + `consenso`.
-    Se quella coppia compare in un altro schema, o se lo schema delle persone smette di esigere
-    `consenso`, la decisione è stata aggirata — ed è *qui* che si accorge, non dopo che l'assistente ha
-    già citato un nome in chat.
+    `ItemLuogo` e `PayloadProposta` — è sulla **coppia** che identifica una persona da scrivere:
+    `informativa` (la promessa fatta all'interessata) accanto a `nome`. Se quella coppia compare in un
+    secondo corpo di richiesta, o se lo schema che la ammette smette di avere `consenso`, la decisione è
+    stata aggirata — ed è *qui* che si accorge, non dopo che l'assistente ha già citato un nome in chat.
+
+    `consenso` **non** è `required` a livello di corpo: lo stesso corpo scrive anche schede e opportunità,
+    e obbligarlo lì significherebbe chiedere il consenso per una scheda — o insegnare all'assistente a
+    passare `consenso: true` per abitudine, che è il contrario della promessa. L'obbligo è **condizionato
+    all'entità** e lo impone il validatore (`SalvaDatoIn._coerenza`: persona senza `consenso=true` → 422),
+    provato dai test di `test_scritture`. Qui si presidia che il contratto lo dichiari.
     """
-    schemi_persona = [
+    schemi_con_informativa = [
         percorso for percorso, schema in _schemi_oggetto(contratto)
-        if "consenso" in schema.get("properties", {}) or "informativa" in schema.get("properties", {})
+        if "informativa" in schema.get("properties", {})
     ]
-    assert len(schemi_persona) == 1, (
-        f"l'anagrafica delle persone compare in {len(schemi_persona)} schemi ({schemi_persona}): "
-        "deve stare in uno solo, quello di `salva_dato`, dove il consenso è parte del corpo"
+    assert schemi_con_informativa == [
+        "#/paths//salva_dato/post/requestBody/content/application/json/schema"
+    ], (
+        f"l'anagrafica delle persone compare in {schemi_con_informativa}: deve stare nel solo corpo di "
+        "`salva_dato`, dove il consenso è parte del corpo"
     )
 
     schema_persone = contratto["paths"]["/salva_dato"]["post"]["requestBody"]["content"]["application/json"]["schema"]
     proprieta = schema_persone["properties"]
-    assert "consenso" in proprieta and "informativa" in proprieta, (
-        "lo schema che ammette il nome di una persona deve anche esigere consenso e informativa"
+    assert {"nome", "consenso", "informativa"} <= set(proprieta), (
+        "lo schema che ammette il nome di una persona deve anche prevedere consenso e informativa"
     )
-    assert "consenso" in schema_persone.get("required", []), (
-        "`consenso` facoltativo equivale a scrivere il nome senza una promessa"
+    descrizione = proprieta["consenso"]["description"]
+    assert "persona" in descrizione and "obbligatorio" in descrizione, (
+        "il contratto deve dire all'assistente che `consenso` è obbligatorio per `entita=persona`: "
+        f"«{descrizione}»"
+    )
+    assert "consenso" not in schema_persone.get("required", []), (
+        "`consenso` required per tutto il corpo obbliga il consenso anche per una scheda: l'obbligo è per entità"
     )
 
 
