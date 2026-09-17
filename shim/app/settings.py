@@ -33,11 +33,6 @@ class Settings(BaseSettings):
     # User-Agent identificativo **obbligatorio** (verificato in B0: un UA generico risponde 403, questo risponde 200).
     # Non è una cortesia verso Overpass: senza di esso ogni chiamata fallisce in modo opaco.
     overpass_user_agent: str = "Trasi/0.1 (portierato Brindisi)"
-    # Geocodificatore per `vicino_a?indirizzo=…`. Stesso User-Agent identificativo di Overpass (la policy di
-    # Nominatim lo rende **obbligatorio**: senza, risponde 403) e stesso budget di tempo `overpass_timeout_s`. La
-    # ricerca è confinata alla viewbox di Brindisi (`vicinanza.geocodifica`): «via Appia 120» esiste in decine di
-    # comuni, e un indirizzo fuori provincia sarebbe un dato inventato da una risposta che sembra giusta.
-    nominatim_url: str = "https://nominatim.openstreetmap.org"
 
     # Motore di ricerca interno per `cerca_web` (V-07 negativo: la ricerca web nativa di Onyx non è limitabile
     # per dominio, quindi passa dallo shim su allow-list). La porta è quella del servizio nella rete `trasi_net`.

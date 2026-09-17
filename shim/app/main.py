@@ -15,7 +15,6 @@ Tre cose vivono qui e in nessun altro posto:
 
 from __future__ import annotations
 
-import importlib
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -32,11 +31,8 @@ from .vicinanza import FUSO
 
 logger = logging.getLogger("trasi.shim")
 
-# Le operazioni del contratto. La tupla è la dichiarazione **indipendente** delle `operationId`:
+# Le operazioni del contratto congelato. La tupla è la dichiarazione **indipendente** delle `operationId`:
 # i test la confrontano con `openapi.yaml` e con i router, e l'import fallisce se una diverge.
-# Le due operazioni open data (`cerca_opendata`, `leggi_dataset`) consumano i cataloghi CKAN in
-# allow-list (`trasi.fonte` tipo_accesso='api'): il connettore `web` di Onyx non può indicizzare
-# un'API JSON, e la memoria della rete non deve inventare un dato che un portale pubblico ha.
 FIRMA_OPERAZIONI: tuple[tuple[str, str], ...] = (
     ("cerca_luogo", "GET"),
     ("eventi_oggi", "GET"),
@@ -54,15 +50,6 @@ FIRMA_OPERAZIONI: tuple[tuple[str, str], ...] = (
     ("oggi", "GET"),
     ("statistiche", "GET"),
     ("cerca_web", "GET"),
-    ("cerca_opendata", "GET"),
-    ("leggi_dataset", "GET"),
-    # La scheda !NEW 5 (attrezzoteca): ricerca inventario, prenotazione anticipata, spostamento e
-    # statistiche d'uso — il contratto cresce coi dialoghi di servizio, 2026-09-17.
-    ("attrezzoteca", "GET"),
-    ("prenota_oggetto", "POST"),
-    ("registra_movimento", "POST"),
-    ("conferma_movimento", "POST"),
-    ("uso_oggetti", "GET"),
 )
 
 
@@ -159,14 +146,13 @@ def crea_app() -> FastAPI:
     applicazione.include_router(routes_lettura.router, prefix=prefisso)
     applicazione.include_router(routes_geo.router, prefix=prefisso)
 
-    # I router delle scritture, degli output e degli open data vivono in file separati: si montano
-    # **dopo** i miei e ognuno monta il proprio `router`, così nessuno riscrive il file dell'altro.
-    # Il prefisso lo applica il loro `monta()`, derivandolo dal contratto.
-    from . import opendata, scritture, testi
+    # I router delle scritture e degli output sono dell'altro worker (B3ShimB) e vivono in file separati: si
+    # montano **dopo** i miei e ognuno monta il proprio `router`, così nessuno riscrive il file dell'altro. Il
+    # prefisso lo applica il loro `monta()`, derivandolo dal contratto congelato.
+    from . import scritture, testi
 
     scritture.monta(applicazione)
     testi.monta(applicazione)
-    opendata.monta(applicazione)
 
     # --- area operatore (schede !NEW 3/5/6/7): le funzioni del browser, non di Onyx --------------
     #
@@ -206,56 +192,6 @@ def crea_app() -> FastAPI:
     applicazione.include_router(attrezzoteca.router, prefix="/op", include_in_schema=False)
     applicazione.include_router(messaggi.router, prefix="/op", include_in_schema=False)
 
-    # --- Router dell'area operatore nati col cantiere UX (schede Home / Osservatorio / Account) -----
-    #
-    # Ogni modulo espone un `router` **e** una funzione `monta(applicazione)` che dichiara il proprio
-    # prefisso: è la convenzione già usata da `chat.py` e `testi.py`, e serve a una cosa sola —
-    # chi possiede il modulo possiede anche il modo in cui si monta, quindi chi aggiunge una rotta non
-    # deve toccare questo file. `main.py` non conosce i path: conosce i moduli.
-    #
-    # `try/except ImportError` e non un import secco: questi moduli nascono **durante** il cantiere, in
-    # parallelo, e lo shim deve restare avviabile mentre ci sono. Senza il try, un file non ancora
-    # scritto impedirebbe l'avvio dell'intero shim — cioè il lavoro degli altri si fermerebbe per il
-    # ritardo di uno. Il rischio opposto (un modulo che *dovrebbe* esserci e non c'è) è coperto dal
-    # `warning`: chi guarda i log lo vede, e non fallisce in silenzio.
-    for _nome in ("conversazioni_op", "mappa_op", "poi_op", "eventi_op", "servizi_op",
-                  "biglietto_op", "proposte_op", "casa_op", "decisione_op",
-                  "statistiche_op", "proponi_op", "eventi_scrittura", "oggi_op"):
-        try:
-            _modulo = importlib.import_module(f".{_nome}", __package__)
-        except ImportError:
-            logger.warning("router non montato: shim/app/%s.py assente", _nome)
-            continue
-        # `hasattr` e **non** `except (ImportError, AttributeError)`. La differenza conta, ed è
-        # costata un crash-loop dell'anteprima il 2026-09-17: un modulo importabile ma ancora senza
-        # `monta` (scritto a metà da chi ci sta lavorando in parallelo) abbatteva l'avvio dell'intero
-        # shim, perché `AttributeError` non era catturato. Catturarlo insieme a `ImportError`
-        # risolverebbe *questo* caso e ne creerebbe uno peggiore: un `AttributeError` sollevato
-        # **dentro** `monta` — cioè un bug vero nel modulo — verrebbe scambiato per «modulo non
-        # pronto», e il router non si monterebbe con un warning invece che con un errore.
-        # `hasattr` guarda il contratto prima di chiamarlo; quello che accade dentro `monta` resta un
-        # errore vero, e deve restare visibile.
-        #
-        # **Due convenzioni accettate, e nessuna delle due è un ripiego.** `monta(applicazione)` è la
-        # forma di `chat.py` e `testi.py`: il modulo dichiara il proprio prefisso. `router` nudo è la
-        # forma di `attrezzoteca.py` e `messaggi.py`, che `main.py` include con `prefix="/op"`.
-        # Entrambe esistono già in questo repository, e i moduli di questo cantiere sono nati con
-        # l'una o con l'altra a seconda di chi li ha scritti: rifiutarne una significherebbe che metà
-        # dei router non si monta per una questione di stile. La scelta è esplicita e locale — questi
-        # moduli sono **tutti** dell'area operatore, quindi `router` nudo va sotto `/op`.
-        if hasattr(_modulo, "monta"):
-            _modulo.monta(applicazione)
-        elif hasattr(_modulo, "router"):
-            applicazione.include_router(_modulo.router, prefix="/op", include_in_schema=False)
-        else:
-            logger.warning("router non montato: shim/app/%s.py non espone `monta` né `router`", _nome)
-    # Monitoraggio PA (US-4): il browser della PA e i tool di Onyx. Come gli altri router del browser, sta fuori
-    # dallo schema del contratto congelato (`include_in_schema=False`), e lo schema delle quattro operazioni dei
-    # tool `/v1/m/…` è in `openapi_monitoraggio.yaml`, non in quello congelato (gate V-09).
-    from . import monitoraggio
-
-    monitoraggio.monta(applicazione)
-
     @applicazione.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:
         """Liveness del container: non tocca il database, così «healthy» significa «il processo risponde»."""
@@ -270,7 +206,6 @@ def crea_app() -> FastAPI:
         """
         inizio = time.perf_counter()
         ruolo = ""
-
         try:
             risposta = await call_next(request)
         except Exception:

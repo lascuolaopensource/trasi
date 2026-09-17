@@ -54,35 +54,24 @@
     {
       "fonte": "Comune di Brindisi-3",
       "url": "https://www.comune.brindisi.it/notizie/avvisi/",
-      "selettore": ".card-body",
+      "selettore": ".journal-content-article",
       "entita": "scheda_servizio",
       "entita_id": null,
       "campo": "descrizione",
       "casa": null,
-      "attivo": true,
-      "_nota": "URL e selettore verificati il 17/09/2026: la pagina risponde 200 e il sito comunale è stato ridisegnato — `.journal-content-article` è sparito, il contenuto utile sta nei 13 blocchi `.card-body`. Gli avvisi sono la fonte naturale delle opportunità (contributi, avvisi con scadenza). `entita_id` resta `null` perché il flusso propone schede nuove quando la pagina cambia."
+      "attivo": false,
+      "_nota": "URL verificato 200 il 16/09/2026, ma il selettore del blocco avvisi NON è individuato: `.journal-content-article` è il contenitore dei portlet e va misurato su questa pagina prima di accendere. Gli avvisi sono la fonte naturale delle opportunità (contributi, avvisi con scadenza). Da fare: misurare il selettore e valorizzare `entita_id` con la scheda reale."
     },
     {
       "fonte": "Comune di Brindisi-3",
       "url": "https://www.comune.brindisi.it/vivere-il-comune/eventi/",
-      "selettore": ".card-body",
+      "selettore": ".journal-content-article",
       "entita": "scheda_servizio",
       "entita_id": null,
       "campo": "descrizione",
       "casa": null,
-      "attivo": true,
-      "_nota": "URL e selettore verificati il 17/09/2026: 200 e 7 blocchi `.card-body` (stesso ridisegno del sito comunale). Il palinsesto comunale cambia: la sorveglianza propone, l'operatore decide. NB: `entita='evento'` NON è ammessa da questo flusso (solo `luogo` e `scheda_servizio`) — per gli eventi la via è la proposta in chat o il connettore iCal, quando esisterà un feed."
-    },
-    {
-      "fonte": "Comune di Brindisi-3",
-      "url": "https://www.comune.brindisi.it/urp",
-      "selettore": "#orari-urp",
-      "entita": "luogo",
-      "entita_id": 16,
-      "campo": "orari",
-      "casa": null,
       "attivo": false,
-      "_nota": "URL e selettore da verificare: la home del Comune esiste, questa pagina risponde 404 (misurato il 16/09) e il blocco `#orari-urp` va individuato sulla pagina reale. Si accende con `attivo: true` dopo la verifica. Nei test il flusso arriva con `--file`, che forza `attivo=True` per costruzione."
+      "_nota": "URL verificato 200 il 16/09/2026. Il palinsesto comunale cambia: la sorveglianza propone, l'operatore decide. Selettore da misurare sulla pagina vera. NB: `entita='evento'` NON è ammessa da questo flusso (solo `luogo` e `scheda_servizio`) — per gli eventi la via è la proposta in chat o il connettore iCal, quando esisterà un feed."
     }
   ]
 }

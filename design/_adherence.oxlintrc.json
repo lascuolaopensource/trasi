@@ -380,6 +380,6 @@
       "--curva": "other",
       "--transizione-stato": "color"
     },
-    "fontFamilies": ["system-ui"]
+    "fontFamilies": ["Commissioner"]
   }
 }

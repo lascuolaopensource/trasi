@@ -519,63 +519,6 @@ def test_biglietto_luogo_id_non_numerico_ne_osm_422(app_cliente):
     assert risposta.status_code == 422
 
 
-
-def test_biglietto_id_nodo_osm_come_numero_422_non_500(app_cliente):
-    """Un id di nodo OSM passato come numero (es. `6042688692`) è 422, non un 500.
-
-    Il bug reale del 17/09/2026: il LLM, davanti a un item esterno di `vicino_a`, chiamava `biglietto` con
-    l'id del **nodo** (che sta nell'`url` dell'item) come se fosse un `luogo.id`. Il valore oltre il int32
-    esplodeva in `asyncpg` (OverflowError → 500 «errore interno dello shim») e l'assistente dichiarava
-    «lo strumento risponde con un errore interno», lasciando l'operatore senza biglietto. La risposta giusta
-    è un 422 che insegna la forma corretta: la colonna `luogo.id` è `integer` e il nodo OSM non è un luogo.
-    """
-    client = app_cliente(SessioneFinta(luogo=None))
-
-    risposta = client.get(
-        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
-        headers=_intestazioni(),
-        params={"luogo_id": 6042688692},
-    )
-
-    assert risposta.status_code == 422
-    assert "osm:node" in risposta.json()["detail"]
-
-
-def test_biglietto_id_int32_massimo_passa_la_guardia(app_cliente):
-    """La guardia respinge solo ciò che asyncpg rifiuterebbe: al limite del int32 si arriva al 404 del database."""
-    client = app_cliente(SessioneFinta(luogo=None))
-
-    risposta = client.get(
-        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
-        headers=_intestazioni(),
-        params={"luogo_id": 2147483647},
-    )
-
-    assert risposta.status_code == 404
-
-
-
-def test_biglietto_html_non_offre_pdf_e_porta_il_font_incorporato(app_cliente):
-    """La pagina HTML non espone `formato=pdf` (export HTML deciso in prodotto) e incorpora Commissioner in base64.
-
-    Il font incorporato non è estetica: senza incorporazione il foglio stampato dal browser cade su un font
-    sostituito a seconda del client. Il foglio è l'HTML stesso: la stampa è del browser, non una conversione.
-    """
-    client = app_cliente(SessioneFinta(luogo=LUOGO_BOZZANO, casa_id=5))
-
-    risposta = client.get(
-        f"/v1/u/{ambiente.EMAIL_SANBAO}/biglietto",
-        headers=_intestazioni(),
-        params={"luogo_id": 6},
-    )
-
-    corpo = risposta.text
-    assert "formato=pdf" not in corpo
-    assert "Scarica il PDF" not in corpo
-    assert "data:font/ttf;base64," in corpo
-    assert 'url("/assets/CommissionerVF.ttf")' not in corpo
-
-
 @respx.mock
 def test_biglietto_accetta_osm_node_e_mostra_badge_esterna(app_cliente):
     """Un POI esterno (`osm:node:<id>`) produce un biglietto con badge `[Esterna …]`, senza scrivere nulla in memoria.
@@ -1116,7 +1059,7 @@ def test_scheda_evento_e_fuori_dal_contratto_congelato(app_cliente):
     """La scheda non compare nell'OpenAPI dell'applicazione: quel documento è il contratto con Onyx (gate V-09).
 
     La scheda la chiama il browser, non il LLM, e `include_in_schema=False` è ciò che la tiene fuori dalle
-    operazioni del contratto. Il test guarda lo schema generato dall'app — non lo YAML, che nessuno tocca
+    nove operazioni congelate. Il test guarda lo schema generato dall'app — non lo YAML, che nessuno tocca
     — perché è da lì che un `include_in_schema` dimenticato farebbe divergere il contratto che Onyx
     registra. L'insieme completo delle `operationId` esposte è già verificato da
     `test_openapi_contract.py`: qui si difende l'assenza di questa, non si ripete quel confronto.

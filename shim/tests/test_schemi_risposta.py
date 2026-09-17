@@ -23,7 +23,6 @@ MODELLI = {
     "RispostaVicinoA": "app.schemi:RispostaVicinoA",
     "ItemStatisticheAmbito": "app.schemi:ItemStatisticheAmbito",
     "RispostaStatistiche": "app.schemi:RispostaStatistiche",
-    "CentroVicinanza": "app.schemi:CentroVicinanza",
 }
 
 

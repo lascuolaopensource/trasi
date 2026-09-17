@@ -26,8 +26,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # `cron`: lo scheduler — il punto d'ingresso primario dei flussi (§6, §8).
 # `tzdata`: il fuso `Europe/Rome` deve esistere davvero, altrimenti cron gira in UTC e «05:00» non
 #          significa più ciò che l'architettura intende.
-# `poppler-utils`: `pdftotext`, con cui `fonti_documenti.py` riduce a testo il PDF della Procura
-# (i centri antiviolenza): il connettore `web` di Onyx non indica un file non-HTML.
 RUN apt-get update \
  && apt-get install --no-install-recommends --yes \
       postgresql-client \
@@ -35,7 +33,6 @@ RUN apt-get update \
       tzdata \
       ca-certificates \
       util-linux \
-      poppler-utils \
  && rm -rf /var/lib/apt/lists/*
 
 # Utente non root, senza shell di login. L'uid è fisso: i file di registro nel volume devono avere un

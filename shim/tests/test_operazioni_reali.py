@@ -39,8 +39,6 @@ PARAMETRI: dict[str, str] = {
     "oggi": "casa=san-bao",
     "statistiche": "casa=san-bao",
     "cerca_web": "q=isee",
-    "cerca_opendata": "q=brindisi",
-    "leggi_dataset": "risorsa_id=7aa651c7-b536-494e-861e-2adbcf798223&campo=COMUNE_SEDE_OP&valore=Brindisi",
 }
 CORPI: dict[str, dict] = {
     "registra_richiesta": {"categoria": "orientamento", "esito": "risolta"},

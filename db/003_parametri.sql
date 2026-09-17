@@ -46,9 +46,7 @@ INSERT INTO trasi.parametro (chiave, valore, tipo, descrizione) VALUES
   ('session_ttl_hours',          '12', 'int',  'Durata in ore del cookie di sessione del login operatore CdQ (scadenza sul DB: trasi.sessione.scade_ts).'),
   ('messaggi_retention_days',    '90', 'int',  'Retention della chat interna CdQ↔CdQ↔PA: trasi.scadi_messaggi() cancella i messaggi LETTI più vecchi di N giorni; i non letti non scadono.'),
   ('attrezzoteca_soglia_bassa',  '2',  'int',  'Sotto N movimenti confermati/rientrati negli ultimi 12 mesi, in v_uso_oggetti l''oggetto è marcato "uso_basso".'),
-  ('attrezzoteca_soglia_alta',   '10', 'int',  'Da N movimenti confermati/rientrati negli ultimi 12 mesi in su, in v_uso_oggetti l''oggetto è marcato "uso_alto".'),
-  -- Canale monitoraggio PA (US-4, db/026) ------------------------------------
-  ('email_report_pa',            '',   'text', 'Recapito email della PA per la notifica del report approvato (vuoto = solo file).')
+  ('attrezzoteca_soglia_alta',   '10', 'int',  'Da N movimenti confermati/rientrati negli ultimi 12 mesi in su, in v_uso_oggetti l''oggetto è marcato "uso_alto".')
 ON CONFLICT (chiave) DO NOTHING;
 
 RESET ROLE;

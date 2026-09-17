@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Trasi — area operatore</title>
+<meta name="description" content="Area operatore Trasi: chat con l’assistente, registrazione richieste, attrezzoteca, messaggi interni.">
+<link rel="stylesheet" href="style.css?v=3">
+</head>
+<body>
+<!-- Area operatore: un solo indirizzo, nessun redirect verso altri domini.
+     La sessione è un cookie HttpOnly emesso dallo shim (`POST /api/shim/login`):
+     questa pagina non vede né conserva credenziali oltre l'invio del modulo. -->
+<a class="salta" href="#banco">Salta al banco di lavoro</a>
+
+<header class="testata">
+  <p class="marchio"><span class="marchio-nome">TRASI</span><span class="marchio-sep" aria-hidden="true">·</span>area operatore —
+    <span id="operatore-casa">accesso in corso…</span>
+  </p>
+  <nav class="azioni" aria-label="Navigazione operatore">
+    <a class="azione" href="/">Home</a>
+    <a class="azione" href="#aiuto">Aiuto</a>
+    <button class="azione" type="button" id="pulsante-esci">Esci</button>
+    <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
+  </nav>
+</header>
+
+<!-- ============================ accesso ================================== -->
+<main id="accesso" hidden>
+  <h1 class="titolo">Accesso operatori</h1>
+  <form class="modulo" id="modulo-accesso" novalidate>
+    <p>
+      <label class="etichetta" for="accesso-casa">Casa di Quartiere</label>
+      <select id="accesso-casa" required>
+        <option value="san-bao">San Bao</option>
+        <option value="bozzano">Centro di Aggregazione Bozzano</option>
+        <option value="buscicchio">Parco Buscicchio</option>
+        <option value="dream">Dream: Laboratorio Creativo</option>
+        <option value="erranti">Accademia degli Erranti</option>
+        <option value="minimus">Minimus</option>
+        <option value="molo12">Molo 12</option>
+        <option value="pop">POP — Piccolo Opificio Popolare</option>
+        <option value="santa-spazio">Santa Spazio Culturale</option>
+        <option value="tuturano">Tuturano</option>
+      </select>
+    </p>
+    <p>
+      <label class="etichetta" for="accesso-password">Parola d’ordine della Casa</label>
+      <input id="accesso-password" type="password" autocomplete="current-password" required>
+    </p>
+    <p><button class="riquadro-azione" type="submit">Entra</button></p>
+    <p class="messaggio-errore" id="accesso-errore" role="alert" hidden></p>
+  </form>
+</main>
+
+<!-- ========================== banco di lavoro ============================ -->
+<main id="banco" hidden>
+  <h1 class="titolo">Banco di lavoro</h1>
+
+  <nav class="linguette" aria-label="Funzioni operatore">
+    <button class="linguetta" type="button" data-pannello="chat" aria-pressed="true">Chiedi</button>
+    <button class="linguetta" type="button" data-pannello="richiesta" aria-pressed="false">Registra richiesta</button>
+    <button class="linguetta" type="button" data-pannello="attrezzoteca" aria-pressed="false">Attrezzoteca</button>
+    <button class="linguetta" type="button" data-pannello="messaggi" aria-pressed="false">Messaggi interni</button>
+  </nav>
+
+  <!-- ------------------------------ chat -------------------------------- -->
+  <section class="pannello" id="pannello-chat" aria-labelledby="chat-titolo">
+    <h2 id="chat-titolo">Chiedi all’assistente</h2>
+    <ol class="chat-registro" id="chat-registro" aria-live="polite" aria-label="Conversazione"></ol>
+    <form class="chat-modulo" id="chat-modulo">
+      <label class="etichetta" for="chat-testo">Domanda</label>
+      <textarea id="chat-testo" rows="3" maxlength="2000" required></textarea>
+      <button class="riquadro-azione" type="submit">Invia</button>
+    </form>
+    <p class="messaggio-nota">La chat passa da Trasi e raggiunge l’assistente senza aprire altri siti. Ogni risposta dichiara la fonte.</p>
+  </section>
+
+  <!-- --------------------------- richiesta ------------------------------- -->
+  <section class="pannello" id="pannello-richiesta" hidden aria-labelledby="richiesta-titolo">
+    <h2 id="richiesta-titolo">Registra la richiesta del colloquio</h2>
+    <p class="messaggio-nota">Nessun dato della persona: solo categoria, esito e destinazione. È la regola della piattaforma, non una scelta dell’operatore.</p>
+    <form class="modulo" id="modulo-richiesta">
+      <p>
+        <label class="etichetta" for="richiesta-categoria">Categoria</label>
+        <select id="richiesta-categoria" required>
+          <option value="orientamento">Orientamento</option>
+          <option value="servizi_sociali">Servizi sociali</option>
+          <option value="fiscale_isee">Fiscale / ISEE</option>
+          <option value="lavoro">Lavoro</option>
+          <option value="abitare">Abitare</option>
+          <option value="salute">Salute</option>
+          <option value="interculturale">Interculturale</option>
+          <option value="ascolto_solitudine">Ascolto / solitudine</option>
+          <option value="eventi_attivita">Eventi e attività</option>
+          <option value="altro">Altro</option>
+        </select>
+      </p>
+      <p>
+        <label class="etichetta" for="richiesta-esito">Esito</label>
+        <select id="richiesta-esito" required>
+          <option value="risolta">Risolta</option>
+          <option value="inviata_altrove">Inviata altrove</option>
+          <option value="non_trovata">Non trovata</option>
+          <option value="rinviata">Rinviata</option>
+        </select>
+      </p>
+      <p id="riga-destinazione" hidden>
+        <label class="etichetta" for="richiesta-destinazione-nota">Destinazione (luogo o nota breve)</label>
+        <input id="richiesta-destinazione-nota" type="text" maxlength="120" placeholder="Es. «CAF via Cavour» oppure «sportello Casa Bozzano»">
+      </p>
+      <p><button class="riquadro-azione" type="submit">Registra</button></p>
+      <p class="messaggio-ok" id="richiesta-esito-ok" role="status" hidden></p>
+      <p class="messaggio-errore" id="richiesta-errore" role="alert" hidden></p>
+    </form>
+  </section>
+
+  <!-- -------------------------- attrezzoteca ----------------------------- -->
+  <section class="pannello" id="pannello-attrezzoteca" hidden aria-labelledby="attrezzoteca-titolo">
+    <h2 id="attrezzoteca-titolo">Attrezzoteca della rete</h2>
+    <form class="modulo modulo-in-linea" id="modulo-cerca-oggetto">
+      <label class="etichetta" for="cerca-oggetto">Cerca oggetto</label>
+      <input id="cerca-oggetto" type="search" maxlength="80" placeholder="Es. microfono">
+      <button class="riquadro-azione" type="submit">Cerca</button>
+    </form>
+    <table class="tabella" id="tabella-inventario">
+      <caption class="solo-lettore">Inventario condiviso degli oggetti della rete</caption>
+      <thead>
+        <tr><th scope="col">Oggetto</th><th scope="col">Casa</th><th scope="col">Disponibili</th><th scope="col">Condizione</th><th scope="col">Fonte</th><th scope="col">Azione</th></tr>
+      </thead>
+      <tbody id="corpo-inventario"><tr><td colspan="6">Caricamento…</td></tr></tbody>
+    </table>
+    <h3>Movimenti da confermare</h3>
+    <ul class="elenco-movimenti" id="movimenti-da-confermare"><li>Caricamento…</li></ul>
+    <p class="messaggio-ok" id="attrezzoteca-ok" role="status" hidden></p>
+    <p class="messaggio-errore" id="attrezzoteca-errore" role="alert" hidden></p>
+  </section>
+
+  <!-- ---------------------------- messaggi ------------------------------- -->
+  <section class="pannello" id="pannello-messaggi" hidden aria-labelledby="messaggi-titolo">
+    <h2 id="messaggi-titolo">Messaggi interni (rete e Comune)</h2>
+    <p class="messaggio-nota">Canale operativo senza assistente: scrivono solo le persone. Decide chi riceve.</p>
+    <ul class="elenco-messaggi" id="elenco-messaggi"><li>Caricamento…</li></ul>
+    <form class="modulo" id="modulo-messaggio">
+      <p>
+        <label class="etichetta" for="messaggio-destinatario">Destinatario</label>
+        <select id="messaggio-destinatario">
+          <option value="">Comune (monitoraggio)</option>
+          <option value="san-bao">San Bao</option>
+          <option value="bozzano">Centro di Aggregazione Bozzano</option>
+          <option value="buscicchio">Parco Buscicchio</option>
+          <option value="dream">Dream: Laboratorio Creativo</option>
+          <option value="erranti">Accademia degli Erranti</option>
+          <option value="minimus">Minimus</option>
+          <option value="molo12">Molo 12</option>
+          <option value="pop">POP — Piccolo Opificio Popolare</option>
+          <option value="santa-spazio">Santa Spazio Culturale</option>
+          <option value="tuturano">Tuturano</option>
+        </select>
+      </p>
+      <p>
+        <label class="etichetta" for="messaggio-testo">Messaggio</label>
+        <textarea id="messaggio-testo" rows="3" maxlength="2000" required></textarea>
+      </p>
+      <p><button class="riquadro-azione" type="submit">Invia messaggio</button></p>
+      <p class="messaggio-ok" id="messaggio-ok" role="status" hidden></p>
+      <p class="messaggio-errore" id="messaggio-errore" role="alert" hidden></p>
+    </form>
+  </section>
+</main>
+
+<section id="aiuto" aria-labelledby="aiuto-titolo">
+  <h2 id="aiuto-titolo">Aiuto</h2>
+  <p>Questa è l’area di lavoro dell’operatore: le quattro linguette corrispondono alle funzioni nuove della piattaforma.</p>
+  <dl class="aiuto-elenco">
+    <dt>Chiedi</dt><dd>La stessa assistente della Home, dentro Trasi: nessun salto di sito. Le risposte dichiarano sempre la fonte.</dd>
+    <dt>Registra richiesta</dt><dd>Una riga per colloquio: categoria, esito, destinazione. Mai il nome della persona.</dd>
+    <dt>Attrezzoteca</dt><dd>Gli oggetti condivisi della rete. Il prestito si propone qui e conta solo dopo la conferma della Casa che riceve.</dd>
+    <dt>Messaggi interni</dt><dd>Comunicazioni tra Case e Comune. L’assistente non legge e non risponde qui.</dd>
+  </dl>
+  <h3>La sessione</h3>
+  <p>L’accesso dura 12 ore e vale solo per la Casa scelta. Con «Esci» la sessione si chiude subito.</p>
+</section>
+
+<footer class="piede">
+  <p>Trasi · area operatore. La piattaforma non conserva dati personali dei cittadini.</p>
+</footer>
+
+<script src="operatore.js?v=2"></script>
+</body>
+</html>

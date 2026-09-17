@@ -7,12 +7,7 @@ Giorno `[P] giorno_ciclo_mensile` (default 3), alle 08:00. Produce:
   proposte in attesa — al recapito della Casa (`v_flusso_recapiti`: `email_digest` → identità
   gestore → AT);
 * **un report per lo staff PN** con il **CSV** `trasi_rete_YYYY-MM.csv` allegato, con le celle
-  k-anonime (`<5`, `—`) già mascherate da `trasi.k_anon` — il report non ricalcola i numeri, li legge;
-* **i report persistiti** (US-4): una riga `trasi.report` per Casa (`ambito='casa'`) e una unica
-  `ambito='osservatorio'` con il CSV in colonna, in stato `bozza`: l'approvazione è umana
-  (operatore referente, ruolo `rete`), la notifica alla PA è del flusso `alert` (07:30) che legge
-  `trasi.v_report_da_notificare`. La persistenza è **prima dell'invio**: il report è il documento
-  che il digest riassume, e deve esistere anche se un'email rimbalza.
+  k-anonime (`<5`, `—`) già mascherate da `trasi.k_anon` — il report non ricalcola i numeri, li legge.
 
 **Perché i messaggi sono miei.** Il contenuto di un messaggio di Trasi ha tre vincoli che vivono in
 questo blocco: i **quattro campi V6** (chi decide, non chi deve fare), la catena di recapito per
@@ -25,10 +20,7 @@ riconosce di aver già girato (`flusso_run.dettaglio` del ciclo del mese corrent
 esce senza inviare nulla. Rimandare un digest è una decisione umana: si fa con `--forza`, che lo
 dichiara in `flusso_run.dettaglio.forzato`. Un ciclo che rimandasse da solo, ogni volta che lo si
 esegue, sarebbe un ciclo che riempie le caselle il giorno in cui qualcuno lo esegue due volte per
-provare. `--forza` rimanda i **messaggi** ma **non riscrive i report**: un report esistente non si
-aggiorna (V4: UPDATE non grantato per costruzione, db/024 — il report si legge e si commenta, non si
-corregge) e un duplicato è impedito dalla SELECT di esistenza per (casa, mese, ambito); il fatto resta
-registrato in `flusso_run.dettaglio.report.gia_esistenti`.
+provare.
 
 **Vincoli rispettati.** Nessuna scrittura su NocoDB né su REGIS (§9): i messaggi escono via SMTP o su
 file. Nessun dato personale (§12): i digest portano conteggi k-anonimi e id di proposta, mai il testo
@@ -60,7 +52,6 @@ from comune import (  # noqa: E402
     CAMPI_V6,
     FlussoErrore,
     apri_run,
-    esegui_sql,
     leggi,
     log,
     parametro_int,
@@ -292,170 +283,6 @@ def messaggi(mese: date) -> tuple[list[Messaggio], str, int]:
     return messaggi_, csv_testo, righe_csv
 
 
-# ----------------------------------------------------------------- persistenza dei report (US-4)
-
-
-def _run_id_sql(run: Run | None) -> int | None:
-    """L'id del run corrente se è già nel registro, altrimenti di un run passato non fallito dello
-    stesso mese, altrimenti None. `flusso_run_id` è nullable per costruzione (db/024): le metà
-    esistenti — report scritti da cicli precedenti a questa persistenza — non hanno il legame,
-    e la risoluzione via `flusso_run` li lega all'esecuzione che li ha prodotti senza inventarlo.
-    """
-    if run is None:
-        return None
-    if getattr(run, "id", None) is not None:
-        return int(run.id)
-    mese = run.dettaglio.get("mese")
-    if not mese:
-        return None
-    righe = leggi(
-        "SELECT id FROM trasi.flusso_run "
-        " WHERE nome = 'ciclo_mensile' AND esito != 'errore' "
-        f"   AND dettaglio->>'mese' = '{mese}' "
-        " ORDER BY id DESC LIMIT 1"
-    )
-    return int(righe[0]["id"]) if righe else None
-
-
-def _run_id_letterale(run: Run | None) -> str:
-    """Il letterale SQL per `flusso_run_id`: numero o `NULL`. Mai una stringa vuota castata a bigint."""
-    risolto = _run_id_sql(run)
-    return str(risolto) if risolto is not None else "NULL"
-
-
-def persisti_report(primo: date, digest: list[dict], csv_testo: str, run: Run | None) -> dict:
-    """Persiste i report del mese in `trasi.report`, una riga per Casa più l'osservatorio.
-
-    Ritorna `{"inseriti": int, "gia_esistenti": int}`: i due conteggi sono il modo in cui
-    l'idempotenza si **legge** — un secondo run dà `inseriti = 0`, e il fatto è dichiarato in
-    `flusso_run.dettaglio.report`, non silenzioso.
-
-    **Nessun `ON CONFLICT`, nè `DO NOTHING` né `DO UPDATE`.** `DO UPDATE` richiede il privilegio
-    UPDATE che db/024 non concede **per costruzione** (il report si legge e si commenta, non si
-    corregge: è la regola di Processi). `DO NOTHING` risolverebbe la selezione nel database, ma
-    renderebbe invisibile al flusso *quale* report esisteva già: la SELECT preventiva per
-    (casa, mese, ambito) è il modo in cui il run sa dichiararlo. Le due chiavi UNIQUE parziali di
-    db/026 restano la guardia dal lato del database — un INSERT in corsa con un parallelo fallisce
-    invece di duplicare.
-
-    **Contenuti dell'ambito `casa`.** Le viste di B1 rilasciano solo celle k-anonime: qui si
-    trascrivono `n_label` (`«<5»`, `«—»`), mai il numero grezzo. L'ambito `casa` non maschera *di
-    regola* (foglio 4.3-B: è il rendiconto della Casa a sé stessa), ma questo flusso **non ha**
-    accesso ai numeri pieni e non deve inventarseli: trascrivere la cella mascherata è il vincolo
-    di §12 fatto struttura, non un limite aggirabile leggendo la tabella di base.
-    """
-    mese = primo.isoformat()
-    if digest:
-        slugs = ",".join(sorted(r["casa_slug"] for r in digest))
-        esistenti = {
-            r["casa_slug"]
-            for r in leggi(
-                "SELECT c.slug AS casa_slug FROM trasi.report r "
-                " JOIN trasi.casa c ON c.id = r.casa_id "
-                f" WHERE r.mese = DATE '{mese}' AND r.ambito = 'casa' "
-                f"   AND c.slug IN ('{slugs.replace(',', "','")}')"
-            )
-        }
-    else:
-        esistenti = set()
-
-    inseriti = 0
-    gia = 0
-    for riga in digest:
-        slug = riga["casa_slug"]
-        if slug in esistenti:
-            gia += 1
-            log(f"  report {slug} {primo.strftime('%m/%Y')} già presente: non riscritto")
-            continue
-        dettaglio = leggi(
-            "SELECT categoria, esito, n_label FROM trasi.v_report_mensile "
-            f" WHERE mese = DATE '{mese}' AND casa_slug = '{slug}' "
-            "   AND n_label NOT IN ('—') ORDER BY categoria, esito"
-        )
-        contenuti = json.dumps(
-            {
-                "richieste": int(riga["richieste"]),
-                "senza_risposta": int(riga["senza_risposta"]),
-                "per_categoria_esito": [
-                    {"categoria": r["categoria"], "esito": r["esito"], "n": r["n_label"]}
-                    for r in dettaglio
-                ],
-                "proposte_in_attesa": int(riga["proposte_aperte"]),
-                "proposte_applicate": int(riga["applicate"]),
-                "schede_in_scadenza": int(riga["in_scadenza"]),
-            },
-            ensure_ascii=False,
-        )
-        esegui_sql(
-            "INSERT INTO trasi.report (casa_id, mese, ambito, contenuti, flusso_run_id)\n"
-            f"SELECT c.id, :'mese'::date, 'casa', :'contenuti'::jsonb, {_run_id_letterale(run)}\n"
-            "  FROM trasi.casa c WHERE c.slug = :'slug'\n",
-            variabili={"mese": mese, "contenuti": contenuti, "slug": slug},
-        )
-        inseriti += 1
-
-    esito_oss = _persisti_osservatorio(primo, csv_testo, run)
-    inseriti += esito_oss["inseriti"]
-    gia += esito_oss["gia_esistenti"]
-    return {"inseriti": inseriti, "gia_esistenti": gia}
-
-
-def _persisti_osservatorio(primo: date, csv_testo: str, run: "Run | None") -> dict:
-    """La riga unica `ambito='osservatorio'` del mese, con l'aggregato di rete e il CSV in colonna.
-
-    `casa_id` è NULL per vincolo (db/026: `(ambito='osservatorio') = (casa_id IS NULL)`): la
-    precondizione va cercata per ambito e mese, non per casa.
-    """
-    mese = primo.isoformat()
-    esiste = leggi(
-        "SELECT id FROM trasi.report "
-        f" WHERE mese = DATE '{mese}' AND ambito = 'osservatorio' LIMIT 1"
-    )
-    if esiste:
-        log(f"  report osservatorio {primo.strftime('%m/%Y')} già presente: non riscritto")
-        return {"inseriti": 0, "gia_esistenti": 1}
-
-    aggregato = leggi(
-        "SELECT categoria, esito, n, n_label FROM trasi.v_report_confronto "
-        f" WHERE mese = DATE '{mese}' ORDER BY categoria, esito"
-    )
-    sotto_soglia = leggi(
-        "SELECT count(*) AS n FROM trasi.v_report_confronto "
-        f" WHERE mese = DATE '{mese}' AND n IS NULL"
-    )[0]["n"]
-    proposte = leggi(
-        "SELECT count(*) AS n FROM trasi.proposta WHERE stato = 'proposta'"
-    )[0]["n"]
-    totale_richieste = sum(
-        int(r["n"]) for r in aggregato if r.get("n", "").lstrip("-").isdigit()
-    )
-    contenuti = json.dumps(
-        {
-            "totale_richieste_supra_soglia": totale_richieste,
-            "celle_sotto_soglia": int(sotto_soglia),
-            "per_categoria_esito": [
-                {
-                    "categoria": r["categoria"],
-                    "esito": r["esito"],
-                    "n": r["n_label"],
-                    "n_mese_precedente": r.get("n_prec_label", ""),
-                    "delta_pct": r.get("delta_pct", ""),
-                }
-                for r in aggregato
-            ],
-            "proposte_in_attesa": int(proposte),
-        },
-        ensure_ascii=False,
-    )
-    esegui_sql(
-        "INSERT INTO trasi.report (casa_id, mese, ambito, contenuti, csv, flusso_run_id)\n"
-        f"VALUES (NULL, :'mese'::date, 'osservatorio', :'contenuti'::jsonb, :'csv', "
-        f"{_run_id_letterale(run)})\n",
-        variabili={"mese": mese, "contenuti": contenuti, "csv": csv_testo},
-    )
-    return {"inseriti": 1, "gia_esistenti": 0}
-
-
 # --------------------------------------------------------------------------- invio
 
 
@@ -522,10 +349,6 @@ def esegui(*, mese: str | None, dry_run: bool, forza: bool) -> int:
 
     try:
         messaggi_, csv_testo, righe_csv = messaggi(primo)
-        # Il digest è la stessa lettura che `persisti_report` trascrive in `trasi.report` (ambito
-        # casa): due query sulle stesse viste darebbero due versioni dello stesso mese da tenere
-        # allineate — il documento persistito e il suo riassunto devono essere la stessa osservazione.
-        digest = _digest_per_casa(primo)
     except FlussoErrore as errore:
         print(f"ciclo_mensile: {errore}", file=sys.stderr)
         run.chiudi("errore", 0, errore=str(errore))
@@ -550,31 +373,12 @@ def esegui(*, mese: str | None, dry_run: bool, forza: bool) -> int:
     percorso_csv.write_text(csv_testo, encoding="utf-8")
 
     if dry_run:
-        # Il dry-run **non** persiste i report: è una prova di «cosa invierebbe», e una bozza scritta
-        # da un dry-run farebbe nascere un report che nessuno ha deciso di produrre. Stesso criterio
-        # dei messaggi: si mostra, non si fa.
         log(f"dry-run: {len(messaggi_)} messaggi pronti · CSV {righe_csv} righe → {percorso_csv}")
         for messaggio in messaggi_:
             log(f"  → {messaggio.a}: {messaggio.oggetto}")
         run.chiudi("ok", 0, dry_run=True, messaggi=len(messaggi_), csv=str(percorso_csv))
         registra_run(run)
         return 0
-
-    # --- persistenza dei report, prima dell'invio (US-4) -------------------------------------
-    # Il report persistito è il **documento** di cui il digest è il riassunto: deve esistere prima
-    # che parta qualunque email, così un invio rimbalzato non lascia un mese senza rendiconto e il
-    # `run` che lo ha prodotto è lo stesso che dichiara `report: {inseriti, gia_esistenti}`.
-    # Un fallimento qui ferma il ciclo — i digest di oggi riassumono un report che deve esistere.
-    try:
-        report_esito = persisti_report(primo, digest, csv_testo, run)
-    except FlussoErrore as errore:
-        print(f"ciclo_mensile: persistenza report fallita: {errore}", file=sys.stderr)
-        run.chiudi("errore", 0, errore=f"persistenza report: {errore}",
-                   mese=primo.isoformat())
-        registra_run(run)
-        return 1
-    log(f"report persistiti: {report_esito['inseriti']} inseriti · "
-        f"{report_esito['gia_esistenti']} già esistenti (non riscritti)")
 
     mittente = os.environ.get("TRASI_SMTP_FROM", "trasi@trasi.local")
     recapiti: list[dict] = []
@@ -594,7 +398,7 @@ def esegui(*, mese: str | None, dry_run: bool, forza: bool) -> int:
 
     run.chiudi(esito, len(recapiti), messaggi=len(recapiti), modo=modo, mese=primo.isoformat(),
                forzato=bool(forza), csv=str(percorso_csv), righe_csv=righe_csv,
-               report=report_esito, recapiti=recapiti, campi_v6=list(CAMPI_V6))
+               recapiti=recapiti, campi_v6=list(CAMPI_V6))
     registra_run(run)
     return 0 if esito == "ok" else 1
 

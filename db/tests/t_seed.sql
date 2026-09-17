@@ -36,7 +36,7 @@ BEGIN
   -- sorella ha aggiunto `pa` (monitoraggio PA, US-4) al DB condiviso, e un totale esatto è diventato
   -- rosso senza che il contratto fosse violato — la stessa lezione di O05, qui.
   SELECT count(*) INTO n_rc FROM trasi.ruolo_casa;
-  IF n_rc < 13 THEN RAISE EXCEPTION 'FAIL O02 — ruolo_casa ha % righe, attese >= 13 (10 Case + rete + ti + pa)', n_rc; END IF;
+  IF n_rc < 12 THEN RAISE EXCEPTION 'FAIL O02 — ruolo_casa ha % righe, attese >= 12 (10 Case + rete + ti)', n_rc; END IF;
   -- Come sopra: il totale non è asserito perché il contratto cresce con gli usi (una sessione
   -- sorella ha aggiunto l'identità del canale PA). Ciò che conta: **zero orfane** e le 10 Case con
   -- il proprio ruolo e 2 identità — verificati sotto, e sono loro il presidio reale.
@@ -50,12 +50,6 @@ BEGIN
   SELECT (casa_id IS NULL) INTO ti_ok   FROM trasi.ruolo_casa WHERE ruolo = 'ti';
   IF NOT rete_ok THEN RAISE EXCEPTION 'FAIL O02 — rete ha una Casa (deve essere territorio: NULL)'; END IF;
   IF NOT ti_ok THEN RAISE EXCEPTION 'FAIL O02 — ti ha una Casa (deve essere NULL)'; END IF;
-  BEGIN
-    SELECT (casa_id IS NULL) INTO rete_ok FROM trasi.ruolo_casa WHERE ruolo = 'pa';
-    IF NOT rete_ok THEN RAISE EXCEPTION 'FAIL O02 — pa ha una Casa (deve essere NULL: è territorio)'; END IF;
-  EXCEPTION WHEN undefined_object THEN
-    RAISE EXCEPTION 'FAIL O02 — ruolo pa assente in ruolo_casa (US-4: il monitoraggio PA dipende da questo ruolo)';
-  END;
 
   -- ogni Casa ha esattamente il proprio ruolo e 2 identità
   SELECT count(*) INTO case_ok FROM trasi.ruolo_casa rc
@@ -64,7 +58,6 @@ BEGIN
      AND (SELECT count(*) FROM trasi.identita_onyx i WHERE i.ruolo_db = rc.ruolo) = 2;
   IF case_ok <> 10 THEN RAISE EXCEPTION 'FAIL O02 — solo % Case hanno ruolo omonimo con 2 identità, attese 10', case_ok; END IF;
   RAISE NOTICE 'PASS O02 — ruolo_casa % righe · identita_onyx % righe · 0 identità orfane · 10 Case con ruolo omonimo e 2 identità', n_rc, n_id;
-  RAISE NOTICE 'PASS O02 — ruolo_casa 13 righe · identita_onyx 23 righe · 0 identità orfane · 10 Case con ruolo omonimo e 2 identità · pa senza Casa';
 END $$;
 
 -- O03 · ruolo `ti`: 3 identità di servizio mappate su identità esistenti ---------------------
@@ -81,16 +74,16 @@ BEGIN
   RAISE NOTICE 'PASS O03 — identità di servizio B7 presenti e mappate (op.san-bao → casa_sanbao)';
 END $$;
 
--- O04 · ruoli: 18, nessun BYPASSRLS/SUPERUSER, shim_rw NOINHERIT con 12 membership -----------
+-- O04 · ruoli: 17, nessun BYPASSRLS/SUPERUSER, shim_rw NOINHERIT con 11 membership -----------
 DO $$
 DECLARE
   ruoli text[] := ARRAY['casa_santaspazio','casa_molo12','casa_erranti','casa_buscicchio','casa_sanbao',
                         'casa_minimus','casa_pop','casa_bozzano','casa_dream','casa_tuturano',
-                        'rete','ti','pa','metabase_ro','automazioni','shim_rw','applicatore','trasi_owner'];
+                        'rete','ti','metabase_ro','automazioni','shim_rw','applicatore','trasi_owner'];
   creati integer; cattivi text; shim record; membri integer; senza_ti boolean; owner_applica record;
 BEGIN
   SELECT count(*) INTO creati FROM pg_roles WHERE rolname = ANY (ruoli);
-  IF creati <> 18 THEN RAISE EXCEPTION 'FAIL O04 — ruoli di progetto presenti: %, attesi 18 (con pa del canale monitoraggio)', creati; END IF;
+  IF creati <> 17 THEN RAISE EXCEPTION 'FAIL O04 — ruoli di progetto presenti: %, attesi 17', creati; END IF;
 
   SELECT string_agg(rolname, ', ') INTO cattivi FROM pg_roles WHERE rolname = ANY (ruoli) AND (rolsuper OR rolbypassrls);
   IF cattivi IS NOT NULL THEN RAISE EXCEPTION 'FAIL O04 — ruoli con SUPERUSER/BYPASSRLS: %', cattivi; END IF;
@@ -103,7 +96,6 @@ BEGIN
   -- aggiunto il ruolo `pa` — e il presidio vero è qui sotto: shim_rw non è mai membro di `ti`.
   SELECT count(*) INTO membri FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member WHERE r.rolname = 'shim_rw';
   IF membri < 11 THEN RAISE EXCEPTION 'FAIL O04 — membership di shim_rw: %, attese >= 11 (10 Case + rete)', membri; END IF;
-  IF membri <> 12 THEN RAISE EXCEPTION 'FAIL O04 — membership di shim_rw: %, attese 12 (10 Case + rete + pa)', membri; END IF;
   SELECT EXISTS (SELECT 1 FROM pg_auth_members m
                  JOIN pg_roles r ON r.oid = m.member JOIN pg_roles g ON g.oid = m.roleid
                  WHERE r.rolname = 'shim_rw' AND g.rolname = 'ti') INTO senza_ti;
@@ -113,15 +105,8 @@ BEGIN
   IF owner_applica.rolcanlogin THEN RAISE EXCEPTION 'FAIL O04 — trasi_owner è LOGIN (deve essere NOLOGIN)'; END IF;
   SELECT rolcanlogin INTO owner_applica FROM pg_roles WHERE rolname = 'applicatore';
   IF owner_applica.rolcanlogin THEN RAISE EXCEPTION 'FAIL O04 — applicatore è LOGIN (deve essere NOLOGIN)'; END IF;
-  -- `pa` è l'identità del canale monitoraggio: NOLOGIN come applicatore, e NO pa ∈ metabase_ro.
-  SELECT rolcanlogin INTO owner_applica FROM pg_roles WHERE rolname = 'pa';
-  IF owner_applica.rolcanlogin THEN RAISE EXCEPTION 'FAIL O04 — pa è LOGIN (deve essere NOLOGIN come trasi_owner/applicatore)'; END IF;
-  IF EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid JOIN pg_roles p ON p.oid = m.member
-              WHERE r.rolname = 'metabase_ro' AND p.rolname = 'pa') THEN
-    RAISE EXCEPTION 'FAIL O04 — pa è membro di metabase_ro (non deve esserlo)'; END IF;
 
   RAISE NOTICE 'PASS O04 — 17 ruoli · 0 con SUPERUSER/BYPASSRLS · shim_rw NOINHERIT+LOGIN con % membership (>= 10 Case + rete, mai ti) · trasi_owner/applicatore NOLOGIN', membri;
-  RAISE NOTICE 'PASS O04 — 18 ruoli · 0 con SUPERUSER/BYPASSRLS · shim_rw NOINHERIT+LOGIN con 12 membership (10 Case + rete + pa, senza ti) · trasi_owner/applicatore/pa NOLOGIN';
 END $$;
 
 -- O05 · schema trasi, tabelle, colonne chiave, indici ---------------------------------------
@@ -145,7 +130,7 @@ BEGIN
     ('ruolo_casa'),('identita_onyx'),('fonte'),('fonte_run'),('flusso_run'),
     -- le 6 delle schede !NEW: login operatore (db/013), attrezzoteca (db/014), chat interna (db/015)
     ('credenziale_casa'),('sessione'),('tentativo_login'),('oggetto'),('movimento'),('messaggio'),
-    ('scheda_servizio'),('conversazione'),('turno')
+    ('scheda_servizio')
   ) AS v(i)
   WHERE NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'trasi' AND tablename = v.i);
   IF mancanti IS NOT NULL THEN RAISE EXCEPTION 'FAIL O05 — tabelle attese mancanti in schema trasi: %', mancanti; END IF;
@@ -276,6 +261,12 @@ BEGIN
   SELECT count(*) INTO sotto FROM trasi.fonte WHERE attiva AND livello_fiducia < trasi.p_int('fiducia_min_esterna');
   IF sotto <> 0 THEN RAISE EXCEPTION 'FAIL O07 — % fonti attive sotto fiducia_min_esterna', sotto; END IF;
 
+  -- §3: le 9 fonti dell'allow-list iniziale, con la fiducia dichiarata
+  SELECT count(*) INTO sotto FROM (VALUES ('Rete-kb-3',3),('Google Drive-3',3),('Google Calendar-ical-2',2),
+      ('OpenStreetMap/Overpass-2',2),('Comune di Brindisi-3',3),('ASL Brindisi-3',3),('INPS-3',3),
+      ('Regione Puglia-3',3),('Questura di Brindisi-3',3)) AS v(nome, fid)
+  WHERE NOT EXISTS (SELECT 1 FROM trasi.fonte f WHERE f.nome = v.nome AND f.attiva AND f.livello_fiducia = v.fid);
+  IF sotto <> 0 THEN RAISE EXCEPTION 'FAIL O07 — % fonti dell''allow-list §3 mancanti o con fiducia errata', sotto; END IF;
 
   SELECT count(*) INTO n_luoghi FROM trasi.luogo;
   IF n_luoghi < 22 THEN RAISE EXCEPTION 'FAIL O07 — count(luogo) = %, atteso >= 22', n_luoghi; END IF;
@@ -287,9 +278,11 @@ BEGIN
   SELECT count(*) INTO n3 FROM trasi.luogo WHERE affidabilita = 3;
   IF n3 <> 14 THEN RAISE EXCEPTION 'FAIL O07 — luoghi con affidabilita=3: %, attesi 14 (solo dati della rete)', n3; END IF;
   -- Le fonti si PROMUOVONO: una promozione da fonte esterna porta `affidabilita` da 1 a 2 (§8 F9),
-  -- e le fonti istituzionali a 1; la fascia alta è popolata dai dati della rete. Non si asserisce un
-  -- totale che il ciclo di vita cambia legittimamente: un'asserzione su un numero esatto fallirebbe
-  -- a ogni promozione e insegnerebbe a ignorare il rosso.
+  -- quindi il numero di luoghi con affidabilità 1 **cala** con l'uso normale del sistema. Il test
+  -- verifica perciò che la distribuzione resti sensata (nessun valore fuori 1-3, almeno i 5
+  -- istituzionali a 1, e la fascia alta popolata dai dati della rete), non un totale che il ciclo
+  -- di vita cambia legittimamente. Un'asserzione su un numero esatto qui fallirebbe a ogni
+  -- promozione e insegnerebbe a ignorare il rosso.
   SELECT count(*) INTO n1 FROM trasi.luogo WHERE affidabilita = 1;
   IF n1 < 5 THEN
     RAISE EXCEPTION 'FAIL O07 — luoghi con affidabilita=1: % (attesi almeno 5, i siti istituzionali)', n1;
@@ -298,15 +291,6 @@ BEGIN
   IF fuori_fascia <> 0 THEN
     RAISE EXCEPTION 'FAIL O07 — % luoghi con affidabilità fuori dalla scala 1-3', fuori_fascia;
   END IF;
-
-  -- §3: le fonti dell'allow-list iniziale, con la fiducia dichiarata. `Google Drive-3` è fuori dal
-  -- MVP (17/09/2026): la riga esiste nel seed ma **inattiva**, e non si verifica qui (O07 controlla
-  -- le fonti attive; una riga spenta non è in allow-list e non autorizza nulla).
-  SELECT count(*) INTO sotto FROM (VALUES ('Rete-kb-3',3),('Google Calendar-ical-2',2),
-      ('OpenStreetMap/Overpass-2',2),('Comune di Brindisi-3',3),('ASL Brindisi-3',3),('INPS-3',3),
-      ('Regione Puglia-3',3),('Questura di Brindisi-3',3)) AS v(nome, fid)
-  WHERE NOT EXISTS (SELECT 1 FROM trasi.fonte f WHERE f.nome = v.nome AND f.attiva AND f.livello_fiducia = v.fid);
-  IF sotto <> 0 THEN RAISE EXCEPTION 'FAIL O07 — % fonti dell''allow-list §3 mancanti o con fiducia errata', sotto; END IF;
 
   SELECT count(*) INTO buchi FROM trasi.luogo WHERE geom IS NULL OR fonte_id IS NULL OR affidabilita IS NULL;
   IF buchi <> 0 THEN RAISE EXCEPTION 'FAIL O07 — % luoghi senza geom, fonte o affidabilità', buchi; END IF;

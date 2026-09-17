@@ -19,8 +19,7 @@ DECLARE attesi text[][] := ARRAY[
     ['giorno_ciclo_mensile','3'],
     -- schede !NEW (2026-09-16)
     ['session_ttl_hours','12'],['messaggi_retention_days','90'],
-    -- soglie attrezzoteca (US-5) + recapito PA per la notifica del report approvato (US-4, 026)
-    ['attrezzoteca_soglia_bassa','2'],['attrezzoteca_soglia_alta','10'],['email_report_pa','']];
+    ['attrezzoteca_soglia_bassa','2'],['attrezzoteca_soglia_alta','10']];
   r text[]; v text;
 BEGIN
   -- Il totale dei parametri NON è asserito: una sessione sorella ha aggiunto `email_report_pa`
@@ -31,7 +30,7 @@ BEGIN
     v := trasi.p_text(r[1]);
     IF v <> r[2] THEN RAISE EXCEPTION 'FAIL V01 — % = ''%'', atteso ''%'' (architettura §7.2)', r[1], v, r[2]; END IF;
   END LOOP;
-  RAISE NOTICE 'PASS V01 — parametri [P] del contratto presenti con i valori attesi (raggio 800, scadenza 30, fiducia_min 2, max_esterni 5, k_anon 5, email_report_pa, …)';
+  RAISE NOTICE 'PASS V01 — parametri [P] del contratto presenti con i valori attesi (raggio 800, scadenza 30, fiducia_min 2, max_esterni 5, k_anon 5, …)';
 END $$;
 
 -- V02 · p_int/p_text/p_bool: tipi corretti, e NULL (non eccezione) su chiave inesistente -----
@@ -315,6 +314,12 @@ BEGIN
     --  * v_da_approvare, v_scritture_senza_audit — diagnostica, non esposte a metabase_ro
     --  * v_flusso_* (B4) — servono agli alert notturni, che devono vedere tutte le Case;
     --    B5 ha rimosso `metabase_ro` dai loro GRANT proprio per non aggirare il least-privilege.
+    --  * v_report, v_commento (db/024) — **non** sono viste aggregate: espongono righe di dominio
+    --    (`report`, `commento`) e per quelle la regola è l'opposta. `v_report` porta i numeri NON
+    --    mascherati del rendiconto di una Casa, quindi la RLS deve filtrarli **per il chiamante**
+    --    (`security_invoker=true`): con `false` girerebbe come owner e ogni Casa leggerebbe i numeri
+    --    pieni delle altre, aggirando il k-anonimato di `v_confronto_case` per via laterale.
+    --    La protezione esiste solo se tutte le vie la rispettano; una via laterale la annulla.
     AND c.relname NOT IN ('v_da_approvare','v_scritture_senza_audit',
                           'v_flusso_alert_proposte','v_flusso_coerenza_fonti',
                           'v_flusso_destinatari','v_flusso_recapiti',

@@ -12,6 +12,3 @@ httpx==0.28.1
 # Interpretazione di `opening_hours` di OpenStreetMap, libreria indicata dal piano (B3-SHM-04): l'unica che
 # interpreta la sintassi OSM reale (`Mo-Fr 09:00-13:00`, `sunrise-sunset`, festivi).
 opening-hours-py==2.1.4
-# HTML→PDF per i fogli stampabili (`biglietto`, `scheda_evento`, parametro `formato=pdf`): la stessa
-# pagina A6/A5 composta da `_foglio`, resa come file invece che come pagina da stampare a mano.
-# Richiede i binari di sistema pango/gdk-pixbuf: sono nel Dockerfile (stage runtime).

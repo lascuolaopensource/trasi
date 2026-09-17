@@ -160,14 +160,6 @@ SOSTITUZIONI: list[tuple[str, str]] = [
         "chiama `eventi_oggi` con `casa=<slug>`:",
         "chiama `eventi_oggi` con `casa=<slug>` (santa-spazio, molo12, erranti, buscicchio, san-bao, minimus, pop, bozzano, dream, tuturano):",
     ),
-    (
-        # 17/09: il modello chiamava `biglietto` con il **nome** del luogo (422) o con l'id di un nodo
-        # OSM come numero (500). Ora `cerca_luogo` espone `id`, e il biglietto sa fare il PDF.
-        "Stampa per il cittadino: biglietto(luogo_id).",
-        "Stampa per il cittadino: biglietto(luogo_id, formato). luogo_id è il campo `id` dell'item di cerca_luogo (numero) "
-        "oppure, per un luogo esterno di vicino_a, `osm:node:<id>` con l'id preso dall'`url`. Mai il nome. "
-        "Se l'operatore vuole il file, formato=pdf.",
-    ),
 ]
 
 

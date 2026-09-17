@@ -18,11 +18,8 @@ SET search_path = trasi, public, pg_temp;
 INSERT INTO trasi.fonte (nome, url, tipo_accesso, autorita, livello_fiducia, attiva) VALUES
   -- Memoria della rete: la fonte di tutto ciò che è già verificato (badge KB)
   ('Rete-kb-3', NULL, 'kb', 'Rete delle Case di Quartiere di Brindisi', 3, true),
-  -- Documenti della rete su Drive: FUORI dal MVP (decisione 17/09/2026). Il consent Google resta in
-  -- «Testing» e il canale non ha consumatori: la riga resta nel seed come configurazione dichiarata ma
-  -- **inattiva**, così un deploy pulito non accende un canale che nessuno usa. Nessun invariante la
-  -- presuppone (O07 verifica le fonti attive, non il totale).
-  ('Google Drive-3', 'https://drive.google.com', 'drive', 'Rete delle Case di Quartiere di Brindisi', 3, false),
+  -- Documenti della rete su Drive (V-02: fallback manuale finché il consent Google è bloccato)
+  ('Google Drive-3', 'https://drive.google.com', 'drive', 'Rete delle Case di Quartiere di Brindisi', 3, true),
   -- Calendari delle Case: unica scrittura automatica diretta ammessa su `evento` (§8 F4)
   ('Google Calendar-ical-2', NULL, 'ical', 'Calendari ufficiali delle Case', 2, true),
   -- POI e orari esterni (§3; endpoint verificato in B0: overpass.openstreetmap.fr risponde con UA identificativo)
@@ -53,32 +50,6 @@ ON CONFLICT (nome) DO UPDATE
 INSERT INTO trasi.fonte (nome, url, tipo_accesso, autorita, livello_fiducia, attiva) VALUES
   ('CAF ACLI Brindisi', 'https://www.acli.it', 'web', 'ACLI — patronato', 1, false),
   ('CAF CISL Brindisi', 'https://www.cisl.it', 'web', 'CISL — patronato', 1, false)
-ON CONFLICT (nome) DO UPDATE
-  SET url = EXCLUDED.url, tipo_accesso = EXCLUDED.tipo_accesso, autorita = EXCLUDED.autorita,
-      livello_fiducia = EXCLUDED.livello_fiducia, attiva = EXCLUDED.attiva;
-
--- Fonti per i link che il connettore `web` di Onyx non può indicizzare (`.orca/drops/link_scartati.json`,
--- 16/09/2026): API JSON e file, non pagine HTML. Due strade, due `tipo_accesso`:
---   * `api`  — interrogate **on-demand** dallo shim: i tre portali CKAN da `cerca_opendata`/`leggi_dataset`
---              (la base API è `url` + `/api/3/action/...`), Nominatim dalla geocodifica di `vicino_a`
---              (parametro `indirizzo`). La riga è l'allow-list: spenta la riga, lo shim non la interroga.
---              Lo shim riconosce Nominatim per host (= `NOMINATIM_URL`); ogni altra riga `api` è un portale CKAN.
---   * `http` — file scaricati e indicizzati dal flusso settimanale `flussi/fonti_documenti.py` (ZIP ISTAT,
---              CSV di Open Data Puglia, PDF della Procura). Il flusso lascia una riga in `fonte_run`, così la
---              coerenza F6 vede se la fonte tace.
--- La fiducia segue la convenzione del suffisso: 3 per gli enti pubblici titolari del dato, 2 per IPRES e
--- per OpenStreetMap (come la riga Overpass). Tutte >= fiducia_min_esterna (invariante O07).
-INSERT INTO trasi.fonte (nome, url, tipo_accesso, autorita, livello_fiducia, attiva) VALUES
-  ('Open Data Puglia-3', 'https://dati.puglia.it/ckan', 'api', 'Regione Puglia — Open Data', 3, true),
-  ('dati.gov.it-3', 'https://www.dati.gov.it/opendata', 'api',
-   'dati.gov.it — Catalogo nazionale dei dati aperti (AgID)', 3, true),
-  ('IPRES Open Data-2', 'http://www.opendataipres.it', 'api',
-   'IPRES — Istituto Pugliese di Ricerche Economiche e Sociali', 2, true),
-  ('Nominatim-2', 'https://nominatim.openstreetmap.org', 'api',
-   'OpenStreetMap contributors (ODbL) — Nominatim', 2, true),
-  ('ISTAT-3', 'https://demo.istat.it', 'http', 'ISTAT', 3, true),
-  ('Procura di Brindisi-3', 'https://procura-brindisi.giustizia.it', 'http',
-   'Procura della Repubblica di Brindisi', 3, true)
 ON CONFLICT (nome) DO UPDATE
   SET url = EXCLUDED.url, tipo_accesso = EXCLUDED.tipo_accesso, autorita = EXCLUDED.autorita,
       livello_fiducia = EXCLUDED.livello_fiducia, attiva = EXCLUDED.attiva;

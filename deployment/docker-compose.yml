@@ -130,12 +130,7 @@ services:
       # `ONYX_CHAT_API_URL`: un nome per rete, così copiare `ONYX_API_URL` dal `.env.example` non può
       # rompere la chat.
       ONYX_CHAT_TOKEN: ${ONYX_CHAT_TOKEN}
-      # PAT **della PA**: è l'identità con cui Onyx invoca i tool del monitoraggio, e il canale
-      # `/v1/m` accetta solo `pa@trasi.local`. Diversa da ONYX_CHAT_TOKEN (sportello, per Casa).
-      ONYX_CHAT_PA_TOKEN: ${ONYX_CHAT_PA_TOKEN:-}
       ONYX_CHAT_API_URL: ${ONYX_CHAT_API_URL:-}
-      # Persona «Trasi Monitoraggio PA» (US-4): distinta dalla «Trasi Casa» dello sportello.
-      ONYX_PERSONA_PA_ID: ${ONYX_PERSONA_PA_ID:-7}
     ports:
       - "127.0.0.1:${HOST_PORT_SHIM}:8000"
     healthcheck:
@@ -315,8 +310,7 @@ services:
       - "127.0.0.1:${HOST_PORT_CADDY_HTTP}:80"
       - "127.0.0.1:${HOST_PORT_CADDY_HTTPS}:443"
     healthcheck:
-      # Un conflitto irrisolto rende il rilascio non valido, anche se Caddy risponde.
-      test: ["CMD-SHELL", "wget --quiet --spider http://127.0.0.1:2019/config/ && ! grep -R -I -n -E '^(<<<<<<<|=======|>>>>>>>)' /srv/home"]
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:2019/config/"]
       interval: 20s
       timeout: 5s
       retries: 5

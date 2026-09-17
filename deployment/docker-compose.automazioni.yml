@@ -94,10 +94,6 @@ services:
       ONYX_API_URL: ${ONYX_API_URL:-http://nginx/api}
       ONYX_TRASI_KB_API_KEY: ${ONYX_TRASI_KB_API_KEY:-}
       ONYX_KB_CC_PAIR_ID: ${ONYX_KB_CC_PAIR_ID:-3}
-      # Export dei documenti esterni (fonti_documenti.py, domenica 01:30): nel container non esiste
-      # `shim/.onyx-kb.json` (il fallback del flusso), quindi il cc_pair passa da qui. Lo scrive
-      # `ops/provisiona_connettore_documenti.py`; il valore è l'id registrato in `shim/.onyx-kb.json`.
-      ONYX_DOCUMENTI_CC_PAIR_ID: ${ONYX_DOCUMENTI_CC_PAIR_ID:-110}
       # SMTP: se assente, gli alert vanno su file in `flussi/evidenze/alert/` e la scelta è dichiarata
       # in `flusso_run.dettaglio.modo`. Non è un ripiego silenzioso.
       TRASI_SMTP_HOST: ${TRASI_SMTP_HOST:-}

@@ -327,15 +327,11 @@ def test_messaggio_fuori_dai_limiti_risponde_422(app_cliente, messaggio):
 
 
 def test_risposta_riporta_il_testo_e_il_badge_della_fonte_kb(app_cliente):
-    """200 `{risposta, fonte, riferimenti}` e la fonte è il badge KB composto dallo shim (V3, non dal modello).
+    """200 `{risposta, fonte}` e la fonte è il badge KB composto dallo shim (V3, non dal modello).
 
     Il badge atteso è la stringa di `badge_kb` sui metadati del primo documento citato: la stessa forma che
     l'operatore legge in `cerca_luogo` e sul biglietto. Comporla qui — e non lasciarla al LLM — è ciò che rende la
     provenienza verificabile a colpo d'occhio.
-
-    `riferimenti` è la novità di `T-SHIM-01`: il documento citato è un `trasi%3Aluogo%3A13` URL-encoded, e il test
-    dell'estrazione sta in `test_conversazioni_op.py`. Qui si verifica solo che il campo ci sia nella risposta della
-    via a un colpo solo, con l'id **decodificato**.
     """
     client, _ = app_cliente()
 
@@ -347,7 +343,6 @@ def test_risposta_riporta_il_testo_e_il_badge_della_fonte_kb(app_cliente):
     assert risposta.json() == {
         "risposta": "Il CAF La Rosa è in via…",
         "fonte": "[KB · Rete-kb-3 · agg. 15/09/2026 · affidabilità 3]",
-        "riferimenti": [{"tipo": "luogo", "id": 13, "nome": "CAF La Rosa"}],
     }
 
 

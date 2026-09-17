@@ -22,13 +22,6 @@ Tre decisioni non negoziabili, e dove vivono:
 Log senza corpo (V5/§12): da qui non si registra mai né slug né password né token; il middleware scrive il `ruolo`
 della sessione e basta.
 
-**Sessioni di servizio (`rete`/`pa`, US-4).** La stessa conversazione — login, cookie, logout — vale anche per i due
-ruoli senza Casa: l'operatore referente (`rete`, approva i report) e la Pubblica Amministrazione (`pa`, li legge).
-Le differenze sono nel database, non in un secondo meccanismo: la credenziale vive in `trasi.credenziale_servizio`,
-la sessione porta `ruolo_db` invece di `casa_id` (CHECK mutuamente esclusivo, db/026), e la creazione è
-`trasi.crea_sessione_servizio` con lo stesso anti-brute-force. Il cookie è lo **stesso** (`trasi_sessione`): due
-cookie significherebbero due logout e una sessione che resta accesa quando l'altra è stata chiusa.
-
 **Dipendenza `sessione_corrente`** (in coda al modulo): è la guardia di tutti gli endpoint `/op/…`. Valida il cookie
 sul DB a ogni richiesta (scadenza e revoca sono immediate, non attendono il TTL), risolve la Casa e apre la
 transazione `BEGIN; SET LOCAL ROLE <ruolo_db>` — lo stesso modello della dipendenza Onyx, così la RLS decide come
@@ -38,10 +31,9 @@ accesso).
 
 from __future__ import annotations
 
-import re
 import uuid
-from collections.abc import AsyncIterator, Callable
-from typing import Any, Literal
+from collections.abc import AsyncIterator
+from typing import Any
 
 import asyncpg
 from asyncpg.exceptions import RaiseError
@@ -63,13 +55,6 @@ COOKIE_SESSIONE = "trasi_sessione"
 DETAIL_CREDENZIALI_NON_VALIDE = "casa o password non valide"
 DETAIL_TROPPI_TENTATIVI = "troppi tentativi: accesso bloccato, riprovare più tardi"
 DETAIL_SESSIONE_NON_VALIDA = "sessione assente o scaduta"
-DETAIL_RUOLO_SBAGLIATO = "questa area richiede un altro ruolo: sessione non valida per il ruolo richiesto"
-
-# La forma ammessa per il `ruolo_db` di una sessione di servizio: lettere minuscole e `_`, nient'altro. È la barriera
-# davanti al `SET LOCAL ROLE …`: il valore viene dal DB (non dall'input), ma un nome di identificatore non ammette
-# parametri, quindi la forma si verifica e basta — anche chi applica una migrazione malata non può trasformare una
-# riga di `sessione` in SQL arbitrario.
-_RUOLO_PERMESSO = re.compile(r"^[a-z][a-z_]*$")
 
 # Fallback documentato del TTL (12 ore) se il parametro `[P]` manca o non è un intero: è il default scritto nel
 # seed di db/003, ripetuto qui perché il login non deve fallire per un parametro assente.
@@ -89,20 +74,6 @@ class Credenziali(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
-class CredenzialiServizio(BaseModel):
-    """Il corpo di `POST /servizio/login`: **le sole** due chiavi ammesse (`extra="forbid"`, V5).
-
-    `ruolo` è il nome del ruolo di servizio (`pa` per la Pubblica Amministrazione, `rete` per il referente AT), non
-    un identificatore personale: un solo accesso per ruolo, come per le Case. La password viaggia nel corpo JSON,
-    mai nella query string.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    ruolo: Literal["pa", "rete"]
-    password: str = Field(min_length=1, max_length=200)
-
-
 class SessioneOperatore:
     """La sessione del browser dell'operatore, validata sul DB a ogni richiesta.
 
@@ -116,32 +87,6 @@ class SessioneOperatore:
         self.ruolo = base.ruolo
         self.casa_id = base.casa_id
         self.casa_slug = casa_slug
-        self.token = token
-
-    async def fetch(self, sql: str, *args: Any):
-        return await self._base.fetch(sql, *args)
-
-    async def fetchrow(self, sql: str, *args: Any):
-        return await self._base.fetchrow(sql, *args)
-
-    async def fetchval(self, sql: str, *args: Any):
-        return await self._base.fetchval(sql, *args)
-
-    async def execute(self, sql: str, *args: Any):
-        return await self._base.execute(sql, *args)
-
-
-class SessioneServizio:
-    """La sessione del browser della PA o del referente di rete, validata sul DB a ogni richiesta.
-
-    Stessa forma di `SessioneOperatore`, senza Casa: il canale conosce il **ruolo** (`pa` o `rete`) e basta. Non è
-    una sessione speciale: è la stessa tabella `trasi.sessione` con `ruolo_db` valorizzato al posto di `casa_id`,
-    guardata dal CHECK mutuamente esclusivo di db/026.
-    """
-
-    def __init__(self, base: Sessione, ruolo: str, token: uuid.UUID) -> None:
-        self._base = base
-        self.ruolo = ruolo
         self.token = token
 
     async def fetch(self, sql: str, *args: Any):
@@ -227,82 +172,6 @@ async def dipendenza_sessione_corrente(request: Request) -> AsyncIterator[Sessio
 sessione_corrente = dipendenza_sessione_corrente
 
 
-async def _dipendenza_sessione_servizio(
-    request: Request, ruolo_atteso: str, morbido: bool = False
-) -> AsyncIterator[SessioneServizio]:
-    """Cookie valido con `ruolo_db = ruolo_atteso` → transazione con quel ruolo; altrimenti 401.
-
-    La risoluzione del token **non** presuppone il ruolo: il cookie è quello di una sessione, e il confronto con il
-    ruolo atteso è una decisione applicativa — così chi tiene un cookie di servizio può verificare da solo con
-    `GET /pa/me` se è rimasto dentro la sessione scaduta (401) senza che lo shim sveli quale ruolo il token porta.
-
-    La query legge **solo** `sessione`: `ruolo_db` su una sessione di Casa è `NULL` per il CHECK di db/026, quindi
-    il confronto stringa basta a escluderle — non serve un JOIN che distingua i due casi, perché la distinzione è
-    già un vincolo del database. Il formato del ruolo è verificato prima dell'`SET LOCAL ROLE`: identificatori non
-    parametrici si possono solo interpolare, e la forma è la barriera giusta per una stringa che il DB vincola ma
-    che non è un parametro.
-
-    `morbido=True` è il modo in cui la factory multi-ruolo (`sessione_servizio_tra`) *chiede* la prova di un
-    ruolo senza chiudere: il mismatch non solleva, semplicemente non produce niente — e la factory prova il
-    ruolo successivo. Gli 401 dei casi davvero fuori accesso (cookie assente, scaduto, ruolo malformato) restano
-    intatti: il "morbido" riguarda solo il **confronto del ruolo**.
-    """
-    token = _token_dal_cookie(request)
-    if token is None:
-        raise errore(401, DETAIL_SESSIONE_NON_VALIDA)
-
-    pool = _pool_corrente()
-    async with pool.acquire() as conn:
-        ruolo = await conn.fetchval(
-            "SELECT ruolo_db FROM trasi.sessione WHERE token = $1 AND scade_ts > now()", token
-        )
-        if ruolo is None or not _RUOLO_PERMESSO.match(str(ruolo)):
-            raise errore(401, DETAIL_SESSIONE_NON_VALIDA)
-        if ruolo != ruolo_atteso:
-            if morbido:
-                return
-            raise errore(401, DETAIL_RUOLO_SBAGLIATO)
-
-        async with conn.transaction():
-            await conn.execute(f"SET LOCAL ROLE {ruolo}")
-            request.state.ruolo = ruolo
-            yield SessioneServizio(Sessione(conn, "", ruolo, None), ruolo, token)
-
-
-def sessione_servizio_corrente(ruolo_atteso: str) -> Callable[[Request], AsyncIterator[SessioneServizio]]:
-    """La guardia degli endpoint del servizio (`/pa/…`, la dashboard del monitoraggio US-4).
-
-    `ruolo_atteso` è il nome del ruolo di servizio (`pa` o `rete`): i due canali condividono lo stesso cookie e la
-    stessa dipendenza, e il confronto decide se questo browser è autorizzato a *questa* area. Una sessione di Casa
-    passa qualsiasi `/op/…` e qui trova il 401 dedicato, perché il contratto delle due aree è diverso.
-    """
-
-    async def guardia(request: Request) -> AsyncIterator[SessioneServizio]:
-        async for sessione in _dipendenza_sessione_servizio(request, ruolo_atteso):
-            yield sessione
-
-    return guardia
-
-
-def sessione_servizio_tra(ruoli: tuple[str, ...]) -> Callable[[Request], AsyncIterator[SessioneServizio]]:
-    """Una sessione di servizio valida per **uno qualsiasi** dei ruoli elencati (dashboard condivisa US-4).
-
-    La dashboard del monitoraggio è letta sia da `pa` (Pubblica Amministrazione) sia da `rete` (referente AT, che
-    approva): la stessa superficie, due identità. `sessione_servizio_corrente` tiene UN solo ruolo atteso; per
-    la dashboard condivisa si usa questa factory, che prova i ruoli nell'ordine dato e 401 solo se nessuno
-    corrisponde. `@router.get("/me")` resta multi-ruolo perché è il modo in cui il browser sa chi è entrato.
-    """
-
-    async def guardia(request: Request) -> AsyncIterator[SessioneServizio]:
-        for ruolo in ruoli:
-            async for sessione in _dipendenza_sessione_servizio(request, ruolo, morbido=True):
-                yield sessione
-                return
-        raise errore(401, DETAIL_SESSIONE_NON_VALIDA)
-
-    return guardia
-
-
 @router.post(
     "/login",
     operation_id="login_operatore",
@@ -348,49 +217,6 @@ async def login(corpo: Credenziali, risposta: Response) -> dict[str, Any]:
 
 
 @router.post(
-    "/servizio/login",
-    operation_id="login_servizio",
-    summary="Accede come PA o referente di rete: cookie di sessione sulle credenziali di `credenziale_servizio`.",
-    tags=["servizio"],
-)
-async def login_servizio(corpo: CredenzialiServizio, risposta: Response) -> dict[str, Any]:
-    """POST /servizio/login `{ruolo, password}` → 200 `{ruolo, sessione}` + cookie; 401 su fallimento e sul blocco.
-
-    Il confronto della password è delegato a `trasi.crea_sessione_servizio` (bcrypt/pgcrypto): qui si conosce l'esito,
-    non il segreto. `NULL` significa «credenziali non valide» (il blocco anti-brute-force è sollevato dalla funzione
-    come `RaiseError` con `login_bloccato` nel testo, e qui diventa il proprio 401: è uno stato dedicato, non una
-    variazione di «chi sei»). Ruolo sconosciuto e password errata restano indistinguibili: risposte diverse
-    renderebbero i ruoli enumerabili.
-    """
-    try:
-        async with _pool_corrente().acquire() as conn:
-            token = await conn.fetchval(
-                "SELECT trasi.crea_sessione_servizio($1, $2)", corpo.ruolo, corpo.password
-            )
-    except RaiseError as exc:
-        # La funzione solleva per il blocco anti-forza; il suo testo non è propagato: il messaggio al chiamante è
-        # quello dichiarato qui.
-        raise errore(401, DETAIL_TROPPI_TENTATIVI) from exc
-
-    if token is None:
-        raise errore(401, DETAIL_CREDENZIALI_NON_VALIDE)
-
-    ttl = await _ttl_secondi()
-    risposta.set_cookie(
-        COOKIE_SESSIONE,
-        value=str(token),
-        max_age=ttl,
-        httponly=True,
-        samesite="lax",
-        # `secure` spento finché lo stack serve anche in HTTP loopback; davanti al tunnel HTTPS si accende a
-        # configurazione, senza cambiare codice.
-        secure=False,
-        path="/",
-    )
-    return {"ruolo": corpo.ruolo, "sessione": "aperta"}
-
-
-@router.post(
     "/logout",
     operation_id="logout_operatore",
     summary="Chiude la sessione: revoca il token sul DB e scade subito il cookie. Idempotente: "
@@ -433,16 +259,11 @@ async def me(sess: SessioneOperatore = Depends(sessione_corrente)) -> dict[str, 
 __all__ = [
     "COOKIE_SESSIONE",
     "DETAIL_CREDENZIALI_NON_VALIDE",
-    "DETAIL_RUOLO_SBAGLIATO",
     "Credenziali",
-    "CredenzialiServizio",
     "SessioneOperatore",
-    "SessioneServizio",
     "login",
-    "login_servizio",
     "logout",
     "me",
     "router",
     "sessione_corrente",
-    "sessione_servizio_corrente",
 ]

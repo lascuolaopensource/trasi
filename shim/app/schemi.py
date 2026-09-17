@@ -27,16 +27,10 @@ class Errore(BaseModel):
 
 
 class ItemLuogo(BaseModel):
-    """`cerca_luogo`: un luogo della memoria della rete, con la sua etichetta di provenienza.
-
-    `id` è il `luogo.id` della memoria: è ciò che il LLM passa a `biglietto(luogo_id=…)` per comporre il
-    foglio. Senza questo campo il modello doveva indovinare l'identificativo — e chiamava il biglietto
-    con il **nome** del luogo (422) o con l'id di un nodo OSM (il bug del 17/09: 500).
-    """
+    """`cerca_luogo`: un luogo della memoria della rete, con la sua etichetta di provenienza."""
 
     model_config = TIPO_STRETTO
 
-    id: int = Field(ge=1, description="Identificativo del luogo: è il `luogo_id` da passare a `biglietto`.")
     provenienza: Literal["kb"]
     nome: str
     tipo: str
@@ -123,21 +117,6 @@ class ItemVicinanza(BaseModel):
     badge: str
 
 
-class CentroVicinanza(BaseModel):
-    """`vicino_a?indirizzo=…`: il punto geocodificato da cui si è misurata la distanza, con l'etichetta di Nominatim.
-
-    L'`etichetta` è il `display_name` così com'è: è ciò che l'operatore legge per accorgersi che «via Appia 120» è
-    stata risolta nel posto giusto, e riscriverla toglierebbe proprio il dettaglio che serve a quel controllo.
-    """
-
-    model_config = TIPO_STRETTO
-
-    lat: float = Field(ge=-90, le=90)
-    lon: float = Field(ge=-180, le=180)
-    etichetta: str
-    fonte: str
-
-
 class RispostaVicinoA(BaseModel):
     """Luoghi vicini alla Casa, ordinati per gruppo (prima `kb`, poi `esterna`), apertura e distanza."""
 
@@ -148,7 +127,6 @@ class RispostaVicinoA(BaseModel):
     raggio_m: int = Field(ge=1)
     items: list[ItemVicinanza]
     fonti_esterne: list[FonteEsterna]
-    centro: CentroVicinanza | None = None
 
 
 class ItemStatisticheAmbito(BaseModel):

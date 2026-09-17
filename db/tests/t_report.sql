@@ -44,8 +44,6 @@ BEGIN
 END $$;
 
 -- R01 · il flusso GENERA il report (INSERT): è la sua funzione -------------------------------
--- Il report osservatorio di US-4 ha `casa_id NULL` (CHECK di db/026: ambito osservatorio ⟺
--- nessuna Casa): il fixture qui sotto genera l'aggregato di rete, non il report di Bozzano.
 DO $$
 DECLARE n integer;
 BEGIN
@@ -137,8 +135,7 @@ BEGIN
   INSERT INTO trasi.commento (entita, entita_id, casa_id, testo)
   SELECT 'report', id, trasi.casa_corrente(), 'R06: i numeri tornano con il registro di sportello'
     FROM trasi.report
-   WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='san-bao') AND ambito='casa'
-     AND mese = date_trunc('month', current_date)::date;
+   WHERE casa_id = (SELECT id FROM trasi.casa WHERE slug='san-bao') AND ambito='casa';
   GET DIAGNOSTICS n = ROW_COUNT;
   EXECUTE 'RESET ROLE';
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL R06 — commento = % righe, attesa 1', n; END IF;

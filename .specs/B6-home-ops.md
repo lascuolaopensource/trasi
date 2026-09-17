@@ -17,23 +17,24 @@ GET /v1/u/{email}/oggi   → {"casa":"bozzano","eventi":1,"schede_in_scadenza":0
 ```
 Header richiesto: `X-Trasi-Key` (in `deployment/.env`). Se `casa` è omessa, la deduce dall'identità.
 
-**Pagine pubblicate:**
-- **Home** → conversazione con l'assistente, già nella sessione della Casa
-- **Osservatorio** → mappa, elenco equivalente e scheda dei luoghi
-- **Account** → dati della Casa, proposte e funzioni operative
+**Destinazioni della Home:**
+- **CHIEDI** → `https://onyx.lascuolaopensource.org/app?agentId=<persona_id>` — assistente preselezionato. ID: Presidio=1, Casa=2, Rete=3, Staff PN=4.
+- **MAPPA** → dashboard Metabase «Mappa» (id da `trasi-dash`, blocco B5 in corso: **chiedilo via `hub`** se non è pronto)
+- **REGISTRA/AGGIORNA** → NocoDB, vista della Casa (NocoDB **non è avviato**: se manca, link predisposto e dichiarato)
+- **OSSERVATORIO** → dashboard Metabase «Casa» + coda proposte «Da approvare»
 
-La mappa vive nell'Osservatorio e la sezione «Registra» vive nell'Account. La coda delle proposte è visibile
-nella riga dell'Account e nella sezione «Proposte».
+**Schema di riferimento** (`docs/trasi-architecture-v1.2.md` §4.3): header con `TRASI · Casa: [selettore ▼]` + `[Aiuto] [Esci]`; 4 riquadri `CHIEDI / MAPPA / REGISTRA-AGGIORNA / OSSERVATORIO`; in fondo la riga «Oggi a <Casa>: N eventi · M schede in scadenza · K proposte».
 
 **Servizi attivi:** `db_trasi`, `searxng`, `shim`, `automazioni`, `metabase` — tutti healthy. Caddy è definito e **non avviato** (serve per servire la Home + i sottodomini).
 
 ## Change — Parte A (Trasi Home)
 
-- `index.html` è l'accesso; `home.html`, `osservatorio.html` e `account.html` sono le pagine della shell; CSS/JS **vanilla**, zero CDN
-- `lang="it"`, font base **≥ 16 px**, contrasto **≥ 4,5:1**, focus visibile, navigabile da tastiera tra Home, Osservatorio e Account
-- **Casa della sessione** letta dal cookie HttpOnly; nel browser non entra alcun dato personale
-- **Riga della coda** che dichiara il numero di proposte quando la lettura risponde; se lo shim non risponde → «dati non disponibili»
-- Le pagine e le otto sezioni dell'Account sono collegamenti o controlli nativi
+### 1. La pagina (`deployment/home/`)
+- `index.html` + CSS/JS **vanilla**, ≤ 30 KB totali, **zero CDN** (nessuna risorsa esterna: `grep` su `src`/`href` → 0 URL esterni)
+- `lang="it"`, font base **≥ 16 px**, contrasto **≥ 4,5:1**, focus visibile, navigabile da tastiera nell'ordine CHIEDI → MAPPA → REGISTRA → OSSERVATORIO
+- **Selettore Casa** che persiste (`localStorage`, **solo** lo slug — nessun dato personale) e riscrive gli `href` dei 4 riquadri
+- **Riga «Oggi»** che chiama lo shim e mostra il campo `testo`; se lo shim non risponde entro 3 s → «dati non disponibili» (mai un errore grezzo)
+- Tutti e 4 i riquadri sono `<a>` navigabili
 
 ### 2. Caddy
 - serve `home/` su `/` dell'hostname `trasi.lascuolaopensource.org`

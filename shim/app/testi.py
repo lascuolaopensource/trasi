@@ -19,19 +19,17 @@ autorevoli), e si dichiara con la `nota` invece di allentare il filtro.
 Il confronto è per **host**, non per sottostringa: `inps.it` non deve autorizzare `falso-inps.it.example`, e
 `comune.brindisi.it` deve autorizzare `www.comune.brindisi.it` (il `www.` è lo stesso host, non un altro dominio).
 """
+
 from __future__ import annotations
 
-import base64
 import html
-import io
 from datetime import datetime
-from functools import lru_cache
-from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, Query
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse
 
 from .auth import SessioneOperatore, sessione_corrente
 from .badge import NOTA_ORARI_ASSENTI, badge_esterna, badge_kb, nome_fonte
@@ -55,7 +53,7 @@ from .vicinanza import (
 # percorso, contratto congelato); `router_op` è la via del browser dell'operatore (cookie di sessione,
 # nessun identificatore nell'URL) e viene montato sotto `/op`. La distinzione non è formale: tenendo i
 # due router separati, nessuna route può essere valida per entrambi i canali, e la scheda evento — che
-# è per il browser — non entra nell'OpenAPI che il gate V-09 confronta con le operazioni del contratto (dodici al 16/09/2026).
+# è per il browser — non entra nell'OpenAPI che il gate V-09 confronta con le nove operazioni.
 router = APIRouter()
 router_op = APIRouter()
 
@@ -195,24 +193,6 @@ def _metri(valore: float) -> str:
     return f"{valore / 1000:.1f}".replace(".", ",") + " km"
 
 
-# --- Font e PDF -----------------------------------------------------------------------------------------------
-
-# Il font dei fogli, incorporato in **ogni** pagina: nel PDF (WeasyPrint non segue URL esterni) e nella
-# Home statica (il riferimento `/assets/…` non esiste nel PDF e rompe l'apertura da un altro dominio).
-# Letto una volta per processo: è un file dell'immagine, non cambia a caldo.
-_FONT_COMMISSIONER = Path(__file__).parent / "assets" / "CommissionerVF.ttf"
-
-
-@lru_cache(maxsize=1)
-def _font_commissioner() -> str:
-    """Il font incorporato come base64, oppure stringa vuota: senza il file la pagina cade sui font di sistema
-    invece di fallire — un biglietto leggibile in un font sostituito è meglio di nessun biglietto."""
-    try:
-        return base64.b64encode(_FONT_COMMISSIONER.read_bytes()).decode("ascii")
-    except OSError:
-        return ""
-
-
 def _foglio(
     *,
     titolo: str,
@@ -237,11 +217,6 @@ def _foglio(
     arrivano da OpenStreetMap, dai calendari delle Case e dalla memoria — fonti che non controlliamo — e un `<` in un
     titolo non deve rompere il documento. Il piè di pagina dichiara che il foglio non contiene dati personali: è
     un'affermazione su ciò che **non** c'è, non un campo da compilare.
-
-    Il font Commissioner è **incorporato** (base64) e non più caricato da `/assets`: nel PDF la risorsa esterna non
-    esiste (WeasyPrint non segue l'URL relativo del browser) e nella Home statica il riferimento assoluto romperebbe
-    l'apertura del foglio da un dominio diverso. Un solo sorgente del font, qui: il file vive in `app/assets/` ed è
-    lo stesso che la Home pubblica — due copie diverrebbero due identità visive.
     """
     caption = f'\n    <caption class="luogo">{html.escape(didascalia)}</caption>' if didascalia else ""
     return f"""<!DOCTYPE html>
@@ -252,9 +227,10 @@ def _foglio(
   <style>
     @font-face {{
       font-family: "Commissioner";
-      src: url(data:font/ttf;base64,{_font_commissioner()}) format("truetype");
+      src: url("/assets/CommissionerVF.ttf") format("truetype");
       font-style: normal;
       font-weight: 100 900;
+      font-display: swap;
     }}
     @page {{ size: {formato}; margin: 8mm }}
     @media print {{ body {{ margin: 0 }} .no-print {{ display: none }} }}
@@ -270,11 +246,6 @@ def _foglio(
     footer {{ margin-top: .6rem; font-size: 8pt; color: #3d4756; border-top: 1px solid #c8cfd9; padding-top: .3rem }}
     .luogo {{ font-weight: 600 }}
     .nota {{ font-size: 8pt; color: #3d4756; margin-top: .4rem }}
-    /* Il pulsante PDF è azione del browser (scaricamento), non parte del foglio: non si stampa. */
-    .azioni-stampa {{ margin-top: .8rem }}
-    .azioni-stampa a {{ display: inline-block; font-size: 9pt; color: #14181f; text-decoration: none;
-              border: 1px solid #c8cfd9; border-radius: 3px; padding: .3rem .6rem; background: #f2f5f8 }}
-    @media print {{ .azioni-stampa {{ display: none }} }}
   </style>
 </head>
 <body>
@@ -288,7 +259,6 @@ def _foglio(
     Fonte: {html.escape(fonte)} · consultato il {consultato.strftime('%d/%m/%Y')} alle {consultato.strftime('%H:%M')}
     <p class="nota">{html.escape(nota)}</p>
   </footer>
-  <p class="nota-stampa">Usa «Stampa» del browser per il foglio su carta (A6 per il biglietto, A5 per la scheda evento).</p>
 </body>
 </html>
 """
@@ -388,8 +358,8 @@ async def biglietto(
     luogo_id: str = Query(..., min_length=1),
     casa: str | None = Query(default=None, min_length=1),
     sess: Sessione = Depends(sessione),
-) -> Response:
-    """Il biglietto stampabile (A6) del luogo scelto: `text/html`, pronto per la stampa del browser.
+) -> HTMLResponse:
+    """Il biglietto stampabile (A6) del luogo scelto: `text/html`, l'unica risposta non JSON del contratto.
 
     Due origini, un solo foglio: un luogo della memoria della rete (badge `[KB …]`) o un POI esterno indicato come
     `osm:node:<id>` (badge `[Esterna …]`, ricaricato da Overpass). Nel secondo caso il POI **non viene scritto** in
@@ -406,18 +376,7 @@ async def biglietto(
                 422,
                 "luogo_id deve essere un identificativo numerico di luogo oppure un riferimento esterno «osm:node:<id>»",
             )
-        numero = int(luogo_id)
-        # `luogo.id` è `integer` (int4): un intero oltre il int32 (tipico: l'id di un nodo OSM passato come
-        # numero dal LLM, confondendo l'id del nodo con l'id del luogo) esplode in `asyncpg` come OverflowError
-        # prima ancora di toccare il database — un 500 invece del 422 dichiarato. Il limite è quello della
-        # colonna, non una preferenza: lo stesso numero arriva al bind di asyncpg.
-        if numero > 2147483647:
-            raise errore(
-                422,
-                "luogo_id non è un luogo della memoria: per una destinazione esterna usa la forma «osm:node:<id>» "
-                "con l'identificativo dell'URL OpenStreetMap dell'item",
-            )
-        riga = await _luogo_kb(sess, numero)
+        riga = await _luogo_kb(sess, int(luogo_id))
         if riga is None:
             raise errore(404, "luogo non presente nella memoria della rete")
 
@@ -430,18 +389,19 @@ async def biglietto(
             riferimento["nome"] if riferimento else None,
             riga["indirizzo"] or riga["note_accesso"],
         )
-        documento = _documento_biglietto(
-            nome=riga["nome"],
-            indirizzo=riga["indirizzo"],
-            orari_testo=riga["orari_testo"],
-            orari_nota=None if riga["orari_testo"] else NOTA_ORARI_ASSENTI,
-            come_arrivare=arrivo,
-            fonte=fonte,
-            badge=badge_kb(fonte, riga["data_aggiornamento"], riga["affidabilita"]),
-            consultato=consultato,
-            tipo=riga["tipo"],
+        return HTMLResponse(
+            _documento_biglietto(
+                nome=riga["nome"],
+                indirizzo=riga["indirizzo"],
+                orari_testo=riga["orari_testo"],
+                orari_nota=None if riga["orari_testo"] else NOTA_ORARI_ASSENTI,
+                come_arrivare=arrivo,
+                fonte=fonte,
+                badge=badge_kb(fonte, riga["data_aggiornamento"], riga["affidabilita"]),
+                consultato=consultato,
+                tipo=riga["tipo"],
+            )
         )
-        return HTMLResponse(documento)
 
     config = await _configurazione_osm(sess)
     poi = await nodo_osm(
@@ -460,18 +420,19 @@ async def biglietto(
         if riferimento is not None and riferimento["lat"] is not None
         else None
     )
-    documento = _documento_biglietto(
-        nome=poi.nome,
-        indirizzo=poi.indirizzo,
-        orari_testo=poi.orari_testo,
-        orari_nota=poi.orari_nota,
-        come_arrivare=_arrivo(distanza, riferimento["nome"] if riferimento else None, poi.indirizzo),
-        fonte=fonte,
-        badge=badge_esterna(fonte, consultato),
-        consultato=consultato,
-        tipo=poi.tipo or "luogo esterno",
+    return HTMLResponse(
+        _documento_biglietto(
+            nome=poi.nome,
+            indirizzo=poi.indirizzo,
+            orari_testo=poi.orari_testo,
+            orari_nota=poi.orari_nota,
+            come_arrivare=_arrivo(distanza, riferimento["nome"] if riferimento else None, poi.indirizzo),
+            fonte=fonte,
+            badge=badge_esterna(fonte, consultato),
+            consultato=consultato,
+            tipo=poi.tipo or "luogo esterno",
+        )
     )
-    return HTMLResponse(documento)
 
 
 async def _configurazione_osm(sess: Sessione) -> dict[str, Any]:
@@ -811,7 +772,7 @@ async def _evento_kb(sess: SessioneOperatore, evento_id: int) -> dict[str, Any] 
 async def op_scheda_evento(
     evento_id: int = Query(..., ge=1, description="Identificativo dell'evento (`trasi.evento.id`)."),
     sess: SessioneOperatore = Depends(sessione_corrente),
-) -> Response:
+) -> HTMLResponse:
     """GET /op/scheda_evento?evento_id= — il foglio stampabile di un evento, per il browser dell'operatore.
 
     **Read-only**, come tutti gli output dello shim: legge `trasi.evento` unito a `casa` e `fonte` e
@@ -870,20 +831,22 @@ async def op_scheda_evento(
     # luogo della Casa che organizza. Quando non c'è, la scheda **lo dichiara** invece di dedurre
     # «gratuito» o «su prenotazione» — sono affermazioni che solo la Casa può fare.
     accesso = (riga["casa_accesso"] or "").strip() or NOTA_ACCESSO_ASSENTE
-    documento = _documento_scheda_evento(
-        titolo=titolo,
-        periodo=_periodo(riga["inizio"], riga["fine"]),
-        dove=dove,
-        accesso=accesso,
-        descrizione=descrizione,
-        # Il contatto pubblico è quello della Casa che organizza l'evento: l'ente gestore, che è
-        # un'informazione pubblica e istituzionale (V5). Nessun recapito di persona, mai.
-        contatto=riga["casa_ente"] or NOTA_CONTATTO_ASSENTE,
-        fonte=nome,
-        badge=badge,
-        aggiornamento=aggiornamento,
-        casa=casa,
-        url=riga["url"],
-        consultato=consultato,
+
+    return HTMLResponse(
+        _documento_scheda_evento(
+            titolo=titolo,
+            periodo=_periodo(riga["inizio"], riga["fine"]),
+            dove=dove,
+            accesso=accesso,
+            descrizione=descrizione,
+            # Il contatto pubblico è quello della Casa che organizza l'evento: l'ente gestore, che è
+            # un'informazione pubblica e istituzionale (V5). Nessun recapito di persona, mai.
+            contatto=riga["casa_ente"] or NOTA_CONTATTO_ASSENTE,
+            fonte=nome,
+            badge=badge,
+            aggiornamento=aggiornamento,
+            casa=casa,
+            url=riga["url"],
+            consultato=consultato,
+        )
     )
-    return HTMLResponse(documento)

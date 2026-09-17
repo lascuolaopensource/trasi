@@ -113,9 +113,7 @@ VALUES
 ON CONFLICT (slug) DO NOTHING;
 
 -- ===========================================================================
--- 2. Mappa ruolo → Casa (13 righe: 10 Case + rete + ti + pa)
---    `pa` è il canale di monitoraggio PA (US-4, db/026): casa_id NULL, perché non appartiene a
---    nessuna Casa — è il lettore dell'osservatorio (report approvati e viste k-anonime di rete).
+-- 2. Mappa ruolo → Casa (12 righe: 10 Case + rete + ti)
 -- ===========================================================================
 INSERT INTO trasi.ruolo_casa (ruolo, casa_id, descrizione)
 VALUES
@@ -129,17 +127,13 @@ VALUES
   ('casa_bozzano',     (SELECT id FROM trasi.casa WHERE slug = 'bozzano'),      'Casa: Centro di Aggregazione Bozzano'),
   ('casa_dream',       (SELECT id FROM trasi.casa WHERE slug = 'dream'),        'Casa: Dream: Laboratorio Creativo'),
   ('casa_tuturano',    (SELECT id FROM trasi.casa WHERE slug = 'tuturano'),     'Casa: Tuturano'),
-  ('rete',             NULL, 'Rete / AT-AQ: territorio, promozione dati esterni; approva i report di osservatorio'),
-  ('ti',               NULL, 'TI: allow-list fonti, parametri, identità'),
-  ('pa',               NULL, 'Canale monitoraggio PA (US-4): legge report di osservatorio approvati e viste k-anonime')
+  ('rete',             NULL, 'Rete / AT-AQ: territorio, promozione dati esterni'),
+  ('ti',               NULL, 'TI: allow-list fonti, parametri, identità')
 ON CONFLICT (ruolo) DO UPDATE SET casa_id = EXCLUDED.casa_id, descrizione = EXCLUDED.descrizione;
 
 -- ===========================================================================
--- 3. Identità Onyx (23 righe: op.<slug> e gestore.<slug> per 10 Case + rete + ti + pa)
+-- 3. Identità Onyx (22 righe: op.<slug> e gestore.<slug> per 10 Case + rete + ti)
 -- L'operatore e il gestore della stessa Casa condividono il ruolo DB (plan §394, governance).
--- `pa@trasi.local` è l'identità della persona Onyx «Trasi Monitoraggio PA» (US-4): il tool custom
--- risolve l'email → ruolo `pa` e gira con security_invoker=false viste k-anonime (db/026).
--- `casa_id` NULL: la PA non è una Casa, e attribuirgliene una falserebbe la RLS.
 -- ===========================================================================
 INSERT INTO trasi.identita_onyx (email, ruolo_db, casa_id)
 SELECT v.email, v.ruolo_db, rc.casa_id
@@ -165,8 +159,7 @@ FROM (VALUES
   ('op.tuturano@trasi.local',          'casa_tuturano'),
   ('gestore.tuturano@trasi.local',     'casa_tuturano'),
   ('rete@trasi.local',                 'rete'),
-  ('ti@trasi.local',                   'ti'),
-  ('pa@trasi.local',                   'pa')
+  ('ti@trasi.local',                   'ti')
 ) AS v(email, ruolo_db)
 JOIN trasi.ruolo_casa rc ON rc.ruolo = v.ruolo_db
 ON CONFLICT (email) DO UPDATE SET ruolo_db = EXCLUDED.ruolo_db, casa_id = EXCLUDED.casa_id, attiva = true;

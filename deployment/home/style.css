@@ -1,0 +1,382 @@
+/* Trasi Home — foglio unico, zero CDN. Contrasti in `docs/wcag-home.md`; le due
+   regole non ovvie, in `design/readme.md`: i colori di marca non portano mai
+   testo, e non c'è rosso (nulla è un allarme verso una persona). */
+
+:root {
+  /* I colori di marca non portano mai testo (su bianco: 1,9-3,6:1): stanno nei
+     filetti. Per il testo le varianti profonde, con i contrasti in
+     `docs/wcag-home.md`. Non c'e' rosso: nulla e' un allarme verso una persona. */
+  --mare: #0b90cb; --terra: #cc7e5b;
+  --testo: #1c1c1a; --testo-tenue: #4a4a46; --carta: #f5f3ee;
+  --superficie: #ffffff; --superficie-incassata: #efede6;
+  --testata: #06405a; --testata-bordo: #043044;
+  --azione: #07577b; --azione-sfondo-hover: #eaf2f7; --azione-attiva: #043044;
+  --bordo: #8a8377; --bordo-tenue: #c9c3b6; --bordo-forte: #06405a;
+  --kb-testo: #07577b; --esterna-testo: #7a3d20; --coda-testo: #7a3d20;
+  --attenzione-testo: #6b4a00; --attenzione-sfondo: #ffe9a8;
+  --focus: #f6af37; --focus-contorno: #043044;
+  /* Commissioner è locale: il monospaziato resta solo per le etichette di
+     provenienza, che sono stringhe da citare carattere per carattere. */
+  --font: "Commissioner", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
+  --s-6: 24px; --s-8: 32px;
+  --raggio: 10px; --raggio-piccolo: 4px; --bersaglio-min: 44px;
+  --misura-lettura: 62rem; --misura-testo: 36rem;
+  --transizione: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+}
+
+@font-face {
+  font-family: "Commissioner";
+  src: url("assets/CommissionerVF.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --transizione: none; }
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 16px; }          /* base >= 16 px (nessuna riduzione con rem) */
+
+body { margin: 0; 
+background: var(--carta); 
+color: var(--testo); 
+font-family: var(--font); 
+font-size: 1rem; 
+line-height: 1.5; 
+}
+
+/* ===== Tastiera ===== */
+
+.salta {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10;
+  padding: 12px 16px;
+  background: var(--superficie);
+  color: var(--testo);
+  border: 2px solid var(--testo);
+  border-radius: 0 0 var(--raggio) 0;
+  font-weight: 600;
+}
+.salta:focus { left: 0; }
+
+/* Focus: due anelli, visibile su carta e su testata blu. */
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--focus-contorno); }
+
+/* ===== Testata ===== */
+
+.testata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4) var(--s-6);
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: var(--s-4) 24px;
+  background: var(--testata);
+  color: #ffffff;
+  border-bottom: 4px solid var(--testata-bordo);
+}
+
+.marchio { display: flex; align-items: center; gap: var(--s-4); min-width: 0; margin: 0; }
+/* `width`/`height` nell'HTML riservano lo spazio: la testata non si muove. */
+.marchio-logo { height: 44px; width: auto; }
+
+.marchio-testo { display: flex; flex-direction: column; min-width: 0; }
+.marchio-nome { font-size: 1.375rem; font-weight: 700; letter-spacing: .12em;
+  line-height: 1.2; }
+.marchio-sotto { font-size: .9375rem; color: rgba(255, 255, 255, .86); }
+
+.casa { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.casa-etichetta { font-size: .9375rem; 
+font-weight: 600; 
+color: rgba(255, 255, 255, .86); 
+letter-spacing: .02em; 
+}
+
+#selettore-casa {
+  min-width: 0;
+  min-height: var(--bersaglio-min);
+  max-width: min(22rem, 100%);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--testo);
+  background: var(--superficie);
+  border: 2px solid var(--testata-bordo);
+  border-radius: var(--raggio);
+}
+.casa-nota { max-width: min(22rem, 100%); 
+margin: 0; 
+font-size: .9375rem; 
+color: var(--attenzione-sfondo); 
+}
+.casa-nota[hidden] { display: none; }
+
+.azioni { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+
+.azione {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: .9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: transparent;
+  border: 2px solid #ffffff;
+  border-radius: var(--raggio);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: var(--transizione);
+}
+.azione:hover { background: var(--superficie); color: var(--testata); }
+
+.esito-uscita { flex-basis: 100%; 
+margin: 0; 
+padding: 6px 10px; 
+color: #ffffff; 
+background: var(--testata-bordo); 
+border-radius: var(--raggio); 
+}
+.esito-uscita[hidden] { display: none; }
+
+/* ===== Corpo ===== */
+
+main { max-width: var(--misura-lettura); margin: 0 auto; padding: 24px; }
+
+/* Le due sole che cambiano da sole, in testa: si leggono prima di scegliere. */
+.fascia { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-6); }
+
+.oggi {
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  background: var(--superficie);
+  border: 2px solid var(--bordo-tenue);
+  border-left: 4px solid var(--mare);
+  border-radius: var(--raggio);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+/* «Oggi» non è un titolo: è la parola che dice che cos'è quella riga. */
+.oggi::before { content: "OGGI"; 
+margin-right: var(--s-2); 
+font-size: .9375rem; 
+font-weight: 700; 
+letter-spacing: .06em; 
+color: var(--testo-tenue); 
+}
+.oggi[data-stato="attesa"] { border-left-color: var(--bordo); color: var(--testo-tenue); }
+.oggi[data-stato="non-disponibile"] { border-left-color: #f6af37; }
+.oggi-nota { display: block; 
+margin-top: var(--s-1); 
+font-size: .9375rem; 
+color: var(--testo-tenue); 
+}
+
+/* La lista degli eventi è la stessa scatola della riga «Oggi», continuata: il
+   filetto blu mare prosegue e la riga sopra perde gli angoli in basso. Una scatola
+   separata direbbe che sono due informazioni; è una sola, letta due volte. */
+.oggi[data-eventi="si"] { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.oggi-eventi {
+  margin: calc(-1 * var(--s-3)) 0 0;
+  padding: 0 var(--s-4) var(--s-3);
+  list-style: none;
+  background: var(--superficie);
+  border: 2px solid var(--bordo-tenue);
+  border-top: 0;
+  border-left: 4px solid var(--mare);
+  border-radius: 0 0 var(--raggio) var(--raggio);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.oggi-eventi[hidden] { display: none; }
+.oggi-evento {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s-3);
+  padding: var(--s-1) 0;
+  border-top: 1px solid var(--bordo-tenue);
+}
+/* L'ora ha larghezza fissa così i titoli si allineano: si legge come un orario, non
+   come una frase. Numeri tabellari per lo stesso motivo. */
+.oggi-evento-ora { min-width: 7.5ch; font-variant-numeric: tabular-nums; color: var(--testo-tenue); }
+.oggi-evento-titolo { font-weight: 600; }
+.oggi-evento-dove { color: var(--testo-tenue); }
+.oggi-evento-dove::before { content: "\00b7\00a0"; }
+
+.coda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  background: var(--superficie);
+  border: 2px solid var(--bordo-tenue);
+  border-left: 4px solid var(--terra);
+  border-radius: var(--raggio);
+  font-size: 1rem;
+}
+/* Coda vuota: filetto spento, testo tenue. Non è uno spazio da riempire. */
+.coda[data-vuota="si"] { border-left-color: var(--bordo-tenue); }
+.coda[data-vuota="si"] .coda-testo { color: var(--testo-tenue); }
+.coda[hidden] { display: none; }
+.coda-testo { margin: 0; }
+.coda-numero { font-weight: 700; color: var(--coda-testo); }
+.coda-quando { color: var(--testo-tenue); }
+.coda-azione { color: var(--azione); font-weight: 600; text-underline-offset: 3px; }
+.coda-azione:hover { color: var(--azione-attiva); }
+
+/* ===== Destinazioni ===== */
+
+.titolo { margin: 0 0 var(--s-5); 
+font-size: 1.375rem; 
+font-weight: 600; 
+color: var(--testo-tenue); 
+}
+
+.destinazione {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  height: 100%;
+  padding: var(--s-5);
+  background: var(--superficie);
+  color: var(--testo);
+  border: 2px solid var(--bordo);
+  border-radius: var(--raggio);
+  text-decoration: none;
+  transition: var(--transizione);
+}
+.destinazione:hover { border-color: var(--bordo-forte);
+  background: var(--azione-sfondo-hover); }
+
+/* La gerarchia si legge dalla dimensione, non dal colore. */
+.destinazione.principale { padding: var(--s-8); 
+margin-bottom: var(--s-5); 
+border-color: var(--bordo-forte); 
+}
+.principale-testo { font-size: 1.125rem; }
+
+.destinazione-titolo { font-size: 1.25rem; 
+font-weight: 700; 
+letter-spacing: .06em; 
+line-height: 1.2; 
+color: var(--azione); 
+}
+.principale-titolo { font-size: 2.25rem; }
+
+.destinazione-intestazione { display: flex; 
+flex-wrap: wrap; 
+align-items: baseline; 
+justify-content: space-between; 
+gap: var(--s-2); 
+}
+.destinazione-contatore { font-size: 1rem; font-weight: 600; color: var(--coda-testo); }
+.destinazione-contatore[hidden] { display: none; }
+
+.destinazione-testo { margin: 0; max-width: var(--misura-testo); }
+.nota { font-size: .9375rem; color: var(--testo-tenue); }
+
+.coppia {
+  display: grid;
+  /* `minmax(0, 1fr)`, non `1fr`: senza lo zero le colonne non scendono sotto il
+     contenuto e a 320 px (WCAG 1.4.10) la pagina esce dallo schermo. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-5);
+  margin-bottom: var(--s-5);
+}
+
+/* Sotto i 40 rem le due colonne non ci stanno. */
+@media (max-width: 40rem) {
+  .coppia { grid-template-columns: minmax(0, 1fr); }
+  .destinazione.principale { padding: var(--s-5); }
+  .principale-titolo { font-size: 1.75rem; }
+}
+
+/* REGISTRA/AGGIORNA: spento, non `disabled` (illeggibile, non spiega nulla). */
+.destinazione.spenta { background: var(--superficie-incassata); 
+border-color: var(--bordo-tenue); 
+cursor: default; 
+}
+.destinazione.spenta .destinazione-titolo { color: var(--testo-tenue); }
+
+.etichetta-attenzione {
+  align-self: flex-start;
+  margin-top: var(--s-2);
+  padding: 2px 8px;
+  color: var(--attenzione-testo);
+  background: var(--attenzione-sfondo);
+  border-radius: var(--raggio-piccolo);
+  font-size: .9375rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+/* ===== Aiuto ===== */
+
+#aiuto { margin: var(--s-6) 0; 
+padding: var(--s-6); 
+background: var(--superficie); 
+border: 2px solid var(--bordo-tenue); 
+border-radius: var(--raggio); 
+}
+#aiuto h2 { margin: 0 0 var(--s-3); font-size: 1.375rem; color: var(--azione); }
+#aiuto h3 { margin: var(--s-5) 0 6px; font-size: 1.125rem; color: var(--azione); }
+#aiuto p { margin: 0 0 10px; max-width: var(--misura-testo); line-height: 1.6; }
+
+/* Etichetta di provenienza (in Aiuto). KB/Esterna non è affidata al colore: la
+   portano la parola, il tratto del bordo e la glossa. */
+.esempio { display: flex; 
+flex-wrap: wrap; 
+align-items: baseline; 
+gap: var(--s-2); 
+margin: 0 0 10px; 
+}
+.esempio-etichetta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: .9375rem;
+  line-height: 1.5;
+  color: var(--kb-testo);
+  background: var(--azione-sfondo-hover);
+  border: 1px solid var(--azione);
+  border-left: 2px solid var(--azione);
+  border-radius: var(--raggio-piccolo);
+}
+.esempio-etichetta.esterna { color: var(--esterna-testo); background: #fbf0ea;
+  border-style: dashed; border-left-style: solid; }
+.esempio-glossa { font-size: .9375rem; color: var(--testo-tenue); }
+
+.rinvio { margin-top: var(--s-5); 
+padding: 12px 14px; 
+background: var(--attenzione-sfondo); 
+color: var(--attenzione-testo); 
+border-radius: var(--raggio); 
+}
+
+/* ===== Piede ===== */
+
+.piede { padding: var(--s-4) 0 var(--s-8); color: var(--testo-tenue); }
+.piede p { margin: 0; }
+
+/* ===== Stampa ===== */
+
+@media print {
+  .salta, .azioni, .fascia { display: none; }
+  body { background: #fff; }
+  .destinazione, #aiuto { break-inside: avoid; }
+}

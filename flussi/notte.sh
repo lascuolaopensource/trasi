@@ -11,10 +11,6 @@
 # ferma gli altri: l'export della KB non deve dipendere dall'alert). Questo wrapper propaga invece
 # l'exit code — chi lo esegue a mano vuole sapere se *qualcosa* è andato storto.
 #
-# Fuori da questa catena, di proposito: `fonti_documenti.py` (file istituzionali ZIP/CSV/PDF → KB) è
-# **settimanale** (crontab, domenica 01:30) perché le sue fonti cambiano una volta l'anno; non è uno
-# dei sei passi e si prova a mano con `python3 flussi/fonti_documenti.py --dry-run`.
-#
 # Uso:
 #     flussi/notte.sh                  # tutti e sei i passi
 #     flussi/notte.sh --solo applica   # un solo passo
