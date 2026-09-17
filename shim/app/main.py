@@ -250,7 +250,6 @@ def crea_app() -> FastAPI:
             applicazione.include_router(_modulo.router, prefix="/op", include_in_schema=False)
         else:
             logger.warning("router non montato: shim/app/%s.py non espone `monta` né `router`", _nome)
-
     @applicazione.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:
         """Liveness del container: non tocca il database, così «healthy» significa «il processo risponde»."""

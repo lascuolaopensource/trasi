@@ -486,6 +486,50 @@ non c'è archivio delle password vecchie e non serve riavviare nessun servizio.
 - La Home pubblica (`trasi.…`) **non** richiede login: resta aperta come prima. Il login riguarda solo
   le funzioni operatore sotto `/op/…`.
 
+## Login PA / Rete AT (credenziali di servizio, US-4)
+
+Oltre alle credenziali per Casa esistono **due credenziali di servizio**, una per ruolo:
+
+| Ruolo | Chi lo usa | Accede a |
+|---|---|---|
+| `pa` | l'ente Pubblica Amministrazione | dashboard **PA** (`pa.html`): report osservatorio **approvati**, confronto mesi, lacune, chat di approfondimento |
+| `rete` | l'operatore referente (AT) | la stessa dashboard, **più** il pulsante «Approva» sulle bozze e le proprie bozze in lettura |
+
+Il login è `POST /servizio/login` con `{ruolo: "pa"|"rete", password}`: ritorna lo **stesso cookie
+`trasi_sessione`** del login operatori (HttpOnly + SameSite=Lax, 12 h), e un errore **401
+indistinto** — la risposta non dice se il ruolo non esiste o la password è sbagliata, e l'anti
+brute-force è quella già in uso (> 4 tentativi falliti in 10 minuti per ruolo → blocco di 10
+minuti). `POST /logout` chiude la sessione di servizio come le altre. La password sta in
+`trasi.credenziale_servizio` come hash bcrypt (`crypt`/`gen_salt`, pgcrypto): mai in chiaro.
+
+**Password iniziali (da cambiare al primo utilizzo): `rete2026!` · `pa2026!`** — seed di
+`db/026_report_pa.sql`, installati solo se mancanti (`INSERT` dei ruoli assenti: rieseguire la
+migrazione non reimposta una password già cambiata).
+
+### Rotazione di una credenziale di servizio
+
+Può farlo **solo `ti`**, come per le credenziali CdQ. Comando con la **nuova** password (evitare
+spazi e apici):
+
+```bash
+docker exec trasi-db_trasi-1 psql -U postgres -d trasi_db -c "
+  SET ROLE ti; SET search_path = trasi, public;
+  UPDATE credenziale_servizio SET pass_hash = crypt('NUOVA_PASSWORD', gen_salt('bf')),
+       aggiornato_ts = now(), aggiornato_da = current_user
+  WHERE ruolo = 'pa';"          -- oppure 'rete'
+```
+
+`UPDATE 1` = ruotata; `UPDATE 0` = il ruolo non è mai stato seedato → applicare db/026.
+Le **sessioni di servizio già aperte** restano valide fino allo scadere naturale (≤ 12 h); per
+tagliarle subito, cancellare le sessioni del ruolo (le sessioni di servizio hanno `casa_id NULL` e
+`ruolo_db` valorizzato — è la forma che le distingue dalle sessioni di Casa):
+
+```bash
+docker exec trasi-db_trasi-1 psql -U postgres -d trasi_db -c "
+  SET ROLE ti; SET search_path = trasi, public;
+  DELETE FROM sessione WHERE ruolo_db = 'pa';"   -- oppure 'rete'
+```
+
 ## Eccezioni V4 aggiornate (schede !NEW)
 
 V4 resta la regola: **le scritture al dominio avvengono solo via proposta → approvazione →

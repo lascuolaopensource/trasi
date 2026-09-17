@@ -36,12 +36,12 @@ BEGIN
   -- sorella ha aggiunto `pa` (monitoraggio PA, US-4) al DB condiviso, e un totale esatto è diventato
   -- rosso senza che il contratto fosse violato — la stessa lezione di O05, qui.
   SELECT count(*) INTO n_rc FROM trasi.ruolo_casa;
-  IF n_rc < 12 THEN RAISE EXCEPTION 'FAIL O02 — ruolo_casa ha % righe, attese >= 12 (10 Case + rete + ti)', n_rc; END IF;
-  -- Come sopra: il totale non è asserito perché il contratto cresce con gli usi (una sessione
-  -- sorella ha aggiunto l'identità del canale PA). Ciò che conta: **zero orfane** e le 10 Case con
-  -- il proprio ruolo e 2 identità — verificati sotto, e sono loro il presidio reale.
+  IF n_rc < 13 THEN RAISE EXCEPTION 'FAIL O02 — ruolo_casa ha % righe, attese >= 13 (10 Case + rete + ti + pa)', n_rc; END IF;
+  -- Come sopra: il totale non è asserito perché il contratto cresce con gli usi. Ciò che conta:
+  -- **zero orfane** e le 10 Case con il proprio ruolo e 2 identità — verificati sotto, e sono
+  -- loro il presidio reale.
   SELECT count(*) INTO n_id FROM trasi.identita_onyx;
-  IF n_id < 22 THEN RAISE EXCEPTION 'FAIL O02 — identita_onyx ha % righe, attese >= 22 (2 per Casa + rete + ti)', n_id; END IF;
+  IF n_id < 23 THEN RAISE EXCEPTION 'FAIL O02 — identita_onyx ha % righe, attese >= 23 (2 per Casa + rete + ti + pa)', n_id; END IF;
 
   SELECT count(*) INTO orfane FROM trasi.identita_onyx i LEFT JOIN trasi.ruolo_casa rc ON rc.ruolo = i.ruolo_db WHERE rc.ruolo IS NULL;
   IF orfane <> 0 THEN RAISE EXCEPTION 'FAIL O02 — % identità senza ruolo_casa corrispondente', orfane; END IF;
@@ -50,6 +50,12 @@ BEGIN
   SELECT (casa_id IS NULL) INTO ti_ok   FROM trasi.ruolo_casa WHERE ruolo = 'ti';
   IF NOT rete_ok THEN RAISE EXCEPTION 'FAIL O02 — rete ha una Casa (deve essere territorio: NULL)'; END IF;
   IF NOT ti_ok THEN RAISE EXCEPTION 'FAIL O02 — ti ha una Casa (deve essere NULL)'; END IF;
+  BEGIN
+    SELECT (casa_id IS NULL) INTO rete_ok FROM trasi.ruolo_casa WHERE ruolo = 'pa';
+    IF NOT rete_ok THEN RAISE EXCEPTION 'FAIL O02 — pa ha una Casa (deve essere NULL: è territorio)'; END IF;
+  EXCEPTION WHEN undefined_object THEN
+    RAISE EXCEPTION 'FAIL O02 — ruolo pa assente in ruolo_casa (US-4: il monitoraggio PA dipende da questo ruolo)';
+  END;
 
   -- ogni Casa ha esattamente il proprio ruolo e 2 identità
   SELECT count(*) INTO case_ok FROM trasi.ruolo_casa rc
@@ -57,7 +63,7 @@ BEGIN
      AND rc.ruolo = 'casa_' || replace((SELECT slug FROM trasi.casa c WHERE c.id = rc.casa_id), '-', '')
      AND (SELECT count(*) FROM trasi.identita_onyx i WHERE i.ruolo_db = rc.ruolo) = 2;
   IF case_ok <> 10 THEN RAISE EXCEPTION 'FAIL O02 — solo % Case hanno ruolo omonimo con 2 identità, attese 10', case_ok; END IF;
-  RAISE NOTICE 'PASS O02 — ruolo_casa % righe · identita_onyx % righe · 0 identità orfane · 10 Case con ruolo omonimo e 2 identità', n_rc, n_id;
+  RAISE NOTICE 'PASS O02 — ruolo_casa % righe · identita_onyx % righe · 0 identità orfane · 10 Case con ruolo omonimo e 2 identità · pa senza Casa', n_rc, n_id;
 END $$;
 
 -- O03 · ruolo `ti`: 3 identità di servizio mappate su identità esistenti ---------------------
@@ -74,16 +80,16 @@ BEGIN
   RAISE NOTICE 'PASS O03 — identità di servizio B7 presenti e mappate (op.san-bao → casa_sanbao)';
 END $$;
 
--- O04 · ruoli: 17, nessun BYPASSRLS/SUPERUSER, shim_rw NOINHERIT con 11 membership -----------
+-- O04 · ruoli: 18, nessun BYPASSRLS/SUPERUSER, shim_rw NOINHERIT con 12 membership -----------
 DO $$
 DECLARE
   ruoli text[] := ARRAY['casa_santaspazio','casa_molo12','casa_erranti','casa_buscicchio','casa_sanbao',
                         'casa_minimus','casa_pop','casa_bozzano','casa_dream','casa_tuturano',
-                        'rete','ti','metabase_ro','automazioni','shim_rw','applicatore','trasi_owner'];
+                        'rete','ti','pa','metabase_ro','automazioni','shim_rw','applicatore','trasi_owner'];
   creati integer; cattivi text; shim record; membri integer; senza_ti boolean; owner_applica record;
 BEGIN
   SELECT count(*) INTO creati FROM pg_roles WHERE rolname = ANY (ruoli);
-  IF creati <> 17 THEN RAISE EXCEPTION 'FAIL O04 — ruoli di progetto presenti: %, attesi 17', creati; END IF;
+  IF creati <> 18 THEN RAISE EXCEPTION 'FAIL O04 — ruoli di progetto presenti: %, attesi 18 (con pa del canale monitoraggio)', creati; END IF;
 
   SELECT string_agg(rolname, ', ') INTO cattivi FROM pg_roles WHERE rolname = ANY (ruoli) AND (rolsuper OR rolbypassrls);
   IF cattivi IS NOT NULL THEN RAISE EXCEPTION 'FAIL O04 — ruoli con SUPERUSER/BYPASSRLS: %', cattivi; END IF;
@@ -95,7 +101,7 @@ BEGIN
   -- La soglia è del contratto (10 Case + rete); il totale cresce con gli usi — la sessione PA ha
   -- aggiunto il ruolo `pa` — e il presidio vero è qui sotto: shim_rw non è mai membro di `ti`.
   SELECT count(*) INTO membri FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member WHERE r.rolname = 'shim_rw';
-  IF membri < 11 THEN RAISE EXCEPTION 'FAIL O04 — membership di shim_rw: %, attese >= 11 (10 Case + rete)', membri; END IF;
+  IF membri < 12 THEN RAISE EXCEPTION 'FAIL O04 — membership di shim_rw: %, attese >= 12 (10 Case + rete + pa)', membri; END IF;
   SELECT EXISTS (SELECT 1 FROM pg_auth_members m
                  JOIN pg_roles r ON r.oid = m.member JOIN pg_roles g ON g.oid = m.roleid
                  WHERE r.rolname = 'shim_rw' AND g.rolname = 'ti') INTO senza_ti;
@@ -105,8 +111,14 @@ BEGIN
   IF owner_applica.rolcanlogin THEN RAISE EXCEPTION 'FAIL O04 — trasi_owner è LOGIN (deve essere NOLOGIN)'; END IF;
   SELECT rolcanlogin INTO owner_applica FROM pg_roles WHERE rolname = 'applicatore';
   IF owner_applica.rolcanlogin THEN RAISE EXCEPTION 'FAIL O04 — applicatore è LOGIN (deve essere NOLOGIN)'; END IF;
+  -- `pa` è l'identità del canale monitoraggio: NOLOGIN come applicatore, e NO pa ∈ metabase_ro.
+  SELECT rolcanlogin INTO owner_applica FROM pg_roles WHERE rolname = 'pa';
+  IF owner_applica.rolcanlogin THEN RAISE EXCEPTION 'FAIL O04 — pa è LOGIN (deve essere NOLOGIN come trasi_owner/applicatore)'; END IF;
+  IF EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid JOIN pg_roles p ON p.oid = m.member
+              WHERE r.rolname = 'metabase_ro' AND p.rolname = 'pa') THEN
+    RAISE EXCEPTION 'FAIL O04 — pa è membro di metabase_ro (non deve esserlo)'; END IF;
 
-  RAISE NOTICE 'PASS O04 — 17 ruoli · 0 con SUPERUSER/BYPASSRLS · shim_rw NOINHERIT+LOGIN con % membership (>= 10 Case + rete, mai ti) · trasi_owner/applicatore NOLOGIN', membri;
+  RAISE NOTICE 'PASS O04 — 18 ruoli · 0 con SUPERUSER/BYPASSRLS · shim_rw NOINHERIT+LOGIN con % membership (10 Case + rete + pa, mai ti) · trasi_owner/applicatore/pa NOLOGIN', membri;
 END $$;
 
 -- O05 · schema trasi, tabelle, colonne chiave, indici ---------------------------------------

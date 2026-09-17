@@ -44,6 +44,8 @@ BEGIN
 END $$;
 
 -- R01 · il flusso GENERA il report (INSERT): è la sua funzione -------------------------------
+-- Il report osservatorio di US-4 ha `casa_id NULL` (CHECK di db/026: ambito osservatorio ⟺
+-- nessuna Casa): il fixture qui sotto genera l'aggregato di rete, non il report di Bozzano.
 DO $$
 DECLARE n integer;
 BEGIN
