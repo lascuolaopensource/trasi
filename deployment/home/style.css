@@ -15,15 +15,23 @@
   --kb-testo: #07577b; --esterna-testo: #7a3d20; --coda-testo: #7a3d20;
   --attenzione-testo: #6b4a00; --attenzione-sfondo: #ffe9a8;
   --focus: #f6af37; --focus-contorno: #043044;
-  /* Di sistema: nessun font remoto. Il monospaziato serve solo alle etichette di
+  /* Commissioner è locale: il monospaziato resta solo per le etichette di
      provenienza, che sono stringhe da citare carattere per carattere. */
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font: "Commissioner", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
   --s-6: 24px; --s-8: 32px;
   --raggio: 10px; --raggio-piccolo: 4px; --bersaglio-min: 44px;
   --misura-lettura: 62rem; --misura-testo: 36rem;
   --transizione: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+}
+
+@font-face {
+  font-family: "Commissioner";
+  src: url("assets/CommissionerVF.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
 }
 
 @media (prefers-reduced-motion: reduce) {

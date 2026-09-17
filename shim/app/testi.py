@@ -225,10 +225,17 @@ def _foglio(
   <meta charset="utf-8">
   <title>{html.escape(titolo)}</title>
   <style>
+    @font-face {{
+      font-family: "Commissioner";
+      src: url("/assets/CommissionerVF.ttf") format("truetype");
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }}
     @page {{ size: {formato}; margin: 8mm }}
     @media print {{ body {{ margin: 0 }} .no-print {{ display: none }} }}
     :root {{ color-scheme: light }}
-    body {{ font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    body {{ font-family: "Commissioner", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
             font-size: 10pt; line-height: 1.35; color: #14181f; margin: 8mm; max-width: {larghezza} }}
     h1 {{ font-size: 14pt; margin: 0 0 .4rem; line-height: 1.2 }}
     .badge {{ font-size: 8pt; color: #3d4756; border: 1px solid #c8cfd9; border-radius: 3px;

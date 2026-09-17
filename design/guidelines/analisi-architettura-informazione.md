@@ -113,9 +113,7 @@ I tre colori di marca (#0B90CB mare, #CC7E5B terra, #F6AF37 sole, campionati dal
 Quartiere) **non portano mai testo**: stanno fra 1,9:1 e 3,6:1. Vivono nei filetti, nel marchio e
 nei fondi. Il testo usa le varianti profonde.
 
-**Tipografia**: font di sistema (nessun font remoto), base 16 px, scala 15 · 16 · 17 · 18 · 20 · 22 ·
-28 · 36 px. Il 15 px è ammesso solo per etichette e note, mai per testo corrente. Le etichette di
-provenienza sono in monospaziato di sistema, perché sono stringhe da citare, non prosa.
+**Tipografia**: Commissioner locale con fallback di sistema, base 16 px, scala 15 · 16 · 17 · 18 · 20 · 22 · 28 · 36 px. Il 15 px è ammesso solo per etichette e note, mai per testo corrente. Le etichette di provenienza restano in monospaziato di sistema, perché sono stringhe da citare, non prosa.
 
 **Spaziature**: passo di 4 px, da 4 a 64. Padding di scheda 20 px, griglia 20 px, pagina 24 px.
 
@@ -191,10 +189,7 @@ in pentola* — stanno nella stessa fascia, una sopra l'altra.
 3. **Il comportamento della pagina.** Un solo `localStorage` con lo slug; gli `href` riscritti da
    `data-modello`; la scadenza a 3 secondi; il ritorno a «dati non disponibili» per qualunque
    guasto. Non tocco niente di questo: è già la cosa giusta e la veste non lo richiede.
-4. **Zero dipendenze e il peso.** Font di sistema, nessuna icona da libreria, nessuna immagine
-   decorativa. L'unica immagine è il logo della rete (~20 KB in PNG): se i 30 KB totali sono un
-   tetto rigido, il logo va servito come singolo PNG ottimizzato o sostituito dal solo logotipo
-   «TRASI» in tipografia — la testata funziona anche senza marchio.
+4. **Dipendenze locali e peso.** Commissioner è incluso nel repository e non richiede rete esterna; il font aggiunge circa 1 MB al primo caricamento. Nessuna icona da libreria e nessuna immagine decorativa: l'unica immagine è il logo della rete (~20 KB in PNG).
 5. **Il focus a due anelli.** Giallo + anello scuro è la soluzione che rende il focus visibile sia
    sulla carta sia sulla testata blu. L'ho ripresa identica, cambiando solo il giallo (#FFD400 →
    #F6AF37, il giallo del marchio).
