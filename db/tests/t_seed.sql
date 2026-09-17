@@ -32,10 +32,16 @@ END $$;
 DO $$
 DECLARE n_rc integer; n_id integer; orfane integer; rete_ok boolean; ti_ok boolean; case_ok integer;
 BEGIN
+  -- Il conteggio dei ruoli *di servizio* è per nome (`rete`, `ti`), non per totale: una sessione
+  -- sorella ha aggiunto `pa` (monitoraggio PA, US-4) al DB condiviso, e un totale esatto è diventato
+  -- rosso senza che il contratto fosse violato — la stessa lezione di O05, qui.
   SELECT count(*) INTO n_rc FROM trasi.ruolo_casa;
-  IF n_rc <> 12 THEN RAISE EXCEPTION 'FAIL O02 — ruolo_casa ha % righe, attese 12 (10 Case + rete + ti)', n_rc; END IF;
+  IF n_rc < 12 THEN RAISE EXCEPTION 'FAIL O02 — ruolo_casa ha % righe, attese >= 12 (10 Case + rete + ti)', n_rc; END IF;
+  -- Come sopra: il totale non è asserito perché il contratto cresce con gli usi (una sessione
+  -- sorella ha aggiunto l'identità del canale PA). Ciò che conta: **zero orfane** e le 10 Case con
+  -- il proprio ruolo e 2 identità — verificati sotto, e sono loro il presidio reale.
   SELECT count(*) INTO n_id FROM trasi.identita_onyx;
-  IF n_id <> 22 THEN RAISE EXCEPTION 'FAIL O02 — identita_onyx ha % righe, attese 22 (2 per Casa + rete + ti)', n_id; END IF;
+  IF n_id < 22 THEN RAISE EXCEPTION 'FAIL O02 — identita_onyx ha % righe, attese >= 22 (2 per Casa + rete + ti)', n_id; END IF;
 
   SELECT count(*) INTO orfane FROM trasi.identita_onyx i LEFT JOIN trasi.ruolo_casa rc ON rc.ruolo = i.ruolo_db WHERE rc.ruolo IS NULL;
   IF orfane <> 0 THEN RAISE EXCEPTION 'FAIL O02 — % identità senza ruolo_casa corrispondente', orfane; END IF;
@@ -51,7 +57,7 @@ BEGIN
      AND rc.ruolo = 'casa_' || replace((SELECT slug FROM trasi.casa c WHERE c.id = rc.casa_id), '-', '')
      AND (SELECT count(*) FROM trasi.identita_onyx i WHERE i.ruolo_db = rc.ruolo) = 2;
   IF case_ok <> 10 THEN RAISE EXCEPTION 'FAIL O02 — solo % Case hanno ruolo omonimo con 2 identità, attese 10', case_ok; END IF;
-  RAISE NOTICE 'PASS O02 — ruolo_casa 12 righe · identita_onyx 22 righe · 0 identità orfane · 10 Case con ruolo omonimo e 2 identità';
+  RAISE NOTICE 'PASS O02 — ruolo_casa % righe · identita_onyx % righe · 0 identità orfane · 10 Case con ruolo omonimo e 2 identità', n_rc, n_id;
 END $$;
 
 -- O03 · ruolo `ti`: 3 identità di servizio mappate su identità esistenti ---------------------
@@ -86,8 +92,10 @@ BEGIN
   IF shim.rolinherit THEN RAISE EXCEPTION 'FAIL O04 — shim_rw ha INHERIT (deve essere NOINHERIT: i privilegi si prendono solo con SET LOCAL ROLE)'; END IF;
   IF NOT shim.rolcanlogin THEN RAISE EXCEPTION 'FAIL O04 — shim_rw non può fare login (il DATABASE_URL dello shim lo richiede)'; END IF;
 
+  -- La soglia è del contratto (10 Case + rete); il totale cresce con gli usi — la sessione PA ha
+  -- aggiunto il ruolo `pa` — e il presidio vero è qui sotto: shim_rw non è mai membro di `ti`.
   SELECT count(*) INTO membri FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member WHERE r.rolname = 'shim_rw';
-  IF membri <> 11 THEN RAISE EXCEPTION 'FAIL O04 — membership di shim_rw: %, attese 11 (10 Case + rete)', membri; END IF;
+  IF membri < 11 THEN RAISE EXCEPTION 'FAIL O04 — membership di shim_rw: %, attese >= 11 (10 Case + rete)', membri; END IF;
   SELECT EXISTS (SELECT 1 FROM pg_auth_members m
                  JOIN pg_roles r ON r.oid = m.member JOIN pg_roles g ON g.oid = m.roleid
                  WHERE r.rolname = 'shim_rw' AND g.rolname = 'ti') INTO senza_ti;
@@ -98,7 +106,7 @@ BEGIN
   SELECT rolcanlogin INTO owner_applica FROM pg_roles WHERE rolname = 'applicatore';
   IF owner_applica.rolcanlogin THEN RAISE EXCEPTION 'FAIL O04 — applicatore è LOGIN (deve essere NOLOGIN)'; END IF;
 
-  RAISE NOTICE 'PASS O04 — 17 ruoli · 0 con SUPERUSER/BYPASSRLS · shim_rw NOINHERIT+LOGIN con 11 membership (10 Case + rete, senza ti) · trasi_owner/applicatore NOLOGIN';
+  RAISE NOTICE 'PASS O04 — 17 ruoli · 0 con SUPERUSER/BYPASSRLS · shim_rw NOINHERIT+LOGIN con % membership (>= 10 Case + rete, mai ti) · trasi_owner/applicatore NOLOGIN', membri;
 END $$;
 
 -- O05 · schema trasi, tabelle, colonne chiave, indici ---------------------------------------
@@ -146,10 +154,19 @@ BEGIN
                     WHERE ic.table_schema = 'trasi' AND ic.table_name = c.tab AND ic.column_name = c.col);
   IF mancanti IS NOT NULL THEN RAISE EXCEPTION 'FAIL O05 — colonne mancanti: %', mancanti; END IF;
 
-  -- `richiesta` non deve contenere campi per il cittadino (V5)
+  -- `richiesta` non deve contenere campi **identificativi** del cittadino (V5).
+  --
+  -- Il 2026-09-17 il gruppo Processi ha deciso la forma per il foglio 4.4 (db/028): fascia d'età,
+  -- genere e area di provenienza **a vocabolario chiuso**, con i conteggi esposti solo mascherati da
+  -- `trasi.v_fasce_cittadino`. Sono attributi *del colloquio*, non della persona: non c'è un nome, non
+  -- c'è un id, non c'è la data di nascita da cui l'età si ricalcola, e l'elenco qui sotto resta
+  -- **chiuso** — qualsiasi altra colonna (un nome, un recapito, testo libero) continua a fare fallire
+  -- questo test. È la differenza fra «il contratto è cambiato per decisione» e «qualcuno ha aggiunto
+  -- un campo»: la prima è qui, documentata; la seconda è un rosso.
   SELECT string_agg(column_name, ', ') INTO colonne FROM information_schema.columns
    WHERE table_schema = 'trasi' AND table_name = 'richiesta'
-     AND column_name NOT IN ('id','casa_id','ts','categoria','esito','destinazione_id','destinazione_nota');
+     AND column_name NOT IN ('id','casa_id','ts','categoria','esito','destinazione_id','destinazione_nota',
+                             'fascia_eta','genere','provenienza');
   IF colonne IS NOT NULL THEN RAISE EXCEPTION 'FAIL O05 (V5) — richiesta ha colonne extra: %', colonne; END IF;
 
   -- indici richiesti
@@ -162,9 +179,8 @@ BEGIN
   WHERE NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='trasi' AND indexname=v.i AND indexdef LIKE '%USING gist%');
   IF mancanti IS NOT NULL THEN RAISE EXCEPTION 'FAIL O05 — indici non GIST: %', mancanti; END IF;
 
-  RAISE NOTICE 'PASS O05 — schema trasi owner trasi_owner · % tabelle (tutte le 20 attese presenti) · colonne chiave presenti · richiesta senza campi per il cittadino · 6 indici (2 GIST)', n;
+  RAISE NOTICE 'PASS O05 — schema trasi owner trasi_owner · % tabelle (contratto per nome) · colonne chiave presenti · richiesta senza campi identificativi del cittadino (fasce 4.4 ammesse, db/028) · indici (2 GIST)', n;
 END $$;
-
 -- O06 · vincoli del dominio: vocabolario chiuso, CHECK esito/destinazione, motivazione ≤ 80, uid_ical ----
 DO $$
 DECLARE violato boolean := false; msg text;

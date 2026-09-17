@@ -253,3 +253,60 @@ BEGIN
   IF senza_ruolo IS NOT NULL THEN RAISE EXCEPTION 'FAIL T13 — shim_rw ha una Casa corrente (%) pur senza riga in ruolo_casa', senza_ruolo; END IF;
   RAISE NOTICE 'PASS T13 — casa_corrente() = 5 da ruolo_casa, invariata con GUC spoofata, NULL per shim_rw';
 END $$;
+
+-- T14 · persona_casa (db/029): una Casa non scrive le persone di un'altra ----------------------------
+-- I nomi sono l'unico dato personale che lo shim scrive del dominio (decisione del gruppo Processi,
+-- forma C): l'isolamento cross-Casa non è un dettaglio, è ciò che impedisce a una Casa di pubblicare
+-- in KB il nome di chi lavora altrove. Policy `pers_ins_casa`/`pers_upd_casa`, qui verificate.
+DO $$
+DECLARE bozzano int; n int;
+BEGIN
+  SELECT id INTO bozzano FROM trasi.casa WHERE slug = 'bozzano';
+
+  EXECUTE 'SET ROLE casa_sanbao';
+  BEGIN
+    INSERT INTO trasi.persona_casa (casa_id, nome, ruolo, consenso_il)
+    VALUES (bozzano, 'Persona di Bozzano via San Bao', 'volontario', current_date);
+    n := 1;
+  EXCEPTION WHEN insufficient_privilege THEN n := 0;   -- atteso: la policy `pers_ins_casa` rifiuta
+  END;
+  EXECUTE 'RESET ROLE';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL T14 — san-bao ha inserito una persona di bozzano: la RLS non isola persona_casa'; END IF;
+
+  -- Una persona di Bozzano c'è davvero (scritta da Bozzano): senza fixture UPDATE e DELETE cross-Casa
+  -- toccherebbero 0 righe per assenza di righe, non per la RLS, e il test passerebbe a vuoto.
+  EXECUTE 'SET ROLE casa_bozzano';
+  INSERT INTO trasi.persona_casa (casa_id, nome, ruolo, consenso_il)
+  VALUES (bozzano, 'Persona di Bozzano (fixture T14)', 'volontario', current_date);
+  EXECUTE 'RESET ROLE';
+
+  -- E nemmeno si aggira con un UPDATE delle righe di un'altra Casa.
+  EXECUTE 'SET ROLE casa_sanbao';
+  BEGIN
+    UPDATE trasi.persona_casa SET ruolo = 'riscritto da san-bao' WHERE casa_id = bozzano;
+    GET DIAGNOSTICS n = ROW_COUNT;
+  EXCEPTION WHEN insufficient_privilege THEN n := 0;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL T14 — san-bao ha aggiornato % persone di Bozzano', n; END IF;
+
+  -- Né con un DELETE (`pers_del_casa`): cancellare il nome di chi lavora altrove è una scrittura come
+  -- le altre — la revoca la fa la Casa che ha raccolto il consenso.
+  EXECUTE 'SET ROLE casa_sanbao';
+  BEGIN
+    DELETE FROM trasi.persona_casa WHERE casa_id = bozzano;
+    GET DIAGNOSTICS n = ROW_COUNT;
+  EXCEPTION WHEN insufficient_privilege THEN n := 0;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL T14 — san-bao ha cancellato % persone di Bozzano', n; END IF;
+
+  -- La fixture la toglie chi la può toccare: la sua Casa.
+  EXECUTE 'SET ROLE casa_bozzano';
+  DELETE FROM trasi.persona_casa WHERE nome = 'Persona di Bozzano (fixture T14)';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  EXECUTE 'RESET ROLE';
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL T14 — Bozzano non ha potuto cancellare la propria persona (% righe)', n; END IF;
+
+  RAISE NOTICE 'PASS T14 — persona_casa: INSERT, UPDATE e DELETE cross-Casa → 0 righe/42501; la propria Casa cancella (la RLS isola anche i nomi)';
+END $$;
