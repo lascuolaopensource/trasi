@@ -890,3 +890,84 @@ def test_log_non_contiene_messaggio_ne_risposta(app_cliente, caplog):
     assert risposta_testo not in testo, "la risposta dell'assistente non entra nel log"
     assert TOKEN_DI_PROVA not in testo, "il PAT non entra nel log"
     assert EMAIL_OPERATORE not in testo, "l'email dell'identità non entra nel log"
+
+
+# --- P4.1: la prima domanda si salva all'apertura ---------------------------------------------------------------
+
+
+def test_apertura_con_prima_domanda_scrive_il_turno_prima_di_onyx(app_cliente):
+    """T18 — `POST /op/conversazioni {"messaggio": …}` scrive il turno dell'operatore **nell'apertura**.
+
+    L'ordine conta: conversazione → turno dell'operatore → (poi, nel vivo, Onyx). La richiesta dello sportello
+    esiste nello storico subito: un guasto della risposta non la cancella, e il titolo della conversazione è la
+    domanda (trigger di db/021), non una riga senza titolo.
+    """
+    client, sessione, _ = app_cliente()
+
+    with respx.mock(assert_all_called=True) as mock:
+        mock.post(URL_CREA).mock(return_value=httpx.Response(200, json={"chat_session_id": "sessione-onyx-nuova"}))
+        risposta = client.post("/op/conversazioni", json={"messaggio": "Dove si fa l'ISEE vicino a qui?"})
+
+    assert risposta.status_code == 201
+    turni = sessione.turni_scritti()
+    assert len(turni) == 1
+    assert turni[0]["ruolo"] == "operatore"
+    assert turni[0]["testo"] == "Dove si fa l'ISEE vicino a qui?"
+
+    # L'INSERT del turno viene dopo quello della conversazione: la domanda si aggancia alla riga che esiste.
+    ordine = [s.split("VALUES", 1)[0].strip() for s, _ in sessione.scritture]
+    assert ordine[0].startswith("INSERT INTO trasi.conversazione")
+    assert ordine[1].startswith("INSERT INTO trasi.turno")
+
+
+def test_apertura_a_vuoto_non_scrive_turni(app_cliente):
+    """T19 (a) — il corpo vuoto apre la conversazione senza turni: il contratto con chi già la usa non cambia."""
+    client, sessione, _ = app_cliente()
+
+    with respx.mock:
+        respx.post(URL_CREA).mock(return_value=httpx.Response(200, json={"chat_session_id": "s"}))
+        risposta = client.post("/op/conversazioni", json={})
+
+    assert risposta.status_code == 201
+    assert sessione.turni_scritti() == []
+
+
+def test_apertura_con_corpo_assente_non_scrive_turni(app_cliente):
+    """T19 (b) — la UI può non mandare corpo: nessun turno, stessa risposta."""
+    client, sessione, _ = app_cliente()
+
+    with respx.mock:
+        respx.post(URL_CREA).mock(return_value=httpx.Response(200, json={"chat_session_id": "s"}))
+        risposta = client.post("/op/conversazioni")
+
+    assert risposta.status_code == 201
+    assert sessione.turni_scritti() == []
+
+
+def test_apertura_con_dato_personale_risponde_422_e_non_scrive_niente(app_cliente):
+    """T19 (c) — il filtro anti-PII precede qualunque scrittura: nessuna conversazione, nessun turno, nessun
+    token consumato da Onyx."""
+    client, sessione, _ = app_cliente()
+
+    with respx.mock:
+        respx.post(URL_CREA).mock(return_value=httpx.Response(200, json={"chat_session_id": "s"}))
+        risposta = client.post(
+            "/op/conversazioni", json={"messaggio": "Chiamatemi al +390000000"}
+        )
+
+    assert risposta.status_code == 422
+    assert "dato_personale_sospetto" in risposta.json()["detail"]
+    assert sessione.scritture == [], "niente righe con un dato personale nel testo"
+
+
+def test_sessione_onyx_che_non_si_apre_non_lascia_la_prima_domanda(app_cliente):
+    """T19 (c) — se la sessione Onyx non si apre non si crea nemmeno la conversazione: il 503 è onesto, e la
+    domanda non resta appesa a una riga senza sessione (quella riga non potrebbe riceverne altri)."""
+    client, sessione, _ = app_cliente()
+
+    with respx.mock:
+        respx.post(URL_CREA).mock(side_effect=httpx.ConnectError("Onyx spento"))
+        risposta = client.post("/op/conversazioni", json={"messaggio": MESSAGGIO})
+
+    assert risposta.status_code == 503
+    assert sessione.scritture == []

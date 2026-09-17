@@ -61,6 +61,7 @@ from .chat import (
     prepara_invio,
 )
 from .errori import errore
+from .pii import rifiuta_se_presente
 
 router = APIRouter()
 
@@ -77,17 +78,6 @@ RUOLO_OPERATORE = "operatore"
 RUOLO_ASSISTENTE = "assistente"
 
 
-class ConversazioneIn(BaseModel):
-    """Il corpo di `POST /op/conversazioni`: **vuoto**, e `extra="forbid"` lo impone (V5).
-
-    Non c'è un `casa_id` perché la Casa è quella della sessione, non una scelta del chiamante: è lo stesso principio
-    per cui `sessione_corrente` fa `SET LOCAL ROLE` prima di ogni query. Un corpo con una chiave in più è un `422` di
-    validazione, non un campo ignorato in silenzio.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-
 class MessaggioIn(BaseModel):
     """Il corpo di `POST /op/conversazioni/{id}/messaggi`: `{"messaggio"}`, nient'altro (`extra="forbid"`).
 
@@ -102,6 +92,25 @@ class MessaggioIn(BaseModel):
         min_length=1,
         max_length=2000,
         description="Domanda dell'operatore per l'assistente (max 2000 caratteri).",
+    )
+
+
+class ConversazioneApertaIn(BaseModel):
+    """Il corpo di `POST /op/conversazioni`: niente, oppure `{"messaggio": …}` con la prima domanda (P4.1).
+
+    Quando la UI apre una conversazione **per porre una domanda**, la domanda arriva qui e viene salvata
+    nell'apertura (`turno` ruolo `operatore`), non dopo la risposta: la richiesta di una persona che serve il
+    tavolo deve esistere nello storico **già all'apertura** — un `503` di Onyx non la cancella, e il titolo della
+    conversazione (primi 40 caratteri del testo, trigger di db/021) è la domanda, non «Conversazione senza titolo».
+    Vuoto o assente = apertura a vuoto, come prima: il contratto con chi non manda `messaggio` non cambia.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    messaggio: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=2000,
+        description="Prima domanda da salvare all'apertura; assente = apertura senza turno.",
     )
 
 
@@ -224,13 +233,14 @@ async def _scrivi_turno(
     operation_id="op_conversazioni_crea",
     status_code=201,
     summary="Apre una conversazione con l'assistente della rete per la Casa della sessione, con la sua "
-    "sessione Onyx già legata: i turni successivi riusano quella, quindi il contesto resta.",
+    "sessione Onyx già legata: i turni successivi riusano quella, quindi il contesto resta. Con "
+    '{"messaggio": …} salva la prima domanda all\'apertura (P4.1).',
     tags=["op"],
 )
 async def op_conversazioni_crea(
-    corpo: ConversazioneIn | None = None, sess: SessioneOperatore = Depends(sessione_corrente)
+    corpo: ConversazioneApertaIn | None = None, sess: SessioneOperatore = Depends(sessione_corrente)
 ) -> dict[str, Any]:
-    """POST /op/conversazioni `{}` → 201 `{conversazione_id, creato_ts}`; 401; 503 (database o Onyx).
+    """POST /op/conversazioni `{}` o `{"messaggio": …}` → 201 `{conversazione_id, creato_ts}`; 401; 503 (database o Onyx).
 
     La sessione Onyx si apre **qui** e non al primo messaggio, per due ragioni. La prima è che la riga di
     `conversazione` deve uscire da questa chiamata con `onyx_session_id` già valorizzato: sui ruoli Casa non c'è
@@ -240,9 +250,17 @@ async def op_conversazioni_crea(
 
     Se la sessione Onyx non si apre, si risponde `503` e **non** si crea nessuna conversazione: una conversazione
     senza la sua sessione sarebbe uno storico di domande senza contesto, cioè il difetto che questo modulo corregge.
+
+    **P4.1 (17/09/2026) — la prima domanda si salva all'apertura.** Con `{"messaggio": …}` il turno dell'operatore
+    viene scritto subito dopo l'`INSERT` della conversazione, prima di parlare con Onyx: la richiesta dello sportello
+    esiste nello storico **già all'apertura**, e un `503` di Onyx la lascia nel titolo della conversazione al posto
+    di cancellarla. Il filtro anti-PII gira **prima** di qualunque scrittura — un testo con un telefono non lascia
+    riga, come da contratto. Il corpo vuoto (o assente) apre a vuoto come sempre.
     """
     # Il corpo è dichiarato opzionale perché la UI manda `{}` (o niente): l'unico contenuto lecito è «nessuno».
-    _ = corpo
+    # Con un messaggio, il filtro anti-PII è il primo controllo che lo riguarda, prima del token.
+    if corpo is not None and corpo.messaggio:
+        rifiuta_se_presente({"messaggio": corpo.messaggio})
 
     # `prepara_invio` non si può usare qui: il suo primo controllo è il PII su un messaggio che non esiste ancora.
     # Token e identità però si controllano **prima** di parlare con Onyx, come là: un 503 dichiarato prima di una
@@ -267,6 +285,13 @@ async def op_conversazioni_crea(
         """,
         sessione_onyx,
     )
+
+    prima_domanda = corpo.messaggio if corpo is not None else None
+    if prima_domanda:
+        # All'apertura, e prima di ogni chiamata a Onyx: la richiesta dello sportello è già nello storico. Se la
+        # risposta di Onyx non arriva, il `503` parte da qui e la conversazione resta con la sua domanda come titolo.
+        await _scrivi_turno(sess, riga["id"], RUOLO_OPERATORE, prima_domanda)
+
     return {"conversazione_id": riga["id"], "creato_ts": _ts(riga["creato_ts"])}
 
 
@@ -468,8 +493,7 @@ def monta(applicazione: FastAPI) -> None:
 
 __all__ = [
     "DETAIL_CONVERSAZIONE_NON_TROVATA",
-    "ConversazioneIn",
-    "MessaggioIn",
+    "ConversazioneApertaIn",
     "RUOLO_ASSISTENTE",
     "RUOLO_OPERATORE",
     "TETTO_CONVERSAZIONI",

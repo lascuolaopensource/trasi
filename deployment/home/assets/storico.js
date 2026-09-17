@@ -88,6 +88,12 @@
     window.Trasi.montaPannello(
       '<div class="pannello-testa">' +
         '<button class="bottone storico-nuova" type="button" id="storico-nuova">Nuova conversazione</button>' +
+        '<form id="storico-nuova-form" class="storico-nuova-form" hidden>' +
+          '<label class="storico-nuova-etichetta" for="storico-nuova-testo">La domanda della persona</label>' +
+          '<input id="storico-nuova-testo" maxlength="2000" autocomplete="off" ' +
+                 'placeholder="Es. dove si fa l\'ISEE vicino a qui?">' +
+          '<button class="bottone" type="submit">Apri la conversazione</button>' +
+        '</form>' +
       '</div>' +
       '<div class="pannello-corpo">' +
         '<div id="storico-lista" class="storico-elenco" aria-label="Conversazioni"></div>' +
@@ -96,7 +102,31 @@
     );
 
     var bottone = document.getElementById("storico-nuova");
-    if (bottone) {
+    var modulo = document.getElementById("storico-nuova-form");
+    if (bottone && modulo) {
+      /* Il bottone apre il modulo della domanda: l'apertura **salva** la domanda (P4.1) e poi porta
+         a Onyx. «Nuova conversazione» senza domanda resta la via diretta. */
+      bottone.addEventListener("click", function () {
+        modulo.hidden = !modulo.hidden;
+        if (!modulo.hidden) {
+          var testo = document.getElementById("storico-nuova-testo");
+          if (testo) testo.focus();
+        }
+      });
+      modulo.addEventListener("submit", function (evento) {
+        evento.preventDefault();
+        var testo = document.getElementById("storico-nuova-testo");
+        var domanda = testo ? testo.value.trim() : "";
+        if (!domanda) { apriOnyx(); return; }
+        window.Trasi.api("/op/conversazioni", { method: "POST", body: { messaggio: domanda } })
+          .then(function () { apriOnyx(); })
+          .catch(function (e) {
+            /* L'apertura senza salvataggio non deve bloccare il dialogo: Onyx resta il luogo della
+               conversazione, e il difetto della richiesta non salvata è dello shim, non dello sportello. */
+            apriOnyx();
+          });
+      });
+    } else if (bottone) {
       bottone.addEventListener("click", apriOnyx);
     }
 

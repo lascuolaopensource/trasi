@@ -68,3 +68,11 @@
 .report-cella-n { font-variant-numeric: tabular-nums; }
 .report-nota { margin: 0; color: var(--testo-tenue); font-size: var(--t-minuto, 0.9375rem); }
 .report-azioni { margin: 0; }
+
+
+/* «Nuova conversazione» con la domanda da salvare (P4.1): il modulo si apre sotto il bottone, una
+   riga sola. L'etichetta è visibile (un campo senza nome è una casella che non si sa riempire). */
+.storico-nuova-form { display: flex; flex-direction: column; gap: var(--s-2, 8px); margin-top: var(--s-2, 8px); }
+.storico-nuova-form[hidden] { display: none; }
+.storico-nuova-etichetta { font-size: var(--t-minuto, 0.9375rem); color: var(--testo-tenue); }
+.storico-nuova-form input { padding: var(--s-2, 8px) var(--s-3, 12px); border: 1px solid var(--bordo-tenue, #C9C3B6); border-radius: var(--raggio-piccolo, 4px); font: inherit; }
