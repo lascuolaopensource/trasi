@@ -15,7 +15,7 @@
   "use strict";
 
   var SEZIONI = ["la-casa", "numeri", "proposte", "registra", "attrezzoteca",
-                 "messaggi", "conversazioni", "impostazioni"];
+                 "messaggi", "impostazioni"];
   var PREDEFINITA = "la-casa";
 
   var vista = document.getElementById("acc-vista");

@@ -261,7 +261,6 @@
       titolo(dati);
       applica();
       aggiornaEtichette();
-      montaPannello();
       return dati;
     });
   }
@@ -434,26 +433,6 @@
     if (case1) { case1.textContent = "Case della rete (" + stato.case.length + ")"; }
     var luoghi = document.querySelector('label[for="filtro-luoghi"]');
     if (luoghi) { luoghi.textContent = "Luoghi della rete (" + stato.luoghi.length + ")"; }
-  }
-
-  /* ------------------------------------------------------------------ il pannello contestuale
-   *
-   * §4 del contratto: in Osservatorio il pannello è la **chat compatta** — «l'ultimo scambio e il
-   * compositore compatto», con in testa «Apri nella Home». La conversazione vive nel modulo della
-   * Home (`chat.js`): qui non se ne tiene una seconda copia, perché «la conversazione corrente è
-   * **una sola** per sessione» (§3.2). Il corpo del pannello lo riempie il modulo che possiede la
-   * chat; qui si dichiara il contenitore e il collegamento in testa.
-   */
-  function montaPannello() {
-    window.Trasi.montaPannello(
-      '<div class="pannello-testa"><a class="azione" href="home.html">Apri nella Home</a></div>' +
-      '<div class="pannello-corpo" id="chat-compatta"></div>'
-    );
-    /* Se il modulo della chat compatta esiste monta sé stesso nel contenitore; altrimenti il
-     * pannello resta con il solo collegamento, che è comunque la via per la conversazione. */
-    if (window.TrasiChatCompatta && typeof window.TrasiChatCompatta.monta === "function") {
-      window.TrasiChatCompatta.monta(document.getElementById("chat-compatta"));
-    }
   }
 
   /* ------------------------------------------------------------------ avvio */

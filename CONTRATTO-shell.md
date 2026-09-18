@@ -17,14 +17,12 @@ o lo **caricano**, non lo modificano.
 | `_shell.html` | BOT-1 | il guscio: testata, sidebar, pannello, main, piede. **Contiene segnaposto**, non contenuti |
 | `assets/struttura.css` | BOT-1 | layout, griglia, classi del contratto. **Nessuna scelta di veste** |
 | `assets/veste.css` | BOT-1 | ciò che X sostituisce. Importa i token di `design/tokens/` |
-| `assets/shell.js` | BOT-1 | sessione (`GET /me`), apertura/chiusura sidebar, «Menu», «Esci», popolamento del pannello |
-| `index.html` | BOT-1 | **Accesso** (se non c'è sessione) **e** Home: due viste dello stesso file |
-| `home.html` | BOT-2 | la chat: stato vuoto, suggerimenti, turni, compositore |
-| `assets/chat.js` | BOT-2 | la macchina a stati della chat (§4.1 del piano) |
-| `assets/storico.js` | BOT-2 | il pannello storico nella sidebar |
+| `assets/shell.js` | BOT-1 | sessione (`GET /me`), apertura/chiusura sidebar, «Menu», «Esci», popolamento del pannello, voce «Chiedi» → Onyx (`GET /op/config`) |
+| `index.html` | BOT-1 | **Accesso** (se non c'è sessione); a sessione aperta rimanda a `osservatorio.html` |
+| `home.html` | BOT-1 | **non è più la chat**: rimanda a Onyx (`window.Trasi.onyx`) chi la apre da un vecchio segnalibro o da `?c=<id>` |
 | `osservatorio.html` | BOT-3 | mappa, elenco, scheda (tre viste dello stesso file) |
 | `assets/mappa.js` | BOT-3 | Leaflet, pin, legenda, sincronizzazione con l'elenco |
-| `account.html` | BOT-4 | la **pagina singola**: carica le 8 sezioni e ne mostra una |
+| `account.html` | BOT-4 | la **pagina singola**: carica le 7 sezioni e ne mostra una |
 | `assets/account.js` | BOT-4 | sotto-navigazione, caricamento delle sezioni via `fetch` |
 | `account/la-casa.html` | BOT-4 | sezione 1 (frammento, **solo markup**) |
 | `account/proposte.html` | BOT-4 | sezione 3 |
@@ -32,8 +30,7 @@ o lo **caricano**, non lo modificano.
 | `account/registra.html` | BOT-5 | sezione 4 |
 | `account/attrezzoteca.html` | BOT-5 | sezione 5 |
 | `account/messaggi.html` | BOT-5 | sezione 6 |
-| `account/conversazioni.html` | BOT-5 | sezione 7 |
-| `account/impostazioni.html` | BOT-5 | sezione 8 |
+| `account/impostazioni.html` | BOT-5 | sezione 7 (era l'8ª: la sezione «Conversazioni» è stata rimossa con la chat interna) |
 | `aiuto.html` | BOT-6 | l'Aiuto riscritto per le tre pagine |
 | `stati/*.html` | BOT-6 | le condizioni forzate, per pagina |
 
@@ -97,17 +94,21 @@ condivise e non si toccano fra bot.
 | Stati | `.filetto` + `.filetto--oggi` `.filetto--coda` `.filetto--attenzione` `.filetto--spento` | il segno di stato, 4 px |
 | Etichette | `.etichetta`, `.etichetta--provenienza`, `.etichetta--esterna` | `--esterna` ha il bordo tratteggiato |
 | Bottoni | `.bottone`, `.bottone--principale`, `.bottone--quieto` | bersaglio ≥ 44 px |
-| Chat | `.turno`, `.turno--operatore`, `.turno--assistente`, `.turno-chi`, `.turno-testo`, `.compositore` | di BOT-2, dichiarate qui per l'elenco completo |
+| Chat | — | **nessuna**: la conversazione con l'assistente vive in Onyx («Chiedi» apre `https://<ONYX_DOMAIN>/chat?agentId=2` in una nuova scheda). Le classi `.turno*`/`.compositore` e `chat.css` sono state rimosse |
 | Tabella | `.tabella` | con `<caption>` e `<th scope="col">` |
 
 ## 4. Il pannello contestuale — chi scrive cosa
 
-`shell.js` mette nel pannello un contenitore vuoto con l'id giusto; **è la pagina** a riempirlo:
+`shell.js` mette nel pannello un contenitore vuoto con l'id giusto; **è la pagina** a riempirlo. Dopo lo spostamento
+della chat in Onyx, **nessuna pagina lo riempie**: resta vuoto ovunque (una sola convenzione), e la via alla
+conversazione è la voce «Chiedi» della nav, che `shell.js` trasforma in un collegamento a Onyx (`target="_blank"`,
+`rel="noopener"`, `aria-label` «… (si apre in una nuova scheda)») quando `GET /op/config` risponde `{onyx_url}`.
+Se non risponde, la voce resta **senza** `href` con il testo «Onyx non disponibile»: mai un collegamento vuoto,
+mai un ripiego a una chat interna.
 
 | Pagina | Cosa deve esserci in `#shell-pannello` | Chi lo scrive |
 |---|---|---|
-| `index.html` / `home.html` | `.pannello-testa` con `<button>` «Nuova conversazione» + `<div id="storico-lista">` | `storico.js` (BOT-2) |
-| `osservatorio.html`, `account.html` | `.pannello-testa` con `<a href="home.html?c=<id>">Apri nella Home</a>` + `<div id="chat-compatta">` | `shell.js` chiama `home-api.js` (BOT-2) |
+| tutte | niente | — |
 
 `shell.js` espone un solo aggancio, e nient'altro:
 
@@ -117,14 +118,16 @@ window.Trasi = {
   casa: null,          // {casa, casa_id, ruolo} da GET /me, o null se non c'è sessione
   api(percorso, opzioni) { … },   // fetch verso /api/shim, gestisce 401 → ritorno all'accesso
   montaPannello(html) { … },      // scrive in #shell-pannello
-  voceCorrente: null               // slug della pagina, per aria-current
+  voceCorrente: null,              // slug della pagina, per aria-current
+  pronto: Promise,                 // si chiude con la Casa della sessione (o null)
+  onyx: Promise                    // si chiude con l'URL di Onyx da GET /op/config, o si rifiuta
 };
 ```
 
 **Questo è l'unico contratto di codice fra i bot.** Chi ha bisogno di una funzione lo chiede a BOT-1 invece di
 scrivere una seconda copia.
 
-## 5. `account.html` — pagina singola, otto viste
+## 5. `account.html` — pagina singola, sette viste
 
 `account.html` **non contiene** le sezioni: le carica. La struttura è:
 
@@ -134,7 +137,7 @@ scrivere una seconda copia.
   <nav class="acc-sottonav" aria-label="Sezioni dell'account">
     <a href="#la-casa">La Casa</a> <a href="#numeri">Numeri</a> <a href="#proposte">Proposte</a>
     <a href="#registra">Registra</a> <a href="#attrezzoteca">Attrezzoteca</a>
-    <a href="#messaggi">Messaggi</a> <a href="#conversazioni">Conversazioni</a> <a href="#impostazioni">Impostazioni</a>
+    <a href="#messaggi">Messaggi</a> <a href="#impostazioni">Impostazioni</a>
   </nav>
   <div id="acc-vista" aria-live="polite"><!-- qui entra UNA sezione --></div>
 </main>

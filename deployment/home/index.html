@@ -70,8 +70,8 @@
   </nav>
 </header>
 
-     `401` da qualunque chiamata porta qui; il testo digitato nel compositore della chat vive in
-     memoria (mai `localStorage`, V5) e viene ritrovato al ritorno — vedi `assets/chat.js`.
+     `401` da qualunque chiamata porta qui. La conversazione con l'assistente vive in Onyx, non in
+     queste pagine: niente testo della chat da conservare, niente `localStorage` (V5).
      ============================================================================ -->
 <main class="accesso">
 
@@ -129,7 +129,7 @@
     <h2 id="aiuto-titolo">Aiuto</h2>
     <p>Trasi è la porta della rete delle Case di Quartiere. Da qui si aprono quattro destinazioni, e ognuna si apre già sulla Casa scelta in alto.</p>
     <h3>CHIEDI</h3>
-    <p>La chat con l’assistente della rete. Si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali.</p>
+    <p>Apre Onyx, l’assistente della rete, in una nuova scheda. Lì si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali.</p>
     <h3>MAPPA</h3>
     <p>I luoghi e le Case della rete su una mappa, da guardare insieme alla persona.</p>
     <h3>REGISTRA / AGGIORNA</h3>
@@ -153,7 +153,7 @@
     <h3>La Casa in alto</h3>
     <p>Il selettore ricorda la Casa nel browser: al prossimo accesso è già quella. L’unica cosa conservata è il nome breve della Casa, nessun dato personale. Tuturano porta la nota «dati provvisori»: alcune sue schede non sono ancora complete.</p>
     <h3>Tastiera</h3>
-    <p>Si può usare tutto da tastiera: il tasto Tab passa dal salto alle destinazioni, al selettore della Casa, ad Aiuto ed Esci, poi a CHIEDI, MAPPA, OSSERVATORIO e alla coda delle proposte. Il riquadro giallo indica sempre dove sei.</p>
+    <p>Si può usare tutto da tastiera: il tasto Tab passa dal salto alle destinazioni, al selettore della Casa, ad Aiuto ed Esci, poi a CHIEDI (che apre Onyx in una nuova scheda), MAPPA, OSSERVATORIO e alla coda delle proposte. Il riquadro giallo indica sempre dove sei.</p>
 
     <p class="rinvio">La verifica di accessibilità delle tre applicazioni esterne (Onyx, Metabase, NocoDB) è rinviata alla settimana 2 del piano: qui è verificata la sola pagina Trasi Home.</p>
   </section>
@@ -174,10 +174,11 @@
   var password = document.getElementById("accesso-password");
   var casa = document.getElementById("accesso-casa");
 
-  /* Se la sessione è già aperta si va alla Home, senza mostrare il modulo.
+  /* Se la sessione è già aperta si va all'Osservatorio, senza mostrare il modulo: è la prima
+   * destinazione dentro Trasi, ora che «Chiedi» apre Onyx in un'altra scheda.
    * `location.replace` e non `href`: il tasto «indietro» non deve riportare al modulo. */
   fetch("/api/shim/me", { credentials: "same-origin" })
-    .then(function (r) { if (r.ok) location.replace("home.html"); })
+    .then(function (r) { if (r.ok) location.replace("osservatorio.html"); })
     .catch(function () { /* senza shim si resta qui, e il login dirà cosa non va */ });
 
   document.getElementById("pulsante-mostra").addEventListener("click", function () {
@@ -210,7 +211,7 @@
         if (r.ok) {
           esito.textContent = "Accesso eseguito per " + scelta + ".";
           password.value = "";
-          location.replace("home.html");
+          location.replace("osservatorio.html");
           return;
         }
         esito.hidden = true;

@@ -4,22 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>Trasi — Home</title>
-<meta name="description" content="Trasi: la chat con l'assistente della rete delle Case di Quartiere di Brindisi.">
+<title>Trasi — La chat è in Onyx</title>
+<meta name="description" content="Trasi: la conversazione con l'assistente della rete delle Case di Quartiere di Brindisi vive in Onyx.">
 <link rel="stylesheet" href="assets/struttura.css?v=3">
 <link rel="stylesheet" href="assets/veste.css?v=3">
-<!-- `chat.css` è della Home: contiene `.turno`, `.compositore` e le classi `chat-`/`storico-`
-     che il contratto (§3 di CONTRATTO-shell.md) dichiara di questa pagina. Non è una veste:
-     è il comportamento della chat — righe del compositore, aggancio in fondo, misure dei turni. -->
-<link rel="stylesheet" href="assets/chat.css?v=3">
 </head>
 <body>
 
 <!-- ============================================================ IL GUSCIO =====================
-     Copiato **una volta** da `_shell.html` (CONTRATTO-shell.md §2: «ogni pagina lo include
-     copiandolo una volta, alla prima scrittura, e da lì in poi se lo tiene»). Da qui in poi
-     questo file è mio e non si rilegge da quello: la shell è congelata, non un import.
-     I tre segnaposto (`#shell-casa`, `#shell-zona`, `#shell-pannello`) li riempie `shell.js`. -->
+     Copiato **una volta** da `_shell.html` (CONTRATTO-shell.md §2). I tre segnaposto
+     (`#shell-casa`, `#shell-zona`, `#shell-pannello`) li riempie `shell.js`. -->
 <a class="salta" href="#contenuto">Salta al contenuto</a>
 
 <div class="guscio">
@@ -36,8 +30,7 @@
       <a class="nav-voce" href="account.html">Account</a>
     </nav>
 
-    <!-- PANNELLO CONTESTUALE — vuoto qui: in Home lo riempie `storico.js` con «Nuova
-         conversazione» e l'elenco per data (CONTRATTO-shell.md §4). -->
+    <!-- PANNELLO CONTESTUALE — vuoto: la conversazione vive in Onyx, non c'è uno storico da mostrare. -->
     <div class="pannello" id="shell-pannello" aria-label="Pannello contestuale"></div>
 
     <div class="sidebar-piede">
@@ -52,72 +45,35 @@
 
     <main class="contenuto" id="contenuto">
 
-      <!-- ======================================================== HOME — la chat ==============
-           Gli stati sono cinque e vivono in `chat.js` (§4.1.1 del piano). Il markup qui è la
-           forma di **tutti** gli stati: chi li accende e li spegne è il modulo, con una classe
-           sul contenitore. Lo stato di partenza è `chat-vuota` (S0): compositore centrato,
-           suggerimenti visibili, nessun turno. -->
-
-      <div class="chat" id="chat" data-stato="vuota">
-
-        <!-- Righe di stato: `aria-live` perché compaiono senza che nessuno abbia mosso il focus.
-             Vuote all'avvio e `hidden`: una regione live vuota non si annuncia, ed è quello che
-             si vuole — la Home appena aperta non deve dire niente. -->
-        <p class="chat-avviso" id="chat-avviso" role="status" aria-live="polite" hidden></p>
-
-        <!-- Testa della conversazione riaperta (S5): la data del **primo** turno («Conversazione
-             del 15/09/2026, 11:42 · Santa Spazio Culturale»). Compare solo con `?c=<id>`. -->
-        <p class="chat-aperta" id="chat-aperta" hidden></p>
-
-        <!-- S0 — titolo e sottotitolo dello stato vuoto. -->
-        <div class="chat-testa" id="chat-testa">
-          <h1 class="titolo-pagina">La domanda della persona allo sportello</h1>
-          <p class="chat-sotto">Senza nomi e senza dati personali: servono solo il bisogno e la zona.</p>
-        </div>
-
-        <!-- I turni. `aria-live="polite"` sulla colonna: il turno dell'assistente arriva senza che
-             l'operatore abbia toccato niente, e chi usa un lettore di schermo deve sentirlo. -->
-        <div class="chat-turni" id="chat-turni" aria-live="polite" aria-label="Conversazione"></div>
-
-        <!-- S0 — i suggerimenti. Sono `<button>` e non collegamenti: riempiono il compositore e
-             inviano, non portano altrove. Sei, dalle user stories; due portano il nome della Casa
-             della sessione e lo ricevono da `chat.js` (`{casa}` è il segnaposto). -->
-        <div class="chat-suggerimenti" id="chat-suggerimenti" aria-label="Domande di esempio">
-          <p class="chat-suggerimenti-testa">Esempi di domanda</p>
-          <div class="chat-suggerimenti-elenco">
-            <button class="suggerimento" type="button" data-domanda="Dove si fa l'ISEE vicino a La Rosa?">Dove si fa l'ISEE vicino a La Rosa?</button>
-            <button class="suggerimento" type="button" data-domanda="Bar vicino a {casa} aperti adesso?">Bar vicino a {casa} aperti adesso?</button>
-            <button class="suggerimento" type="button" data-domanda="Una persona sola cerca qualcuno con cui parlare: dove?">Una persona sola cerca qualcuno con cui parlare: dove?</button>
-            <button class="suggerimento" type="button" data-domanda="Farmacia di turno vicino a Tuturano">Farmacia di turno vicino a Tuturano</button>
-            <button class="suggerimento" type="button" data-domanda="Eventi oggi a {casa}">Eventi oggi a {casa}</button>
-            <button class="suggerimento" type="button" data-domanda="Laboratori per bambini questa settimana?">Laboratori per bambini questa settimana?</button>
-          </div>
-        </div>
-
-        <!-- Il compositore: uguale nei cinque stati, cambia **dove sta** — centrato in S0,
-             agganciato in fondo da S1 in poi. La classe sta sul contenitore `.chat`, non qui:
-             è lo stato della pagina, non una proprietà del campo. -->
-        <form class="compositore" id="chat-compositore" novalidate>
-          <label class="chat-etichetta" for="chat-testo">La domanda della persona</label>
-          <textarea class="chat-campo" id="chat-testo" name="messaggio" rows="3" maxlength="2000"
-                    aria-describedby="chat-aiuto"></textarea>
-          <p class="chat-aiuto" id="chat-aiuto">Si può scrivere il bisogno e la zona. Nomi, telefoni, email e codici fiscali non sono ammessi.</p>
-          <div class="riga chat-azioni">
-            <button class="bottone bottone--principale" type="submit" id="chat-chiedi">Chiedi</button>
-            <p class="chat-contatore" id="chat-contatore" aria-live="off">0/2000</p>
-          </div>
-        </form>
-
-      </div>
+      <!-- ======================================================== HOME — non è più la chat ======
+           Questa pagina resta per chi la apre da un vecchio segnalibro o da un `?c=<id>` dello
+           storico: la conversazione con l'assistente «Trasi Casa» vive in Onyx, l'unica superficie
+           di dialogo con l'AI. Appena `GET /op/config` risponde (`window.Trasi.onyx`), si va lì.
+           Il `?c=<id>` non viaggia: nell'URL verso Onyx c'è solo l'assistente (V5). -->
+      <h1 class="titolo-pagina">La chat è in Onyx</h1>
+      <p id="home-rinvio">La conversazione con l'assistente della rete si apre in Onyx: <a id="home-onyx">vai a Onyx</a>.</p>
 
     </main>
   </div>
 </div>
 
-<!-- `shell.js` **prima**: espone `window.Trasi` (sessione, `api()`, pannello), e senza quello né
-     `chat.js` né `storico.js` possono funzionare. L'ordine è contratto, non preferenza. -->
 <script src="assets/shell.js?v=3"></script>
-<script src="assets/chat.js?v=3"></script>
-<script src="assets/storico.js?v=3"></script>
+<script>
+  (function () {
+    "use strict";
+    var a = document.getElementById("home-onyx");
+    if (!window.Trasi || !window.Trasi.onyx) return;
+    window.Trasi.onyx.then(function (url) {
+      a.setAttribute("href", url);
+      a.setAttribute("rel", "noopener");
+      location.replace(url);
+    }).catch(function () {
+      /* Senza l'indirizzo non si inventa niente: la riga lo dice, e il collegamento non c'è. */
+      a.removeAttribute("href");
+      a.setAttribute("aria-disabled", "true");
+      a.textContent = "Onyx non disponibile";
+    });
+  })();
+</script>
 </body>
 </html>

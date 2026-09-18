@@ -119,6 +119,21 @@ Un mese senza richieste arriva come `ambiti: []`: dillo («mese senza richieste 
 """,
     ),
     (
+        # Difetto: alla domanda «che eventi ci sono questo mese?» il modello rispondeva «posso
+        # solo leggere un giorno alla volta, dimmi una data». In realtà `eventi_oggi` accetta
+        # `finestra_gg`, e il tool ri-registrato lo espone: ma il prompt non lo citava, e il
+        # modello non ci ha pensato da solo.
+        "FINESTRA TEMPORALE — periodi in una chiamata sola",
+        """
+FINESTRA TEMPORALE — periodi in una chiamata sola:
+`eventi_oggi` accetta il parametro facoltativo `finestra_gg` (intero, 1–92): con `finestra_gg=7` hai una
+settimana intera, con `31` un mese, con `92` un trimestre, in **una sola chiamata** ordinata per data.
+Quando l'operatore chiede un periodo («questa settimana», «questo mese», «i prossimi 10 giorni», «a settembre»)
+chiama **una volta** con `finestra_gg` appropriato, non ripetere la chiamata giorno per giorno.
+Se invece chiede un giorno preciso (oggi, domani, «sabato 26»), non serve `finestra_gg` (default 1, retro-compatibile).
+""",
+    ),
+    (
         # Il marcatore è una frase che esiste **nel testo** della sezione, non un'etichetta: il
         # controllo di presenza legge il prompt salvato (`_manca`), e un titolo che nel prompt non
         # compare dichiarerebbe la sezione assente per sempre — l'ha pagato la sessione sorella con

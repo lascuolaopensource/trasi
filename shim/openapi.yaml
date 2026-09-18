@@ -80,8 +80,10 @@ paths:
       operationId: eventi_oggi
       tags:
       - kb
-      summary: Elenca gli eventi di una Casa di Quartiere in una data (oggi se non indicata). Usalo quando l'operatore chiede
-        che cosa succede oggi, o in un giorno preciso, in una Casa.
+      summary: Elenca gli eventi di una Casa di Quartiere in una data (oggi se non indicata), oppure in un arco di
+        più giorni se specifichi `finestra_gg` (es. 7 per «questa settimana», 31 per «questo mese»). Usalo quando
+        l'operatore chiede che cosa succede oggi, domani, in un giorno preciso, oppure nei prossimi giorni in una
+        Casa.
       parameters:
       - name: casa
         in: query
@@ -98,9 +100,19 @@ paths:
         schema:
           type: string
           format: date
+      - name: finestra_gg
+        in: query
+        required: false
+        description: Finestra in giorni a partire da `data` (inclusa). 1 = solo quel giorno (comportamento
+          predefinito), 7 = una settimana, 31 = un mese. Massimo 92. Usa questo parametro **invece** di ripetere
+          la chiamata per ogni giorno quando l'operatore chiede un periodo (settimana, mese, prossimi N giorni).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 92
       responses:
         '200':
-          description: Eventi della Casa nella data richiesta.
+          description: Eventi della Casa nella data o nel periodo richiesto, in ordine cronologico.
           content:
             application/json:
               schema:

@@ -7,10 +7,13 @@
  *   1. chiede `GET /api/shim/me`: se risponde, la pagina è "dentro"; se dà 401, si torna all'accesso;
  *   2. riempie la testata della sidebar (Casa e zona) e segna la voce corrente con `aria-current`;
  *   3. governa la sidebar sotto 62 rem (bottone «Menu», `Esc`, click fuori);
- *   4. espone `window.Trasi` con `api()`, `montaPannello()`, `casa`;
- *   5. gestisce «Esci».
+ *   4. espone `window.Trasi` con `api()`, `montaPannello()`, `casa`, `onyx`;
+ *   5. gestisce «Esci»;
+ *   6. chiede `GET /op/config` e trasforma la voce «Chiedi» in un collegamento a Onyx, che si apre
+ *      in una nuova scheda: Onyx è l'unica superficie di conversazione con l'assistente.
  *
- * NON contiene: la chat, lo storico, la mappa, l'account. Quelli sono dei rispettivi moduli.
+ * NON contiene: la mappa, l'account. Quelli sono dei rispettivi moduli. Non contiene nemmeno una
+ * chat: la conversazione con l'assistente vive in Onyx, non in queste pagine.
  *
  * Perché tutte le chiamate passano da `/api/shim/…`: Caddy aggiunge la `X-Trasi-Key` lato server
  * (`deployment/caddy/Caddyfile`), il browser non vede mai un segreto.
@@ -61,13 +64,47 @@
 
   function segnaVoce() {
     var p = paginaCorrente();
-    // L'accesso vive in index.html; la pagina Home della sessione è home.html.
-    var voce = p;
     var voci = document.querySelectorAll(".nav-voce");
     for (var i = 0; i < voci.length; i++) {
-      if (voci[i].getAttribute("href") === voce) {
+      if (voci[i].getAttribute("href") === p) {
         voci[i].setAttribute("aria-current", "page");
       }
+    }
+  }
+
+  /* ---------------------------------------------------------------- onyx */
+
+  /* Le voci «Chiedi» (`href="home.html"` nel guscio) puntano a Onyx: l'indirizzo lo dice lo shim
+   * (`GET /op/config` → `{onyx_url}`), perché la Home è statica e non lo conosce. Nuova scheda, e
+   * lo si dice a chi non la vede (`aria-label`); `rel="noopener"` perché Onyx è un'altra
+   * applicazione. Se lo shim non risponde, la voce resta **senza** `href` e lo dichiara: mai un
+   * collegamento vuoto, mai un ripiego a una chat che qui non c'è più. */
+  var TESTO_ONYX_NON_DISPONIBILE = "Onyx non disponibile";
+
+  function vociChiedi() {
+    return document.querySelectorAll('.nav-voce[href="home.html"]');
+  }
+
+  function collegaOnyx(url) {
+    var voci = vociChiedi();
+    for (var i = 0; i < voci.length; i++) {
+      var a = voci[i];
+      a.setAttribute("href", url);
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener");
+      a.setAttribute("aria-label", a.textContent.trim() + " (si apre in una nuova scheda)");
+      a.removeAttribute("aria-current");
+    }
+  }
+
+  function scollegaOnyx() {
+    var voci = vociChiedi();
+    for (var i = 0; i < voci.length; i++) {
+      var a = voci[i];
+      a.removeAttribute("href");
+      a.removeAttribute("aria-current");
+      a.setAttribute("aria-disabled", "true");
+      a.textContent = TESTO_ONYX_NON_DISPONIBILE;
     }
   }
 
@@ -146,7 +183,10 @@
     montaPannello: montaPannello,
     voceCorrente: paginaCorrente(),
     /* La Casa come la mostra la testata: serve a chi scrive i testi («Oggi a …», «… a San Bao»). */
-    nomeCasa: function () { return Trasi.casa ? (Trasi.casa.nome || Trasi.casa.casa) : ""; }
+    nomeCasa: function () { return Trasi.casa ? (Trasi.casa.nome || Trasi.casa.casa) : ""; },
+    /* Promessa dell'indirizzo di Onyx (`GET /op/config`): si chiude con l'URL, o si rifiuta se lo
+     * shim non lo dà. `home.html` la usa per rimandare a Onyx chi la apre da un vecchio segnalibro. */
+    onyx: null
   };
   window.Trasi = Trasi;
 
@@ -172,4 +212,17 @@
     }
     return null;
   });
+
+  /* Solo con una sessione: senza, `/op/config` darebbe 401 e la pagina sta già tornando all'accesso. */
+  Trasi.onyx = Trasi.pronto.then(function (casa) {
+    if (!casa) throw new Error(TESTO_ONYX_NON_DISPONIBILE);
+    return api("/op/config");
+  }).then(function (config) {
+    if (!config || typeof config.onyx_url !== "string" || !config.onyx_url) {
+      throw new Error(TESTO_ONYX_NON_DISPONIBILE);
+    }
+    collegaOnyx(config.onyx_url);
+    return config.onyx_url;
+  });
+  Trasi.onyx.catch(function () { scollegaOnyx(); });
 })();
