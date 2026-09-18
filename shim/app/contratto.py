@@ -12,6 +12,9 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import yaml
+from fastapi import Request
+
+from .errori import errore
 
 METODI_HTTP = ("get", "post", "put", "delete", "patch", "options", "head")
 
@@ -106,3 +109,29 @@ def meta(operation_id: str) -> dict[str, Any]:
         "summary": " ".join(dichiarazione["summary"].split()),
         "tags": dichiarazione.get("tags", []),
     }
+
+
+def solo_parametri_dichiarati(request: Request) -> None:
+    """Dipendenza: un parametro di query che la rotta **non dichiara** è un 422 che lo nomina, non un silenzio.
+
+    FastAPI ignora i parametri di query sconosciuti. Per un'API chiamata da un modello è il difetto peggiore: il
+    2026-09-18 gli assistenti passavano `finestra_gg=30` a uno shim che non lo conosceva, ricevevano il solo giorno
+    `data` e rispondevano «nessun evento nel mese» — un dato falso, con status 200, e nessuna traccia del perché.
+    Lo stesso principio che V5 applica ai corpi (`extra="forbid"`) vale qui per le query: la chiave sconosciuta
+    torna al chiamante, e l'errore elenca i nomi ammessi così il modello (e chi legge il log) può correggersi.
+
+    I parametri dichiarati si leggono dalla rotta stessa (`request.scope["route"]`), non da un elenco a mano che
+    divergerebbe alla prima aggiunta.
+    """
+    rotta = request.scope.get("route")
+    dichiarati = {
+        campo.alias
+        for campo in getattr(getattr(rotta, "dependant", None), "query_params", [])
+    }
+    sconosciuti = sorted(set(request.query_params.keys()) - dichiarati)
+    if sconosciuti:
+        raise errore(
+            422,
+            "parametri non ammessi — sconosciuti: " + ", ".join(sconosciuti)
+            + "; ammessi: " + ", ".join(sorted(dichiarati)),
+        )

@@ -719,6 +719,8 @@ l'invocazione).
 | **«sto misurando il codice giusto?»** | `ops/provenienza_stack.sh` — dice **quale worktree** ha costruito l'istanza viva (§11) |
 | «un utente non riesce a entrare in Onyx» | `ops/provisiona_utenti_onyx.sh --dry-run` — dice chi manca, senza creare (§11) |
 | «ho aggiunto un evento in chat ma non c'è» — l'assistente ha detto «non ho un calendario» o «memorizzato nelle note» | la chat era con l'assistente **predefinito** di Onyx (persona 0), non con Trasi Casa: `SELECT persona_id FROM chat_session ORDER BY time_created DESC LIMIT 5` sul DB di Onyx · `docker logs trasi-shim-1 \| grep crea_evento` (nessuna riga = nessuna scrittura) · `ops/allinea_assistente_predefinito.py` dà a persona 0 lo strumento `trasi_shim` e le istruzioni |
+| «l'assistente dice *nessun evento* ma la dashboard li mostra» | `SELECT tool_call_arguments, left(tool_call_response::text,120) FROM tool_call ORDER BY id DESC LIMIT 20` sul DB di Onyx: se vedi **un parametro che il contratto servito non ha** o **una chiamata per Casa/per giorno**, è lo scarto shim ↔ tool ↔ prompt di §11.6 — `python3 ops/registra_tool_shim.py --dry-run` dice se il tool registrato è quello servito |
+| «`403` nel log dello shim con `ruolo=-`» | l'email Onyx del chiamante non è un'identità Trasi (es. `admin@…`): V5, non un guasto — si prova con un utente `op.<casa>@trasi.local` (§11.2) |
 
 ---
 
@@ -1129,3 +1131,61 @@ $ curl -s -b cookie_buscicchio -H 'Content-Type: application/json' -d '{"azione"
 **Passi di deploy**: `./db/apply.sh 033` (idempotente; 014/006/016 rieseguiti prima riportano le forme vecchie e
 033 le porta alla forma nuova), rebuild dello shim, `python3 ops/allinea_prompt_assistenti.py`, ri-registrazione del
 tool Onyx (id 12) se `openapi.yaml` cambia (il campo `quantita` ha una descrizione nuova).
+
+### 11.6 · Shim ↔ tool Onyx ↔ prompt: un solo contratto (difetto del 2026-09-18)
+
+**Sintomo.** `op.erranti` chiede in chat «gli eventi del mese di tutte le Case» e l'assistente risponde «nessun
+evento», mentre la dashboard ne mostra 27. Nessun errore nei log: lo shim rispondeva **200** con liste vuote.
+
+**Concause, tutte misurate** (`tool_call` sul DB di Onyx, log dello shim, `tool.openapi_schema`):
+
+1. **Prompt ≠ shim servito.** Il prompt di «Trasi Casa» diceva «usa `finestra_gg`», parametro che lo shim in
+   esercizio non aveva. FastAPI **ignora** i parametri di query sconosciuti: `finestra_gg=30` cadeva, restava il solo
+   giorno `data`, e il 1° settembre non aveva eventi. 20 chiamate, 20 liste vuote, status 200.
+2. **Tool registrato ≠ contratto servito.** Il tool `trasi_shim` (id 12) portava 19 operazioni di un altro branch;
+   lo shim ne serviva 13. Sei strumenti offerti al modello rispondevano 404 (`attrezzoteca`, `prenota_oggetto`,
+   `registra_movimento`, `conferma_movimento`, `uso_oggetti`, `cerca_opendata`, `leggi_dataset`).
+3. **`eventi_oggi` = una Casa × un giorno.** Per «tutte le Case, il mese» il modello doveva fare 10 chiamate (o 300);
+   ne faceva 10 sul solo primo giorno.
+4. **Più sessioni di lavoro su un'unica istanza** (branch `debug-2`, `old-next`, il ripristino di `main`), ciascuna
+   con il proprio shim, il proprio contratto e i propri prompt, e **niente** che imponga *tool registrato = contratto
+   servito = prompt*.
+
+I `403` con `ruolo=-` nello stesso periodo erano `admin@onyx-onice.example.com` che provava le persone «Portinaio»:
+quell'email non è un'identità Trasi. È V5 che funziona, non un difetto.
+
+**Correzioni.**
+
+- `eventi_oggi`: senza `casa` resta la Casa dell'operatore (è ciò che tutti i prompt in esercizio dicono);
+  **`casa=tutte`** legge tutta la rete in una chiamata; il periodo si dà con **`al`** o con **`finestra_gg`** (1–92),
+  equivalenti; un nome di Casa al posto dello slug si risolve; gli eventi ricorrenti si espandono nelle occorrenze.
+- **Parametro di query sconosciuto → 422 che lo nomina** e elenca quelli ammessi (`contratto.solo_parametri_dichiarati`,
+  su tutte le GET del contratto e su `eventi_mese`). Il silenzio è il difetto: un modello che riceve
+  `parametri non ammessi — sconosciuti: giorni; ammessi: al, casa, data, finestra_gg, q` si corregge; uno che riceve
+  `[]` conclude che non c'è nulla.
+- `ops/registra_tool_shim.py` (da `old-next`) ri-registra il tool con `shim/openapi.yaml` **servito** e rilegge dal
+  server; `--dry-run` mostra lo scarto. `ops/allinea_prompt_assistenti.py --solo-sostituzioni` applica le sole
+  sostituzioni di frasi a prompt scritti in un'altra forma (quello compatto di «Trasi Casa»), senza appendere sezioni.
+
+**Procedura, ogni volta che cambia `shim/openapi.yaml` o `shim/app/**` in esercizio** — sono tre passi e vanno fatti
+tutti, nell'ordine:
+
+```bash
+docker compose -f deployment/docker-compose.yml build --no-cache shim && \
+docker compose -f deployment/docker-compose.yml up -d --force-recreate shim      # 1. lo shim servito
+python3 ops/registra_tool_shim.py                                                 # 2. il tool = quel contratto
+python3 ops/allinea_prompt_assistenti.py --dry-run                                # 3. i prompt citano solo ciò che esiste
+```
+
+Verifica finale dal punto di vista di Onyx (stesso percorso del tool):
+
+```bash
+docker exec onyx-api_server-1 python -c "import urllib.request;print(urllib.request.urlopen(urllib.request.Request(
+'http://shim:8000/v1/u/op.erranti@trasi.local/eventi_oggi?data=2026-09-01&finestra_gg=30&casa=tutte',
+headers={'X-Trasi-Key':'…'})).read()[:200])"      # atteso: 200 con eventi di più Case, casa_slug su ogni item
+```
+
+Misurato il 2026-09-18 dopo la correzione: erranti nel mese → 2 eventi (23/09); tutta la rete → 27; parametro
+sconosciuto → 422 nominato; le 13 operazioni del contratto → 200 come `op.erranti`; scritture (`crea_evento`,
+`registra_richiesta`, `proponi_modifica`, `salva_dato`) → 201 nella modalità prevista, `approva_proposta` sulla
+propria → 403 (V4). `shim`: 297 passed.

@@ -45,7 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from . import pii
 from .auth import SessioneOperatore, sessione_corrente
 from .badge import badge_kb, nome_fonte
-from .contratto import meta
+from .contratto import meta, solo_parametri_dichiarati
 from .db import Sessione, dipendenza_sessione, risolvi_slug_casa
 from .errori import errore
 from .schemi import ItemOggetto, RispostaCercaOggetto
@@ -223,6 +223,7 @@ async def cerca_oggetto(
         default=None, description="Slug o nome della Casa di Quartiere; se omesso, tutte le Case."
     ),
     sess: Sessione = Depends(dipendenza_sessione),
+    _: None = Depends(solo_parametri_dichiarati),
 ) -> RispostaCercaOggetto:
     """Cerca nell'attrezzoteca della rete (US-5.1): dove si trova un oggetto, quanti pezzi sono disponibili.
 

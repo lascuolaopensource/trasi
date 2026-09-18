@@ -80,21 +80,24 @@ paths:
       operationId: eventi_oggi
       tags:
       - kb
-      summary: Elenca gli eventi del calendario condiviso della rete, in una data o in un intervallo. Senza `casa`
-        copre TUTTE le Case (ogni item dichiara la sua in `casa_slug`/`casa_nome`); con `casa`, solo quella. Con
-        `al` copre l'intervallo `data..al` — «questo weekend» o «questa settimana» in una sola chiamata; `q` filtra
-        per parola chiave (es. «bambini»). Usalo quando l'operatore chiede che cosa succede, oggi o in un periodo,
+      summary: 'Elenca gli eventi del calendario condiviso della rete, in una data o in un intervallo, in UNA sola
+        chiamata. Senza `casa` copre la Casa dell''operatore; con `casa=tutte` copre TUTTE le Case della rete (ogni
+        item dichiara la sua in `casa_slug`/`casa_nome`); con `casa=<slug o nome>`, quella Casa. Il periodo si
+        indica con `al` (data di fine) oppure con `finestra_gg` (numero di giorni da `data`) — «questo weekend»,
+        «questa settimana», «il mese» sono una chiamata sola, mai una per giorno o una per Casa; `q` filtra per
+        parola chiave (es. «bambini»). Usalo quando l''operatore chiede che cosa succede, oggi o in un periodo,
         alla Casa o in tutta la rete. È anche lo strumento per «è gratuito?», «serve prenotare?», «per chi è?» e
         «ogni quanto si ripete?» — ogni item porta `costo`/`gratuito`, `prenotazione`/`prenotazione_nota`,
         `fascia_eta`, `tag` e `ricorrenza`. Rispondi con quei campi; se sono `null`, dì che il dato non è
-        dichiarato invece di cercarlo altrove.
+        dichiarato invece di cercarlo altrove.'
       parameters:
       - name: casa
         in: query
         required: false
-        description: Slug o nome della Casa di Quartiere. Se omesso, la risposta copre gli eventi di TUTTE le Case
-          della rete (il calendario è condiviso) e ogni item dichiara la sua Casa in `casa_slug`/`casa_nome`; se
-          indicato, solo quella Casa (un nome non-slug si prova a risolvere; se non è una Casa riconoscibile, 404).
+        description: 'Slug o nome della Casa di Quartiere, oppure `tutte` per tutte le Case della rete in una sola
+          chiamata. Se omesso, la Casa dell''operatore autenticato (per un''identità senza Casa, tutta la rete). Ogni
+          item dichiara la sua Casa in `casa_slug`/`casa_nome`. Un nome non-slug si prova a risolvere; se non è una
+          Casa riconoscibile, 404.'
         schema:
           type: string
           minLength: 1
@@ -109,10 +112,20 @@ paths:
         in: query
         required: false
         description: Fine dell'intervallo (inclusa). Con `al` la risposta copre gli eventi da `data` (o oggi) fino
-          ad `al` — «questo weekend» o «questa settimana» in una sola chiamata. Per un solo giorno, ometterla.
+          ad `al` — «questo weekend» o «questa settimana» in una sola chiamata. Alternativa a `finestra_gg`; per un
+          solo giorno, omettere entrambi.
         schema:
           type: string
           format: date
+      - name: finestra_gg
+        in: query
+        required: false
+        description: Ampiezza dell'intervallo in giorni a partire da `data` (inclusa), da 1 a 92 — 7 = «la
+          settimana», 30 = «il mese». Alternativa ad `al` (se dati entrambi devono coincidere, altrimenti 422).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 92
       - name: q
         in: query
         required: false
@@ -922,7 +935,8 @@ components:
           schema:
             $ref: '#/components/schemas/Errore'
     ParametriNonAmmessi:
-      description: 'Parametri o corpo non ammessi: campo non previsto (`additionalProperties: false`), valore fuori vocabolario,
+      description: 'Parametri o corpo non ammessi: campo non previsto (`additionalProperties: false`), parametro di query
+        non dichiarato dall''operazione (l''errore elenca quelli sconosciuti e quelli ammessi), valore fuori vocabolario,
         `motivazione` oltre 80 caratteri, destinazione mancante per `inviata_altrove`, oppure dato personale sospetto (email,
         telefono italiano, codice fiscale) → `dato_personale_sospetto`.'
       content:

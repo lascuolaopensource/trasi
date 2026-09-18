@@ -29,7 +29,7 @@ from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Depends, Query
 
 from .badge import badge_kb, nome_fonte
-from .contratto import meta
+from .contratto import meta, solo_parametri_dichiarati
 from .db import Sessione, dipendenza_sessione, parametri, risolvi_slug_casa, slug_casa_da_identita
 from .errori import errore
 from .schemi import (
@@ -166,6 +166,7 @@ async def cerca_luogo(
     tipo: str | None = Query(default=None, description="Tipo di luogo, facoltativo (vocabolario `luogo.tipo`)."),
     quartiere: str | None = Query(default=None, description="Quartiere o zona, facoltativo."),
     sess: Sessione = Depends(dipendenza_sessione),
+    _: None = Depends(solo_parametri_dichiarati),
 ) -> RispostaCercaLuogo:
     """Cerca nella memoria della rete per nome, descrizione e indirizzo.
 
@@ -190,12 +191,18 @@ async def cerca_luogo(
     return RispostaCercaLuogo(items=[_item_luogo(riga) for riga in righe])
 
 
+# I valori di `casa` che significano «tutta la rete». Due forme perché il modello scrive l'una o l'altra; il
+# significato è uno solo. `rete@trasi.local`, che non ha una Casa, legge tutta la rete anche senza `casa`.
+CASA_TUTTE = frozenset({"tutte", "rete", "tutte-le-case", "*"})
+
+
 @router.get("/eventi_oggi", response_model=RispostaEventiOggi, **meta("eventi_oggi"))
 async def eventi_oggi(
     casa: str | None = Query(
         default=None,
-        description="Slug o nome della Casa di Quartiere. Se omesso, gli eventi di TUTTE le Case della rete "
-        "(il calendario è condiviso); ogni item dichiara la sua Casa in `casa_slug`/`casa_nome`.",
+        description="Slug o nome della Casa di Quartiere; `tutte` per tutte le Case della rete in una sola chiamata. "
+        "Se omesso, la Casa dell'operatore autenticato (tutta la rete per un'identità senza Casa). Ogni item "
+        "dichiara la sua Casa in `casa_slug`/`casa_nome`.",
     ),
     data: date | None = Query(
         default=None,
@@ -204,36 +211,61 @@ async def eventi_oggi(
     al: date | None = Query(
         default=None,
         description="Fine dell'intervallo (inclusa): con `al` la risposta copre `data..al` — «questo weekend» o "
-        "«questa settimana» in una sola chiamata. Per un solo giorno, ometterla.",
+        "«questa settimana» in una sola chiamata. Alternativa a `finestra_gg`; per un solo giorno, ometterla.",
+    ),
+    finestra_gg: int | None = Query(
+        default=None,
+        ge=1,
+        le=MAX_GIORNI_INTERVALLO,
+        description=f"Ampiezza dell'intervallo in giorni a partire da `data` (inclusa), 1–{MAX_GIORNI_INTERVALLO}: "
+        "30 = «il mese». Alternativa ad `al`.",
     ),
     q: str | None = Query(
         default=None,
         description="Parola chiave facoltativa: filtra gli eventi per titolo/descrizione (es. «bambini»).",
     ),
     sess: Sessione = Depends(dipendenza_sessione),
+    _: None = Depends(solo_parametri_dichiarati),
 ) -> RispostaEventiOggi:
-    """Gli eventi del calendario della rete in una data o nell'intervallo `data..al`.
+    """Gli eventi del calendario della rete in una data o nell'intervallo `data..al` (o `data` + `finestra_gg`).
 
     «Oggi» è calcolato nel fuso italiano: alle 00:30 di Roma gli eventi della sera prima non sono più «oggi».
 
-    Senza `casa` la risposta copre **tutte** le Case della rete (fino al 2026-09-17 prendeva la sola Casa
-    dell'operatore, e gli eventi delle altre erano invisibili in chat: una Casa non vedeva il calendario della
-    rete). Con `casa` esplicito è quella Casa; il modello ne scrive di solito il **nome** e non lo slug, quindi un
-    valore che non è uno slug si prova a risolvere in Casa, e solo un testo che non è riconoscibile è 404. Ogni
-    item porta `casa_slug`/`casa_nome`: la provenienza viaggia con l'evento, non si deduce dal campo `casa` (che è
-    `null` quando la ricerca è su tutta la rete).
+    **Ambito.** Senza `casa` la risposta è quella della Casa dell'operatore — è ciò che i prompt degli assistenti
+    dicono da sempre («per la tua Casa ometti `casa`») e cambiarlo in silenzio avrebbe fatto rispondere a «cosa c'è
+    oggi da noi» con il calendario di dieci Case. Per **tutta la rete** c'è un valore esplicito, `casa=tutte`, e
+    ogni item porta `casa_slug`/`casa_nome`: la provenienza viaggia con l'evento. Un'identità senza Casa (`rete`)
+    legge tutta la rete anche senza `casa`. Il modello scrive spesso il **nome** della Casa e non lo slug: un
+    valore che non è uno slug si prova a risolvere, e solo un testo non riconoscibile è 404 — mai un ripiego
+    silenzioso su un'altra Casa.
+
+    **Intervallo.** `al` e `finestra_gg` dicono la stessa cosa in due forme, perché i prompt in esercizio usano
+    l'una o l'altra: date insieme devono coincidere, altrimenti 422. Il tetto è `MAX_GIORNI_INTERVALLO`.
+
+    **Parametri sconosciuti → 422** (`solo_parametri_dichiarati`): un parametro che il contratto non ha viene
+    nominato nell'errore invece di essere ignorato. È il difetto del 2026-09-18: il modello passava `finestra_gg`
+    a uno shim che non lo conosceva, riceveva il solo giorno `data` e rispondeva «nessun evento nel mese».
     """
     richiesto = (casa or "").strip() or None
-    slug = richiesto
-    if slug is not None and await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
-        # Il modello riempie `casa` col nome della Casa, non con lo slug (v. `risolvi_slug_casa`): un nome
-        # riconoscibile diventa lo slug, un testo che non è una Casa è 404 — mai un ripiego silenzioso su un'altra.
-        slug = await risolvi_slug_casa(sess, slug)
-        if slug is None:
-            raise errore(404, f"casa non trovata: nessuna Casa di Quartiere con «{richiesto}»")
+    if richiesto is not None and richiesto.lower() in CASA_TUTTE:
+        slug: str | None = None
+    elif richiesto is None:
+        slug = await slug_casa_da_identita(sess) or None
+    else:
+        slug = richiesto
+        if await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
+            slug = await risolvi_slug_casa(sess, slug)
+            if slug is None:
+                raise errore(404, f"casa non trovata: nessuna Casa di Quartiere con «{richiesto}»")
 
     dal = data or oggi_locale()
-    fine_intervallo = al or dal
+    if finestra_gg is not None:
+        da_finestra = dal + timedelta(days=finestra_gg - 1)
+        if al is not None and al != da_finestra:
+            raise errore(422, "parametri non ammessi — al e finestra_gg indicano due fini diverse: indicane uno solo")
+        fine_intervallo = da_finestra
+    else:
+        fine_intervallo = al or dal
     if fine_intervallo < dal:
         raise errore(422, "parametri non ammessi — al: deve essere uguale o successiva a data")
     if (fine_intervallo - dal).days > MAX_GIORNI_INTERVALLO:
@@ -255,7 +287,8 @@ async def eventi_oggi(
     # l'ordine è per data **dell'occorrenza**, non per `inizio`, altrimenti la lista mentirebbe sul calendario.
     eventi.sort(key=lambda e: (e.data, e.ora_inizio or ""))
 
-    return RispostaEventiOggi(casa=slug, data=dal, al=al, eventi=eventi)
+    al_dichiarato = fine_intervallo if fine_intervallo != dal else None
+    return RispostaEventiOggi(casa=slug, data=dal, al=al_dichiarato, eventi=eventi)
 
 
 @router.get(
@@ -271,6 +304,7 @@ async def eventi_mese(
     ),
     mese: str | None = Query(default=None, description="Mese `AAAA-MM`; se omesso, il mese corrente."),
     sess: Sessione = Depends(dipendenza_sessione),
+    _: None = Depends(solo_parametri_dichiarati),
 ) -> RispostaEventiMese:
     """Gli eventi di una Casa in un mese intero, dal primo all'ultimo giorno, in ordine di inizio.
 
@@ -491,6 +525,7 @@ async def statistiche(
     ),
     mese: str | None = Query(default=None, description="Mese `AAAA-MM`; se omesso, quello corrente."),
     sess: Sessione = Depends(dipendenza_sessione),
+    _: None = Depends(solo_parametri_dichiarati),
 ) -> RispostaStatistiche:
     """Le statistiche mensili delle richieste della Casa, dalla vista `v_report_mensile`.
 

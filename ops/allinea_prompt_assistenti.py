@@ -56,6 +56,7 @@ lo shim la usa automaticamente e la risposta porta il suo nome in `casa` — **e
 non con il nome citato nella domanda.
 Se invece l'operatore chiede di un'ALTRA Casa (per nome o slug), chiama `eventi_oggi` con `casa=<slug>` (santa-spazio, molo12, erranti, buscicchio, san-bao, minimus, pop, bozzano, dream, tuturano):
 è ammesso e necessario — il tool legge il calendario di qualunque Casa della rete, l'auto-uso è solo un default.
+Per TUTTE le Case della rete («tutte le Case», «in rete», «in città») chiama `eventi_oggi` con `casa=tutte`: UNA sola chiamata, mai una per Casa; ogni evento porta la sua Casa in `casa_slug`/`casa_nome`.
 Non chiedere mai «di quale Casa parliamo?»: rispondi con i tuoi strumenti.
 """,
     ),
@@ -116,6 +117,19 @@ della Casa, chiama `statistiche` (parametro `mese` facoltativo, formato `AAAA-MM
 Riporta i numeri **solo** come li dà lo strumento: il campo `n_label` («375», «<5», «—») e il campo `testo` sono già
 mascherati secondo le regole della rete — non calcolare, non sommare, non stimare nulla che il risultato non dica.
 Un mese senza richieste arriva come `ambiti: []`: dillo («mese senza richieste registrate»), non è un guasto.
+""",
+    ),
+    (
+        # Difetto (2026-09-18, misurato in `tool_call`): «gli eventi del mese di tutte le Case» → 20 chiamate
+        # `eventi_oggi`, una per Casa, e la risposta «nessun evento». Il periodo è un parametro, non un ciclo.
+        "FINESTRA TEMPORALE — periodi in una chiamata sola",
+        """
+FINESTRA TEMPORALE — periodi in una chiamata sola:
+`eventi_oggi` copre un periodo con `finestra_gg` (giorni da `data`, 1–92: 7 = la settimana, 30 = il mese) oppure con
+`al` (data di fine): «questa settimana», «questo weekend», «il mese», «i prossimi eventi» sono UNA chiamata, mai una
+per giorno. Con `casa=tutte` copre tutta la rete nella stessa chiamata. Se l'operatore chiede un giorno preciso
+(oggi, domani, «sabato 26»), basta `data`. Un parametro che lo strumento non conosce è un 422 che lo nomina: leggilo
+e correggi la chiamata, non ripeterla uguale.
 """,
     ),
     (
@@ -185,6 +199,23 @@ indica quale Casa deve farla. I prestiti tra Case si fanno dal portale, non in c
 # Frasi di versioni precedenti delle sezioni, da sostituire: il marcatore della sezione c'è già,
 # quindi il controllo «manca la sezione» non le vedrebbe. Ogni voce: (testo vecchio, testo nuovo).
 SOSTITUZIONI: list[tuple[str, str]] = [
+    (
+        # Forma lunga (questo script): dopo la regola sull'ALTRA Casa entra quella per tutta la rete.
+        "è ammesso e necessario — il tool legge il calendario di qualunque Casa della rete, l'auto-uso è solo un default.\n"
+        "Non chiedere mai «di quale Casa parliamo?»",
+        "è ammesso e necessario — il tool legge il calendario di qualunque Casa della rete, l'auto-uso è solo un default.\n"
+        "Per TUTTE le Case della rete («tutte le Case», «in rete», «in città») chiama `eventi_oggi` con `casa=tutte`: UNA sola chiamata, mai una per Casa; ogni evento porta la sua Casa in `casa_slug`/`casa_nome`.\n"
+        "Non chiedere mai «di quale Casa parliamo?»",
+    ),
+    (
+        # Forma compatta (prompt scritti il 2026-09-18 da un'altra sessione, in esercizio su «Trasi Casa»).
+        "Passa `casa=<slug>` SOLO per un'altra Casa (santa-spazio, molo12, erranti, buscicchio, san-bao, minimus, pop, bozzano, dream, tuturano).",
+        "Passa `casa=<slug>` SOLO per un'altra Casa (santa-spazio, molo12, erranti, buscicchio, san-bao, minimus, pop, bozzano, dream, tuturano); `casa=tutte` per TUTTE le Case della rete in UNA chiamata (mai una per Casa).",
+    ),
+    (
+        "• Periodi (`eventi_oggi`): usa `finestra_gg` (1–92) in UNA sola chiamata. Nessuna chiamata in loop.",
+        "• Periodi (`eventi_oggi`): usa `finestra_gg` (1–92) o `al` in UNA sola chiamata, con `casa=tutte` se serve tutta la rete. Nessuna chiamata in loop. Un 422 «parametri non ammessi» nomina il parametro sbagliato: correggi, non ripetere.",
+    ),
     (
         "Quando chiami `vicino_a`, `eventi_oggi` e `oggi`, NON indicare il parametro `casa`: lo shim usa automaticamente quella dell'operatore.",
         "Quando chiami `vicino_a` e `eventi_oggi`, NON indicare il parametro `casa` se l'operatore parla della SUA Casa:\n"
@@ -287,6 +318,12 @@ def _sezioni_di(persona_id: int) -> list[tuple[str, str]]:
 def main(argv: list[str] | None = None) -> int:
     argomenti = argparse.ArgumentParser(description="Allinea i prompt dei 4 assistenti Trasi")
     argomenti.add_argument("--dry-run", action="store_true", help="mostra cosa farebbe, senza scrivere")
+    argomenti.add_argument(
+        "--solo-sostituzioni",
+        action="store_true",
+        help="applica solo le SOSTITUZIONI di frasi, senza aggiungere sezioni: per un prompt scritto in un'altra forma "
+        "(es. quello compatto di «Trasi Casa»), a cui servono le regole nuove ma non un secondo testo in coda",
+    )
     opzioni = argomenti.parse_args(argv)
 
     email, password = _leggi_credenziali()
@@ -297,7 +334,9 @@ def main(argv: list[str] | None = None) -> int:
         persona = _richiesta(f"/persona/{persona_id}", cookie)
         prompt = persona.get("system_prompt") or ""
 
-        assenti = [testo for marcatore, testo in _sezioni_di(persona_id) if _manca(marcatore, prompt)]
+        assenti = [] if opzioni.solo_sostituzioni else [
+            testo for marcatore, testo in _sezioni_di(persona_id) if _manca(marcatore, prompt)
+        ]
         da_sostituire = [(v, n) for v, n in SOSTITUZIONI if v in prompt]
         if not assenti and not da_sostituire:
             print(f"  {persona_id} {nome}: già completo ({len(prompt)} caratteri)")
@@ -330,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     if opzioni.dry_run:
         print(f"\ndry-run: {mancanti_totali} sezioni da aggiungere in totale")
         return 0
-    if residui:
+    if residui and not opzioni.solo_sostituzioni:
         print(f"\nATTENZIONE: {residui} sezioni ancora mancanti dopo l'aggiornamento", file=sys.stderr)
         return 1
     print("\ntutti i prompt allineati.")

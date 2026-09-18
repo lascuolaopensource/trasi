@@ -33,7 +33,7 @@ from fastapi.responses import HTMLResponse
 
 from .auth import SessioneOperatore, sessione_corrente
 from .badge import NOTA_ORARI_ASSENTI, badge_esterna, badge_kb, nome_fonte
-from .contratto import prefisso_path
+from .contratto import prefisso_path, solo_parametri_dichiarati
 from .db import Sessione, parametri, parametro_int, risolvi_slug_casa, sessione, slug_casa_da_identita
 from .errori import errore
 from .operazioni import dichiarazione
@@ -116,6 +116,7 @@ SELECT casa_id, slug, nome, data, eventi, schede_in_scadenza, proposte, giorni_p
 async def oggi(
     casa: str | None = Query(default=None, description="Slug della Casa; se omesso, quella dell'operatore."),
     sess: Sessione = Depends(sessione),
+    _: None = Depends(solo_parametri_dichiarati),
 ) -> dict[str, Any]:
     """La riga «Oggi» della Casa, dalla vista `v_oggi_casa`.
 
@@ -358,6 +359,7 @@ async def biglietto(
     luogo_id: str = Query(..., min_length=1),
     casa: str | None = Query(default=None, min_length=1),
     sess: Sessione = Depends(sessione),
+    _: None = Depends(solo_parametri_dichiarati),
 ) -> HTMLResponse:
     """Il biglietto stampabile (A6) del luogo scelto: `text/html`, l'unica risposta non JSON del contratto.
 
@@ -542,6 +544,7 @@ async def cerca_web(
     q: str = Query(..., min_length=1),
     max: int | None = Query(default=None, ge=1),
     sess: Sessione = Depends(sessione),
+    _: None = Depends(solo_parametri_dichiarati),
 ) -> dict[str, Any]:
     """Ricerca web **solo** su fonti in allow-list (V-07 negativo: la restrizione è dello shim, non del motore).
 

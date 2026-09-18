@@ -495,7 +495,7 @@ def test_vicino_a_raggio_di_tuturano_viene_dalla_casa(client, db_vivo):
 
     route = respx.post(ENDPOINT_OVERPASS).mock(return_value=_risposta_overpass([]))
 
-    corpo = _vicino_a(client, "casa=tuturano&tipo=bar&tipo_ignorato=", email="op.tuturano@trasi.local").json()
+    corpo = _vicino_a(client, "casa=tuturano&tipo=bar", email="op.tuturano@trasi.local").json()
 
     assert corpo["raggio_m"] == 2000
     assert "around:2000" in route.calls.last.request.content.decode("utf-8")

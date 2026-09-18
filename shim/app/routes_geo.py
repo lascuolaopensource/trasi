@@ -32,7 +32,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from .badge import nome_fonte
-from .contratto import meta
+from .contratto import meta, solo_parametri_dichiarati
 from .db import Sessione, dipendenza_sessione, parametri, parametro_int, risolvi_slug_casa, slug_casa_da_identita
 from .errori import errore
 from .schemi import FonteEsterna, ItemVicinanza, RispostaVicinoA
@@ -127,6 +127,7 @@ async def vicino_a(
     ),
     raggio_m: int | None = Query(default=None, ge=1, description="Raggio di ricerca in metri, facoltativo."),
     sess: Sessione = Depends(dipendenza_sessione),
+    _: None = Depends(solo_parametri_dichiarati),
 ) -> RispostaVicinoA:
     """I luoghi di un tipo vicino a una Casa, dalla memoria della rete e da OpenStreetMap.
 

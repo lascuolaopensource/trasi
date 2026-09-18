@@ -460,14 +460,14 @@ def _rimuovi_eventi(ids: list[int]) -> None:
 
 
 @pytest.mark.live
-def test_eventi_oggi_senza_casa_copre_la_rete_su_un_intervallo(client, db_vivo):
-    """Un operatore che non nomina una Casa riceve il calendario di TUTTA la rete, su un intervallo, in una chiamata.
+def test_eventi_oggi_casa_tutte_copre_la_rete_e_senza_casa_resta_la_propria(client, db_vivo):
+    """`casa=tutte` legge il calendario di TUTTA la rete su un intervallo, in una chiamata; senza `casa` la propria.
 
-    È il difetto grave del 2026-09-17: `eventi_oggi` senza `casa` ripiegava sulla Casa dell'operatore, così chi
-    lavora a una Casa non vedeva gli eventi delle altre e l'assistente rispondeva «non ce ne sono» su un calendario
-    di rete pieno. Qui si inseriscono eventi in **altre** Case (Buscicchio, Bozzano) e in un intervallo di due
-    giorni, e li si legge come operatore di San Bao **senza** passare `casa`: devono comparire tutti, con la loro
-    Casa in `casa_slug`, e `casa` di risposta `null` (la ricerca è sulla rete).
+    Difetto del 2026-09-17/18: l'assistente rispondeva «nessun evento nel mese» perché doveva fare una chiamata per
+    Casa e per giorno. Qui si inseriscono eventi in **altre** Case (Buscicchio, Bozzano) e li si legge come
+    operatore di San Bao: con `casa=tutte` compaiono tutti con la loro Casa in `casa_slug` e `casa` di risposta
+    `null`; senza `casa` la risposta è di San Bao (i prompt in esercizio dicono «per la tua Casa ometti `casa`») e
+    quegli eventi non ci sono. `finestra_gg=2` equivale ad `al=domenica`; `q` filtra per parola.
     """
     if not db_vivo:
         pytest.skip("database non raggiungibile")
@@ -479,20 +479,18 @@ def test_eventi_oggi_senza_casa_copre_la_rete_su_un_intervallo(client, db_vivo):
         ("bozzano", "Serata anziani TEST rete", datetime.combine(domenica, time(18, 0), tzinfo=FUSO_LOCALE), None),
     ]
     ids = _inserisci_eventi(righe)
+    base = f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?data={sabato.isoformat()}"
     try:
-        risposta = client.get(
-            f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?data={sabato.isoformat()}&al={domenica.isoformat()}"
-        )
-        filtro = client.get(
-            f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi"
-            f"?data={sabato.isoformat()}&al={domenica.isoformat()}&q=bambini"
-        )
+        rete = client.get(f"{base}&al={domenica.isoformat()}&casa=tutte")
+        finestra = client.get(f"{base}&finestra_gg=2&casa=tutte")
+        propria = client.get(f"{base}&al={domenica.isoformat()}")
+        filtro = client.get(f"{base}&al={domenica.isoformat()}&casa=tutte&q=bambini")
     finally:
         _rimuovi_eventi(ids)
 
-    assert risposta.status_code == 200
-    corpo = risposta.json()
-    assert corpo["casa"] is None, "senza `casa` la risposta è della rete: `casa` deve essere null"
+    assert rete.status_code == 200
+    corpo = rete.json()
+    assert corpo["casa"] is None, "con `casa=tutte` la risposta è della rete: `casa` deve essere null"
     assert corpo["al"] == domenica.isoformat()
     titoli = {e["titolo"] for e in corpo["eventi"]}
     assert {"Laboratorio per bambini TEST rete", "Serata anziani TEST rete"} <= titoli, (
@@ -502,10 +500,45 @@ def test_eventi_oggi_senza_casa_copre_la_rete_su_un_intervallo(client, db_vivo):
     assert per_titolo["Laboratorio per bambini TEST rete"]["casa_slug"] == "buscicchio"
     assert per_titolo["Serata anziani TEST rete"]["casa_slug"] == "bozzano"
 
+    assert finestra.status_code == 200
+    assert finestra.json()["al"] == domenica.isoformat(), "`finestra_gg=2` da sabato finisce domenica"
+    assert {e["titolo"] for e in finestra.json()["eventi"]} == titoli
+
+    assert propria.status_code == 200
+    assert propria.json()["casa"] == "san-bao", "senza `casa` la risposta è della Casa dell'operatore"
+    assert not ({"Laboratorio per bambini TEST rete", "Serata anziani TEST rete"} & {e["titolo"] for e in propria.json()["eventi"]})
+
     assert filtro.status_code == 200
     titoli_filtro = {e["titolo"] for e in filtro.json()["eventi"]}
     assert "Laboratorio per bambini TEST rete" in titoli_filtro
     assert "Serata anziani TEST rete" not in titoli_filtro, "`q=bambini` non deve restituire la serata anziani"
+
+
+def test_eventi_oggi_al_e_finestra_gg_discordanti_risponde_422(client, sessione_finta):
+    """Due fini diverse per lo stesso intervallo sono un errore dichiarato, non una scelta silenziosa."""
+    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_oggi?data=2026-09-01&al=2026-09-30&finestra_gg=7")
+    assert risposta.status_code == 422
+    assert "finestra_gg" in risposta.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("percorso", "sconosciuto"),
+    [
+        ("eventi_oggi?data=2026-09-01&giorni=30", "giorni"),
+        ("cerca_luogo?q=isee&zona=centro", "zona"),
+        ("statistiche?anno=2026", "anno"),
+    ],
+)
+def test_parametro_di_query_sconosciuto_risponde_422_e_lo_nomina(client, sessione_finta, percorso, sconosciuto):
+    """Un parametro che il contratto non dichiara è un 422 che lo nomina ed elenca quelli ammessi.
+
+    È il difetto del 2026-09-18: `finestra_gg=30` passato a uno shim che non lo conosceva veniva ignorato in
+    silenzio, la risposta copriva un giorno solo e l'assistente concludeva «nessun evento nel mese» con status 200.
+    """
+    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/{percorso}")
+    assert risposta.status_code == 422
+    dettaglio = risposta.json()["detail"]
+    assert sconosciuto in dettaglio and "ammessi:" in dettaglio
 
 
 @pytest.mark.live
