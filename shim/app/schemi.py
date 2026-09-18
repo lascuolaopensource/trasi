@@ -105,6 +105,8 @@ class RispostaCercaOggetto(BaseModel):
     model_config = TIPO_STRETTO
 
     items: list[ItemOggetto]
+
+
 class RispostaEventiMese(BaseModel):
     """`eventi_mese` (fuori contratto, calendario della Home): gli eventi di una Casa dal primo all'ultimo giorno del mese.
 
@@ -119,6 +121,40 @@ class RispostaEventiMese(BaseModel):
     al: date
     oggi: date
     eventi: list[ItemEvento]
+
+
+class VoceMappaCasa(BaseModel):
+    """`mappa_case` (fuori contratto, pagina «Mappa» della Home): una Casa della rete come pin e come voce dell'elenco."""
+
+    model_config = TIPO_STRETTO
+
+    slug: str
+    nome: str
+    zona: str | None
+    ente_gestore: str | None
+    lat: float
+    lon: float
+    raggio_m_eff: int | None
+    geom_qualita: str | None
+    da_validare: bool
+    orari_provvisori: bool
+    orari_testo: str | None
+    fonte: str
+    fiducia: int | None = Field(default=None, ge=1, le=3)
+    data_aggiornamento: date | None
+    badge: str
+    evidenziata: bool
+
+
+class RispostaMappaCase(BaseModel):
+    """Le dieci Case per la mappa: `casa_evidenziata` è lo slug richiesto (o `null`), `consultato_ts` l'istante della lettura."""
+
+    model_config = TIPO_STRETTO
+
+    casa_evidenziata: str | None
+    consultato_ts: datetime
+    case: list[VoceMappaCasa]
+
 
 
 class FonteEsterna(BaseModel):

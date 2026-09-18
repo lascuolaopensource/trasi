@@ -385,3 +385,69 @@ def test_eventi_oggi_riconosce_la_casa_dal_nome(client, db_vivo, casa):
     assert risposta.status_code == 200
     atteso = "bozzano" if "Bozzano" in casa else "buscicchio"
     assert risposta.json()["casa"] == atteso, f"«{casa}» deve risolversi in {atteso}, non nella Casa dell'operatore"
+
+
+# --- mappa_case (fuori contratto: la mappa delle dieci Case della Home) -------------------------------------
+
+
+@pytest.mark.live
+def test_mappa_case_dieci_voci_con_coordinate_e_badge_kb(client, db_vivo):
+    """Le dieci Case della rete, con lat/lon numerici e il badge KB (V3) composto dallo shim; nessuna evidenziata senza `casa`."""
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    risposta = client.get(f"{URL.format(email=EMAIL_RETE)}/mappa_case")
+
+    assert risposta.status_code == 200
+    corpo = risposta.json()
+    assert corpo["casa_evidenziata"] is None
+    assert len(corpo["case"]) == 10
+    assert len({c["slug"] for c in corpo["case"]}) == 10
+    for casa in corpo["case"]:
+        assert isinstance(casa["lat"], float) and isinstance(casa["lon"], float)
+        assert 40.0 < casa["lat"] < 41.0 and 17.0 < casa["lon"] < 18.5, casa["slug"]
+        assert casa["badge"].startswith("[KB · "), casa["badge"]
+        assert casa["evidenziata"] is False
+
+
+@pytest.mark.live
+def test_mappa_case_evidenzia_la_casa_richiesta_per_slug(client, db_vivo):
+    """`casa=tuturano` → esattamente una voce evidenziata, con la qualità della geometria dichiarata («stimata»)."""
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    risposta = client.get(f"{URL.format(email=EMAIL_RETE)}/mappa_case?casa=tuturano")
+
+    assert risposta.status_code == 200
+    corpo = risposta.json()
+    assert corpo["casa_evidenziata"] == "tuturano"
+    evidenziate = [c for c in corpo["case"] if c["evidenziata"]]
+    assert [c["slug"] for c in evidenziate] == ["tuturano"]
+    assert evidenziate[0]["geom_qualita"] == "stimata"
+
+
+@pytest.mark.live
+def test_mappa_case_riconosce_la_casa_dal_nome(client, db_vivo):
+    """`casa=Parco Buscicchio` (il nome, come lo scrive la Home nel testo) → evidenziata `buscicchio`."""
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    risposta = client.get(f"{URL.format(email=EMAIL_RETE)}/mappa_case?casa=Parco%20Buscicchio")
+
+    assert risposta.status_code == 200
+    assert risposta.json()["casa_evidenziata"] == "buscicchio"
+
+
+def test_mappa_case_con_casa_inesistente_risponde_404(client, sessione_finta):
+    """Una Casa che non esiste è 404 (vocabolario chiuso), non una mappa senza evidenza."""
+    sessione_finta(righe=[], valore=None)
+    risposta = client.get(f"{URL.format(email=EMAIL_RETE)}/mappa_case?casa=casa-che-non-esiste")
+
+    assert risposta.status_code == 404
+    assert "casa non trovata" in risposta.json()["detail"]
+
+
+def test_mappa_case_e_fuori_dal_contratto_congelato(client):
+    """La rotta non compare nello schema OpenAPI generato: le operazioni esposte restano quelle congelate (V-09)."""
+    percorsi = client.get("/openapi.json").json()["paths"]
+    assert not any(p.endswith("/mappa_case") for p in percorsi)

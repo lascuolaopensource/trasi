@@ -331,6 +331,49 @@ vero portandogli l'header `Host`: è lo stesso percorso della riga «Oggi», con
 proxy. `curl` con `-H 'Host: …'` è invece sufficiente per tutte le misure che non richiedono un
 browser.
 
+## 5b · La pagina «Mappa delle Case» (`mappa.html`, aggiunta il 2026-09-18)
+
+Seconda pagina pubblica, stessa testata e stesso `style.css` della Home (+ `mappa.css`, Leaflet vendorizzato
+BSD-2 in `vendor/leaflet/`). Misure sul banco locale (file veri, `/api/shim/*` verso lo shim del ramo), Chrome
+headless, axe-core 4.10.2 regole WCAG 2.1 A/AA: **0 violazioni** (26 regole passate) su `mappa.html`; la Home
+dopo l'estrazione di `casa.js` resta a 0 violazioni.
+
+**Struttura semantica** (1.3.1): `<header>` (stesso selettore `#selettore-casa` con `<label>`) → `<main>` →
+`<h1>` «Le dieci Case della rete» → riga di stato `role="status" aria-live="polite"` («Lettura in corso…» →
+«10 Case · centrata su San Bao») → la tela `<div id="mappa-tela" tabindex="0" role="region" aria-label…
+aria-describedby="mappa-attribuzione">` → attribuzione OSM **in parole** (`<p>`, nel flusso, mai dietro il
+controllo di Leaflet) → riga «Sfondo della mappa non disponibile…» (`role="status"`, `hidden` finché non serve)
+→ legenda `<ul aria-label="Legenda">` in parole → `<section aria-labelledby>` «Elenco delle Case» con un `<ol>`
+(stesse Case, stesso ordine della mappa: prima la Casa scelta, poi per distanza) → `<footer>`.
+
+**Tastiera** (2.1.1, 2.4.3, 2.4.7): ordine misurato con Tab dal selettore → «Home» → «Area operatore» → la
+tela (annunciata: «Mappa delle dieci Case della rete. L'elenco sotto è la stessa informazione…») → i due
+bottoni di zoom di Leaflet («Avvicina la mappa», «Allontana la mappa») → i dieci bottoni «Mostra <Casa> sulla
+mappa» → piede. **I pin non sono mai nel percorso** (`keyboard: false`, 0 marcatori con `tabindex ≥ 0`
+misurati): l'equivalente è l'elenco. Enter su un bottone seleziona la Casa, l'elenco si riordina e il focus
+resta sul bottone della stessa Casa (misurato). Focus visibile su tela e bottoni (`outline 3px --focus`).
+
+**Non solo colore** (1.4.1): la Casa scelta ha l'anello sul pin **e** la parola «la Casa scelta» + `aria-current`
+nella voce; «orari provvisori», «coordinate stimate», «dati provvisori» sono parole; il badge di provenienza è
+testo monospazio verbatim.
+
+**Contrasti** (1.4.3), colori calcolati: nome della voce `#1c1c1a` su bianco **17,07**; testo tenue `#4a4a46`
+**8,90**; chip «LA CASA SCELTA» carta su `--testata` **10,03**; badge `--kb-testo` `#07577b` su bianco
+**7,90** (6,98 sulla voce scelta, sfondo `--azione-sfondo-hover`); note `--attenzione-testo` su `--attenzione-sfondo` **6,71** (già misurato in §1.4.3); pin `--testata`
+su tile chiari: il pin non porta testo informativo (il nome è nell'elenco), il carattere è 22 px.
+
+**Stati dichiarati**: shim fermo → riga «Dati non disponibili: la memoria della rete non risponde in questo
+momento. È un'informazione, non un guasto.», tela e attribuzione nascoste, pagina navigabile; tile bloccati →
+«Sfondo della mappa non disponibile: le Case e l'elenco restano leggibili.», 10 pin e 10 voci intatti (misurato
+bloccando `tile.openstreetmap.org` con cache disattivata: con la cache attiva i tile già scaricati non
+producono errore, ed è corretto); `?casa=` non valido → Casa predefinita, nessun testo tecnico a schermo.
+
+**Reflow** (1.4.10): a 360 px `scrollWidth === 360`, 10 pin; la tela scende a 20 rem. Screenshot in
+`evidenze/mappa-{1280,768,360,tile-bloccati,shim-fermo,da-home-molo12}.png`.
+
+**Domini contattati**: `127.0.0.1` (la pagina e `/api/shim/*`) e **`tile.openstreetmap.org`** (lo sfondo).
+Nessun CDN, nessun font remoto — misurato registrando ogni richiesta della pagina.
+
 ## 6 · Difetti reali trovati durante questa verifica
 
 **Della versione precedente (riportati perché sono lezioni, non storia):**

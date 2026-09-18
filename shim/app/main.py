@@ -150,6 +150,11 @@ def crea_app() -> FastAPI:
     prefisso = prefisso_path()
     applicazione.include_router(routes_lettura.router, prefix=prefisso)
     applicazione.include_router(routes_geo.router, prefix=prefisso)
+    # La mappa delle Case per la Home (`mappa.html`): route nascosta sullo stesso canale con chiave,
+    # fuori dal contratto (`include_in_schema=False` nel decoratore).
+    from . import mappa_case
+
+    applicazione.include_router(mappa_case.router, prefix=prefisso)
 
     # I router delle scritture e degli output sono dell'altro worker (B3ShimB) e vivono in file separati: si
     # montano **dopo** i miei e ognuno monta il proprio `router`, così nessuno riscrive il file dell'altro. Il
