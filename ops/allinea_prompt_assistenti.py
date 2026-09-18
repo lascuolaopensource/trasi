@@ -143,6 +143,42 @@ Se l'operatore non risponde alla domanda, non registrare nulla: un esito inventa
     ),
 ]
 
+# Sezioni che valgono **solo per alcuni assistenti**: (marcatore, testo, id degli assistenti). L'attrezzoteca in
+# chat (2026-09-18) ha due letture: la Casa legge **e** scrive il proprio inventario (`salva_dato`), la Rete legge
+# soltanto (`cerca_oggetto`). Un testo unico direbbe alla Rete di scrivere ciò che il database le nega (db/032:
+# GRANT ai soli ruoli Casa) — l'assistente proverebbe, riceverebbe 403 e lo racconterebbe come guasto.
+SEZIONI_PER_ASSISTENTE: list[tuple[str, str, frozenset[int]]] = [
+    (
+        # Difetto (2026-09-18): «aggiungi 5 sedie all'attrezzoteca» e «dove trovo dei microfoni?» non avevano
+        # uno strumento — il contratto non aveva letture dell'inventario e `salva_dato` non conosceva `oggetto`.
+        "ATTREZZOTECA — l'inventario condiviso",
+        """
+ATTREZZOTECA — l'inventario condiviso della rete:
+Per sapere dove si trova un oggetto, quanti pezzi sono disponibili o cosa c'è nell'attrezzoteca di una Casa, usa
+`cerca_oggetto` (tutte le Case; `casa=<slug>` per una sola). Riporta `casa_nome`, `quantita_disponibile`, `condizione`
+e il `badge` così come sono: la disponibilità è già al netto dei prestiti in corso, non ricalcolarla.
+Per aggiungere, correggere o ritirare un oggetto della TUA Casa usa `salva_dato` con `entita="oggetto"`: alla creazione
+servono `nome` e `quantita` (`condizione` facoltativa: integro, danneggiato, mancante_di_parti; `tipo` facoltativo);
+con `id` (l'`oggetto_id` di `cerca_oggetto`) correggi quantità o condizione; `attivo=false` con `id` ritira l'oggetto.
+È scrittura diretta della tua Casa: non chiedere «di quale Casa» e non passare da `proponi_modifica`.
+Gli oggetti delle ALTRE Case si leggono soltanto: se l'operatore chiede di modificarli, digli di contattare quella Casa.
+I prestiti tra Case si fanno dal portale (area operatore), non in chat.
+""",
+        frozenset({2}),
+    ),
+    (
+        "ATTREZZOTECA — sola lettura",
+        """
+ATTREZZOTECA — sola lettura dell'inventario condiviso:
+Per sapere dove si trova un oggetto, quanti pezzi sono disponibili o cosa c'è nell'attrezzoteca di una Casa, usa
+`cerca_oggetto` (tutte le Case; `casa=<slug>` per una sola). Riporta `casa_nome`, `quantita_disponibile`, `condizione`
+e il `badge` così come sono. Tu non scrivi l'inventario: lo fa ciascuna Casa per la propria; se serve una modifica,
+indica quale Casa deve farla. I prestiti tra Case si fanno dal portale, non in chat.
+""",
+        frozenset({3}),
+    ),
+]
+
 # Frasi di versioni precedenti delle sezioni, da sostituire: il marcatore della sezione c'è già,
 # quindi il controllo «manca la sezione» non le vedrebbe. Ogni voce: (testo vecchio, testo nuovo).
 SOSTITUZIONI: list[tuple[str, str]] = [
@@ -240,6 +276,11 @@ def _manca(marcatore: str, prompt: str) -> bool:
     return marcatore.casefold() not in prompt.casefold()
 
 
+def _sezioni_di(persona_id: int) -> list[tuple[str, str]]:
+    """Le sezioni attese per un assistente: quelle comuni più quelle riservate al suo id."""
+    return list(SEZIONI) + [(m, t) for m, t, ids in SEZIONI_PER_ASSISTENTE if persona_id in ids]
+
+
 def main(argv: list[str] | None = None) -> int:
     argomenti = argparse.ArgumentParser(description="Allinea i prompt dei 4 assistenti Trasi")
     argomenti.add_argument("--dry-run", action="store_true", help="mostra cosa farebbe, senza scrivere")
@@ -253,7 +294,7 @@ def main(argv: list[str] | None = None) -> int:
         persona = _richiesta(f"/persona/{persona_id}", cookie)
         prompt = persona.get("system_prompt") or ""
 
-        assenti = [testo for marcatore, testo in SEZIONI if _manca(marcatore, prompt)]
+        assenti = [testo for marcatore, testo in _sezioni_di(persona_id) if _manca(marcatore, prompt)]
         da_sostituire = [(v, n) for v, n in SOSTITUZIONI if v in prompt]
         if not assenti and not da_sostituire:
             print(f"  {persona_id} {nome}: già completo ({len(prompt)} caratteri)")
@@ -278,7 +319,7 @@ def main(argv: list[str] | None = None) -> int:
     residui = 0
     for persona_id, nome in ASSISTENTI.items():
         prompt = _richiesta(f"/persona/{persona_id}", cookie).get("system_prompt") or ""
-        assenti = [m for m, _ in SEZIONI if _manca(m, prompt)]
+        assenti = [m for m, _ in _sezioni_di(persona_id) if _manca(m, prompt)]
         stato = "OK" if not assenti else f"MANCANO {assenti}"
         print(f"  {persona_id} {nome}: {stato}")
         residui += len(assenti)

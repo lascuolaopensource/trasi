@@ -764,10 +764,12 @@ WITH mut AS (
   UNION ALL
   SELECT 'casa', id, id, aggiornato_ts, aggiornato_da FROM trasi.casa
    WHERE aggiornato_ts IS NOT NULL
-  -- Attrezzoteca (db/014): `oggetto` è memoria della rete a tutti gli effetti —
-  -- nasce e si modifica SOLO via proposta (tipi nuovo_oggetto/modifica_oggetto/
-  -- ritira_oggetto), quindi una sua mutazione senza `applicata` è una violazione
-  -- di V4 esattamente come per un luogo. `movimento` NON è qui: è l'evento
+  -- Attrezzoteca (db/014, db/032): `oggetto` è memoria della rete a tutti gli effetti.
+  -- La propria Casa lo scrive **direttamente** (D1: `casa_<slug>` su `casa_id` proprio,
+  -- escluso dal filtro in coda come per scheda/opportunità); le altre Case passano
+  -- dalla proposta (nuovo_oggetto/modifica_oggetto/ritira_oggetto, `applicata`). Quindi
+  -- una mutazione senza `applicata` da un ruolo che **non** è la Casa proprietaria è una
+  -- violazione di V4 esattamente come per un luogo. `movimento` NON è qui: è l'evento
   -- operativo la cui eccezione è documentata, e la sua contabilità è l'audit
   -- 'conferma_movimento' scritto da `conferma_movimento()` a ogni passaggio di
   -- stato — confrontarlo con `applicata` segnalerebbe ogni prestito legittimo.

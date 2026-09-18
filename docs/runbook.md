@@ -1038,3 +1038,57 @@ chat fatte con credenziali admin (PAT `trasi-kb-export`) rispondono **403** — 
 **dell'utente della chat** (`tool_constructor.py:436-447`), e l'admin non ha un'identità in
 `trasi.identita_onyx`: è il comportamento atteso, non un difetto. Il tool Onyx (id 12) è stato
 ri-registrato con il contratto a 12 operazioni.
+
+### 11.4 · Attrezzoteca in chat — `cerca_oggetto` e `salva_dato(entita=oggetto)` (aggiunta il 2026-09-18)
+
+**Difetto**: l'attrezzoteca non era utilizzabile dalla chat Onyx, né in lettura né in scrittura. Il contratto
+non aveva alcuna operazione sull'inventario (l'unico endpoint era `GET /op/attrezzoteca`, canale browser con
+cookie); `proponi_modifica` rifiutava `entita="oggetto"` e `salva_dato` non lo conosceva. Nel database le policy
+`ogg_ins_casa`/`ogg_upd_casa` (db/014 §3) esistevano **senza** il GRANT ai ruoli Casa: la porta era disegnata e
+murata («SOLO via proposta»), ma con un solo accesso per Casa la proposta su un oggetto proprio finiva ad `at` e
+alla notte — né «automatico» né «solo la propria Casa».
+
+**Decisione di perimetro** (coerente con S2 «opzione A» e con la specifica Processi 2026-09-17): `oggetto` della
+**propria** Casa entra nella scrittura diretta (D1), come scheda/opportunità/evento/persona. I tipi di proposta
+`nuovo_oggetto`/`modifica_oggetto`/`ritira_oggetto` restano per il caso cross-Casa (AT). La lettura dell'inventario
+è un'operazione del contratto, aperta a tutte le Case e alla rete.
+
+**Fix** (contratto 12 → 13 operazioni):
+
+- `db/032_attrezzoteca_diretta.sql`: `GRANT INSERT, UPDATE ON trasi.oggetto` ai dieci ruoli Casa (+ USAGE sulla
+  sequenza), **nessun DELETE** (V4 regola 7: ritiro = `attivo=false`); commento della tabella aggiornato. Le
+  policy restano l'autorità (`casa_id = casa_corrente()` in USING e WITH CHECK). `v_scritture_senza_audit` già
+  esclude le scritture della propria Casa: non si tocca. Test: `db/tests/t_rls.sql` T15.
+- `salva_dato` con `entita="oggetto"`: `nome` e `quantita` obbligatori alla creazione; `tipo`, `descrizione`,
+  `condizione` (integro | danneggiato | mancante_di_parti) facoltativi; con `id`: correzione; `attivo=false` con
+  `id`: ritiro. Un oggetto di un'altra Casa → **403** «riga non appartiene alla Casa dell'operatore» (la RLS rende
+  l'UPDATE «0 righe»; lo shim riporta, non decide). `rete` → 403.
+- `cerca_oggetto?q=&casa=`: stessa query del portale (`attrezzoteca.inventario()` su `v_inventario`), `q` su
+  nome/descrizione/tipo/badge, `casa` come slug o nome (`risolvi_slug_casa`), Casa inesistente → 404, inventario
+  vuoto → `items: []`.
+- Portale: la linguetta «Attrezzoteca» rilegge l'inventario **all'apertura**, così un oggetto aggiunto in chat
+  compare senza ricaricare la pagina.
+
+```bash
+# scrittura (San Bao crea)
+$ curl -s -H 'X-Trasi-Key: …' -H 'Content-Type: application/json' \
+    -d '{"entita":"oggetto","nome":"sedie pieghevoli","quantita":5,"condizione":"integro"}' \
+    'http://127.0.0.1:8001/v1/u/op.san-bao@trasi.local/salva_dato'
+{"id":123,"entita":"oggetto","creato":true}
+# lettura (chiunque della rete)
+$ curl -s -H 'X-Trasi-Key: …' 'http://127.0.0.1:8001/v1/u/op.pop@trasi.local/cerca_oggetto?q=sedie'
+{"items":[{"oggetto_id":123,"nome":"sedie pieghevoli","tipo":null,"casa":"san-bao","casa_nome":"San Bao",
+  "quantita":5,"quantita_fuori":0,"quantita_disponibile":5,"condizione":"integro","fonte":null,"badge":"rete"}]}
+# scrittura cross-Casa (Pop su un oggetto di San Bao): decide il database
+$ curl -s -H 'X-Trasi-Key: …' -H 'Content-Type: application/json' -d '{"entita":"oggetto","id":123,"quantita":3}' \
+    'http://127.0.0.1:8001/v1/u/op.pop@trasi.local/salva_dato'
+{"detail":"riga non appartiene alla Casa dell'operatore"}          # 403
+# contabilità V4
+$ psql … -c "SELECT count(*) FROM trasi.v_scritture_senza_audit WHERE entita='oggetto'"   # atteso: 0
+```
+
+**Passi di deploy** (non avvengono con il solo merge): `./db/apply.sh 032` (o `psql -1 -f db/032_attrezzoteca_diretta.sql`);
+rebuild dello shim; ri-registrazione del tool Onyx (id 12) con il contratto a 13 operazioni (`PUT /api/admin/tool/custom/12`,
+`definition` = `shim/openapi.yaml`); `python3 ops/allinea_prompt_assistenti.py` (sezioni «ATTREZZOTECA» su Casa e Rete).
+Verifica: `onyx.openapi_to_method_specs` deve elencare `cerca_oggetto`; chat come `op.san-bao` «Aggiungi all'attrezzoteca
+5 sedie pieghevoli, integre» → tool call `salva_dato` → 201 senza chiedere «di quale Casa».

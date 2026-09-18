@@ -39,6 +39,7 @@ PARAMETRI: dict[str, str] = {
     "oggi": "casa=san-bao",
     "statistiche": "casa=san-bao",
     "cerca_web": "q=isee",
+    "cerca_oggetto": "q=sedie",
 }
 CORPI: dict[str, dict] = {
     "registra_richiesta": {"categoria": "orientamento", "esito": "risolta"},

@@ -81,6 +81,30 @@ class RispostaEventiOggi(BaseModel):
     eventi: list[ItemEvento]
 
 
+class ItemOggetto(BaseModel):
+    """`cerca_oggetto`: un oggetto dell'attrezzoteca della rete, da `v_inventario` (disponibilità già al netto dei prestiti)."""
+
+    model_config = TIPO_STRETTO
+
+    oggetto_id: int
+    nome: str
+    tipo: str | None
+    casa: str
+    casa_nome: str
+    quantita: int = Field(ge=1)
+    quantita_fuori: int = Field(ge=0)
+    quantita_disponibile: int = Field(ge=0)
+    condizione: Literal["integro", "danneggiato", "mancante_di_parti"]
+    fonte: str | None
+    badge: str
+
+
+class RispostaCercaOggetto(BaseModel):
+    """Esito della ricerca nell'attrezzoteca: `items: []` è un inventario senza corrispondenze, mai un 404."""
+
+    model_config = TIPO_STRETTO
+
+    items: list[ItemOggetto]
 class RispostaEventiMese(BaseModel):
     """`eventi_mese` (fuori contratto, calendario della Home): gli eventi di una Casa dal primo all'ultimo giorno del mese.
 

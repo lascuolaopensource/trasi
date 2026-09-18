@@ -1,9 +1,10 @@
 -- Trasi — db/014_attrezzoteca.sql
 -- Attrezzoteca (US-5.x, Fase 0 §2): inventario condiviso delle Case + movimenti (prestiti).
 --
--- Perimetro V4 (decisione Fase 0, lista chiusa in deployment/README.md):
---   * `oggetto` — nascita e modifica SOLO via proposta (tipi nuovo_oggetto / modifica_oggetto /
---     ritira_oggetto in db/006): inventario = memoria della rete;
+-- Perimetro V4 (decisione Fase 0, lista chiusa in deployment/README.md; **aggiornato da db/032**):
+--   * `oggetto` — nascita e modifica DIRETTE della propria Casa (D1: policy `ogg_ins_casa`/`ogg_upd_casa`
+--     qui sotto + GRANT in db/032); via proposta (tipi nuovo_oggetto / modifica_oggetto /
+--     ritira_oggetto in db/006, decide l'AT) per gli oggetti delle altre Case. Inventario = memoria della rete;
 --   * `movimento` — evento operativo tra due Case: INSERT diretto della Casa cedente
 --     (stato 'proposto'), conferma SOLO della ricevente via conferma_movimento() (db/006,
 --     audit su ogni passaggio). Mai DELETE (coerente con V4 regola 7).
@@ -184,9 +185,9 @@ CREATE POLICY ogg_sel ON trasi.oggetto FOR SELECT
      rete, ti, metabase_ro, automazioni, shim_rw
   USING (true);
 
--- oggetto: INSERT/UPDATE solo della propria Casa (difesa in profondità; V4 pieno resta
--- nel flusso proposte — il GRANT di scrittura ai ruoli Casa NON c'è: la policy da sola
--- non basta a scrivere, e `v_scritture_senza_audit` contabilizzerebbe chi scavalcasse).
+-- oggetto: INSERT/UPDATE solo della propria Casa. Le policy sono l'autorità (USING **e** WITH CHECK);
+-- il GRANT ai ruoli Casa non è qui ma in db/032 (nato con la decisione di scrittura diretta D1):
+-- db/000–029 sono congelati. `v_scritture_senza_audit` esclude già le scritture della propria Casa.
 DROP POLICY IF EXISTS ogg_ins_casa ON trasi.oggetto;
 CREATE POLICY ogg_ins_casa ON trasi.oggetto FOR INSERT
   TO casa_santaspazio, casa_molo12, casa_erranti, casa_buscicchio, casa_sanbao,

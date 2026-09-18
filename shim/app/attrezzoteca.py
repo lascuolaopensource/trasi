@@ -2,8 +2,12 @@
 
 Entità **nuova** che la decisione §2 dichiara in due metà diverse, e il codice le tiene separate:
 
-- **Nascita e modifica di `oggetto`** passano dal flusso proposte (V4): da qui **nessuna** scrittura su `oggetto`,
-  nemmeno indiretta. Chi vuole un attrezzo in memoria lo propone, come per ogni altro dominio.
+- **Nascita e modifica di `oggetto`** (db/014 + db/032, decisione 2026-09-18): la **propria** Casa li scrive
+  direttamente con `salva_dato` (`entita="oggetto"`, `scritture.py`), come la scheda; per gli oggetti delle altre
+  Case resta il flusso proposte (tipi `*_oggetto`, decide l'AT). Da questo modulo **nessuna** scrittura su `oggetto`.
+- **La lettura dell'inventario** è una sola query (`inventario()`, su `v_inventario`) servita da due porte: il
+  browser dell'operatore (`GET /op/attrezzoteca`, cookie) e Onyx (`cerca_oggetto`, contratto congelato, chiave).
+  Portale e chat non possono dire numeri diversi perché leggono la stessa funzione.
 - **Il movimento** (prestito/spostamento) è invece **evento operativo** con scrittura immediata, come la registrazione
   della richiesta: il ritiro delle sedie non può aspettare una coda serale. La scrittura è comunque **mediata**:
   l'INSERT crea solo `stato='proposto'` e il passaggio a `confermato`/`rientrato` avviene solo per
@@ -38,7 +42,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from . import pii
 from .auth import SessioneOperatore, sessione_corrente
 from .badge import badge_kb, nome_fonte
+from .contratto import meta
+from .db import Sessione, dipendenza_sessione, risolvi_slug_casa
 from .errori import errore
+from .schemi import ItemOggetto, RispostaCercaOggetto
 
 router = APIRouter()
 
@@ -133,7 +140,53 @@ async def op_registra_richiesta(
     return {"richiesta_id": richiesta_id, "casa": sess.casa_slug}
 
 
-# --- Inventario (`GET /op/attrezzoteca`) ----------------------------------------------------------------------
+# --- Inventario: una query, due porte (`GET /op/attrezzoteca` e `cerca_oggetto`) ------------------------------
+
+SQL_CASA_ESISTE = "SELECT id FROM trasi.casa WHERE slug = $1"
+
+# `v_inventario` è l'unica fonte: `quantita_disponibile` è già al netto dei movimenti confermati in corso e il badge
+# della fonte (V3) arriva dalla vista. Il filtro `q` cerca su nome, descrizione, tipo e badge; `casa_slug` opzionale
+# restringe a una Casa. Nessuna somma qui: portale, chat e dashboard dicono lo stesso numero.
+SQL_INVENTARIO = """
+SELECT v.oggetto_id, v.nome, o.tipo, v.casa_id, v.casa_slug, c.nome AS casa_nome,
+       v.quantita, v.quantita_fuori, v.quantita_disponibile,
+       v.condizione, v.fonte_nome, v.badge_fonte
+  FROM trasi.v_inventario v
+  JOIN trasi.oggetto o ON o.id = v.oggetto_id
+  JOIN trasi.casa c ON c.id = v.casa_id
+ WHERE ($1::text IS NULL
+        OR v.nome ILIKE '%' || $1 || '%'
+        OR COALESCE(v.descrizione, '') ILIKE '%' || $1 || '%'
+        OR COALESCE(o.tipo, '') ILIKE '%' || $1 || '%'
+        OR COALESCE(v.badge_fonte, '') ILIKE '%' || $1 || '%')
+   AND ($2::text IS NULL OR v.casa_slug = $2)
+ ORDER BY v.casa_slug, v.nome
+"""
+
+
+async def inventario(sess: Any, q: str | None, casa_slug: str | None) -> list[dict[str, Any]]:
+    """L'inventario della rete come lo vedono **entrambe** le porte: `[{oggetto_id, nome, tipo, casa, …, badge}]`.
+
+    `sess` è la sessione del browser (`SessioneOperatore`) o quella di Onyx (`Sessione`): entrambe espongono
+    `fetch`, e la RLS (`ogg_sel`: SELECT a tutta la rete) decide cosa si vede.
+    """
+    righe = await sess.fetch(SQL_INVENTARIO, (q or "").strip() or None, casa_slug)
+    return [
+        {
+            "oggetto_id": r["oggetto_id"],
+            "nome": r["nome"],
+            "tipo": r["tipo"],
+            "casa": r["casa_slug"],
+            "casa_nome": r["casa_nome"],
+            "quantita": r["quantita"],
+            "quantita_fuori": r["quantita_fuori"],
+            "quantita_disponibile": r["quantita_disponibile"],
+            "condizione": r["condizione"],
+            "fonte": r["fonte_nome"],
+            "badge": r["badge_fonte"],
+        }
+        for r in righe
+    ]
 
 
 @router.get(
@@ -147,38 +200,45 @@ async def op_attrezzoteca(
     q: str | None = Query(default=None, min_length=1, description="Nome o descrizione dell'oggetto."),
     sess: SessioneOperatore = Depends(sessione_corrente),
 ) -> dict[str, Any]:
-    """GET /op/attrezzoteca?q= — inventario di rete, leggibile da ogni Casa (US-5.1).
+    """GET /op/attrezzoteca?q= — inventario di rete, leggibile da ogni Casa (US-5.1). Stessa query di `cerca_oggetto`."""
+    return {"items": await inventario(sess, q, None)}
 
-    Quantità «disponibile» = quella della vista `v_inventario`, già al netto dei confermati in corso; qui non si
-    somma nulla, così il numero che legge l'operatore è lo stesso che vede la Casa prestatrice. Il badge della fonte
-    (V3) arriva dalla vista ed è restituito com'è, non ricomposto.
+
+# Il router del contratto congelato (prefisso `/v1/u/{email}`, chiave + identità): lo monta `main.py` accanto a
+# `routes_lettura`. Separato da `router` (che va sotto `/op` con il cookie) perché le due porte hanno due
+# autenticazioni diverse e non devono poter essere confuse.
+router_contratto = APIRouter()
+
+
+@router_contratto.get("/cerca_oggetto", response_model=RispostaCercaOggetto, **meta("cerca_oggetto"))
+async def cerca_oggetto(
+    q: str | None = Query(
+        default=None, min_length=1, max_length=120,
+        description="Cosa si cerca (nome, descrizione o tipo dell'oggetto). Vuoto = tutto l'inventario.",
+    ),
+    casa: str | None = Query(
+        default=None, description="Slug o nome della Casa di Quartiere; se omesso, tutte le Case."
+    ),
+    sess: Sessione = Depends(dipendenza_sessione),
+) -> RispostaCercaOggetto:
+    """Cerca nell'attrezzoteca della rete (US-5.1): dove si trova un oggetto, quanti pezzi sono disponibili.
+
+    Aperta a tutte le Case e a `rete` (la RLS `ogg_sel` dà SELECT a tutta la rete): l'inventario è memoria della
+    rete, non della singola Casa. `casa` si risolve come in `eventi_oggi` (`risolvi_slug_casa`: il modello scrive
+    il nome più spesso dello slug); una Casa inesistente è **404** (vocabolario chiuso), un inventario vuoto è
+    `items: []` con 200.
     """
-    testo = (q or "").strip() or None
-    righe = await sess.fetch(
-        """
-        SELECT oggetto_id, nome, casa_id, casa_slug, quantita, quantita_fuori, quantita_disponibile,
-               condizione, fonte_nome, badge_fonte
-          FROM trasi.v_inventario
-         WHERE ($1::text IS NULL OR nome ILIKE '%' || $1 || '%' OR COALESCE(badge_fonte, '') ILIKE '%' || $1 || '%')
-         ORDER BY casa_slug, nome
-        """,
-        testo,
-    )
-    items = [
-        {
-            "oggetto_id": r["oggetto_id"],
-            "nome": r["nome"],
-            "casa": r["casa_slug"],
-            "quantita": r["quantita"],
-            "quantita_fuori": r["quantita_fuori"],
-            "quantita_disponibile": r["quantita_disponibile"],
-            "condizione": r["condizione"],
-            "fonte": r["fonte_nome"],
-            "badge": r["badge_fonte"],
-        }
-        for r in righe
-    ]
-    return {"items": items}
+    casa_slug: str | None = None
+    if casa and casa.strip():
+        richiesta = casa.strip()
+        if await sess.fetchval(SQL_CASA_ESISTE, richiesta) is not None:
+            casa_slug = richiesta
+        else:
+            casa_slug = await risolvi_slug_casa(sess, richiesta)
+            if casa_slug is None:
+                raise errore(404, f"casa non trovata: nessuna Casa di Quartiere con slug «{richiesta}»")
+    items = await inventario(sess, q, casa_slug)
+    return RispostaCercaOggetto(items=[ItemOggetto(**item) for item in items])
 
 
 # --- Movimenti da confermare (`GET /op/movimenti_da_confermare`) ----------------------------------------------
@@ -355,10 +415,13 @@ async def op_movimento_conferma(
 __all__ = [
     "MovimentoIn",
     "RegistraRichiestaIn",
+    "cerca_oggetto",
+    "inventario",
     "op_attrezzoteca",
     "op_movimenti_da_confermare",
     "op_movimento",
     "op_movimento_conferma",
     "op_registra_richiesta",
     "router",
+    "router_contratto",
 ]
