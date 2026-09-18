@@ -96,6 +96,25 @@ WHERE c.slug = $1
 ORDER BY e.inizio
 """
 
+# Variante per finestra multi-giorno (es. «questa settimana», «questo mese»). Stessa select-list e ordinamento
+# di `SQL_EVENTI`, così `_item_evento` e il contratto di risposta sono identici: l'unica differenza è il
+# predicato (range chiuso su entrambi i capi anziché una sola data).
+SQL_EVENTI_RANGE = """
+SELECT e.id, e.titolo, e.inizio, e.fine, e.luogo_testo,
+       COALESCE(e.url, f.url) AS url,
+       COALESCE(e.affidabilita, 2) AS affidabilita,
+       f.nome AS fonte_nome, f.autorita AS fonte_autorita,
+       (e.uid_ical IS NULL AND e.fonte_id IS NULL) AS inserito_a_mano,
+       c.nome AS casa_nome, c.slug AS casa_slug
+FROM trasi.evento e
+JOIN trasi.casa c ON c.id = e.casa_id
+LEFT JOIN trasi.fonte f ON f.id = e.fonte_id
+WHERE c.slug = $1
+  AND e.annullato = false
+  AND e.inizio::date BETWEEN $2 AND $3
+ORDER BY e.inizio
+"""
+
 
 @router.get(
     "/_whoami",
@@ -157,12 +176,23 @@ async def eventi_oggi(
         description="Slug della Casa di Quartiere. Se omesso si usa la Casa dell'operatore autenticato.",
     ),
     data: date | None = Query(default=None, description="Data ISO `AAAA-MM-GG`; se omessa, oggi."),
+    finestra_gg: int | None = Query(
+        default=None,
+        ge=1,
+        le=92,
+        description="Finestra in giorni da `data` (inclusa): 1 = solo quel giorno, 7 = una settimana, 31 = un mese. Se omessa vale 1 (oggi, retro-compatibile).",
+    ),
     sess: Sessione = Depends(dipendenza_sessione),
 ) -> RispostaEventiOggi:
     """Gli eventi di una Casa in una data (oggi se non indicata), dal calendario della rete.
 
     «Oggi» è calcolato nel fuso italiano: alle 00:30 di Roma gli eventi della sera prima non sono più «oggi», ed è
     il comportamento che l'operatore allo sportello si aspetta.
+
+    Con `finestra_gg > 1` la risposta aggrega più giorni (es. «questa settimana», «questo mese»): la forma del
+    contratto non cambia, `data` resta il primo giorno della finestra e `eventi` contiene tutte le date in
+    ordine cronologico. Il tetto di 92 giorni copre «il trimestre» senza sconfessare l'idea che lo strumento
+    è per il ravvicinato, non per lo storico.
 
     La Casa, se non indicata, è quella dell'operatore: l'assistente non deve conoscerla (v. `slug_casa_da_identita`).
     """
@@ -177,7 +207,11 @@ async def eventi_oggi(
     riferimento = data or oggi_locale()
     # Il parametro è un `date`, non una stringa ISO: `$2::date` fa dedurre ad asyncpg il tipo del parametro, e una
     # stringa lì è un `DataError` a runtime (verificato: `'str' object has no attribute 'toordinal'`).
-    righe = await sess.fetch(SQL_EVENTI, slug, riferimento)
+    if finestra_gg and finestra_gg > 1:
+        ultimo = date.fromordinal(riferimento.toordinal() + finestra_gg - 1)
+        righe = await sess.fetch(SQL_EVENTI_RANGE, slug, riferimento, ultimo)
+    else:
+        righe = await sess.fetch(SQL_EVENTI, slug, riferimento)
 
     if not righe and await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
         raise errore(404, f"casa non trovata: nessuna Casa di Quartiere con slug «{slug}»")
