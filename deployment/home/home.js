@@ -35,7 +35,11 @@
   var vuotoEventi = document.getElementById("oggi-eventi-vuoto");
   var contatore = document.getElementById("osservatorio-contatore");
   var notaChiedi = document.getElementById("chiedi-nota");
+  var riquadroChiedi = document.getElementById("riquadro-chiedi");
   var hrefInCorso = null;
+  /* Vero quando CHIEDI punta a Onyx: da lì in poi la Casa scelta non c'entra più
+     con l'indirizzo né con la nota del riquadro. */
+  var chiediSuOnyx = false;
 
   /* Lo slug è valido solo se è una delle opzioni del selettore: un residuo in
      `localStorage` non deve poter costruire un indirizzo arbitrario. */
@@ -98,7 +102,9 @@
      nota è un'informazione sbagliata. */
   function aggiornaNomi(slug) {
     var nome = nomeCasa(slug);
-    if (notaChiedi) notaChiedi.textContent = "si apre con " + nome + " gi\u00e0 impostata";
+    if (notaChiedi && !chiediSuOnyx) {
+      notaChiedi.textContent = "entra nell'area operatore con " + nome + ": da l\u00ec \u00abChiedi\u00bb apre Onyx";
+    }
     if (casaNota) {
       var scelta = opzione(slug);
       var provvisori = scelta && scelta.textContent.indexOf("dati provvisori") !== -1;
@@ -366,6 +372,44 @@
   }
 
   applica(casaScelta());
+
+  /* ------------------------------------------------------------- CHIEDI → Onyx
+   *
+   * Onyx è l'unica superficie di conversazione con l'assistente. L'indirizzo lo
+   * dice lo shim (`GET /op/config` → `{onyx_url}`), perché questa pagina è statica
+   * e non lo conosce; l'endpoint vuole la sessione operatore, quindi:
+   *   200 → il riquadro apre Onyx in una nuova scheda (e lo dichiara a chi non la vede);
+   *   401 → nessuna sessione: il riquadro resta la porta dell'area operatore, dove si
+   *         entra e da dove «Chiedi» apre Onyx (l'`href` dell'HTML, già corretto);
+   *   altro → il riquadro si spegne e dice «Onyx non disponibile». Mai un `href`
+   *         vuoto, mai una chat dentro Trasi. */
+  if (riquadroChiedi) {
+    fetch("/api/shim/op/config", { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (risposta) {
+        if (risposta.status === 401) return null;
+        if (!risposta.ok) throw new Error("risposta " + risposta.status);
+        return risposta.json();
+      })
+      .then(function (config) {
+        if (config === null) return;
+        if (!config || typeof config.onyx_url !== "string" || !config.onyx_url) throw new Error("onyx_url assente");
+        chiediSuOnyx = true;
+        riquadroChiedi.removeAttribute("data-modello");
+        riquadroChiedi.setAttribute("href", config.onyx_url);
+        riquadroChiedi.setAttribute("target", "_blank");
+        riquadroChiedi.setAttribute("rel", "noopener");
+        riquadroChiedi.setAttribute("aria-label", "CHIEDI (si apre in una nuova scheda)");
+        if (notaChiedi) notaChiedi.textContent = "si apre in Onyx, in una nuova scheda";
+      })
+      .catch(function () {
+        chiediSuOnyx = true;
+        riquadroChiedi.removeAttribute("data-modello");
+        riquadroChiedi.removeAttribute("href");
+        riquadroChiedi.setAttribute("aria-disabled", "true");
+        riquadroChiedi.classList.add("spenta");
+        if (notaChiedi) notaChiedi.textContent = "Onyx non disponibile";
+      });
+  }
 
   selettore.addEventListener("change", function () {
     var slug = casaScelta();
