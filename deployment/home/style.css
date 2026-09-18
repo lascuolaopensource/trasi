@@ -499,10 +499,9 @@ input::placeholder, textarea::placeholder { color: var(--testo-tenue); }
 @media (max-width: 48rem) {
   .accesso .aiuto-apri { top: auto; bottom: var(--s-4); }
 }
-
-/* ============================================================ corpo pagina */
-
+.accesso[hidden] { display: none; }
 main { max-width: var(--misura-lettura); margin: 0 auto; padding: var(--s-8) var(--s-6); }
+
 
 .titolo { margin: 0 0 var(--s-5); font-size: 1.75rem; font-weight: 148; letter-spacing: -.02em; color: var(--testo); }
 .sottotitolo { margin: calc(-1 * var(--s-3)) 0 var(--s-5); color: var(--testo-tenue); }
