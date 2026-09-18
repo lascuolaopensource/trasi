@@ -22,12 +22,12 @@
 </head>
 <body>
 <!-- ============================================================================
-     ACCOUNT DELLA CASA — pagina SINGOLA, otto viste (D7).
+     ACCOUNT DELLA CASA — pagina SINGOLA, sette viste (D7 meno «Conversazioni»: la chat vive in Onyx).
 
      La pagina è una; le sezioni sono frammenti caricati in `#acc-vista` una alla volta, secondo
-     `CONTRATTO-shell.md` §5. Perché una sola pagina e non otto file: la sotto-navigazione, la riga
+     `CONTRATTO-shell.md` §5. Perché una sola pagina e non sette file: la sotto-navigazione, la riga
      di presenza della coda e il pannello contestuale della sidebar sono gli stessi in tutte le
-     sezioni; con otto documenti sarebbero otto copie della stessa testata.
+     sezioni; con sette documenti sarebbero sette copie della stessa testata.
 
      Gli id delle sezioni sono prefissati `acc-<nome>-…`, così due sezioni scritte da persone
      diverse non possono collidere. I frammenti sono **solo markup**: `<script>` dentro `innerHTML`
@@ -49,7 +49,7 @@
       <a class="nav-voce" href="account.html">Account</a>
     </nav>
 
-    <!-- Pannello contestuale: in Account è la chat compatta (D6), popolata da `TrasiChat.renderCompatta`. -->
+    <!-- Pannello contestuale: vuoto. La conversazione con l'assistente vive in Onyx («Chiedi», nella nav). -->
     <div class="pannello" id="shell-pannello" aria-label="Pannello contestuale"></div>
 
     <div class="sidebar-piede">
@@ -65,7 +65,7 @@
     <main class="contenuto" id="contenuto">
       <h1 class="titolo-pagina">Account · <span id="acc-casa">…</span></h1>
 
-      <!-- Le otto sezioni di D7, in parole. Non sono icone e non sono schede: sono collegamenti,
+      <!-- Le sette sezioni, in parole. Non sono icone e non sono schede: sono collegamenti,
            così l'indirizzo porta a una sezione precisa (`account.html#proposte`) e si può
            condividerlo. `aria-current` dichiara quale è aperta. -->
       <nav class="acc-sottonav" aria-label="Sezioni dell'account">
@@ -75,7 +75,6 @@
         <a href="#registra">Registra</a>
         <a href="#attrezzoteca">Attrezzoteca</a>
         <a href="#messaggi">Messaggi</a>
-        <a href="#conversazioni">Conversazioni</a>
         <a href="#impostazioni">Impostazioni</a>
       </nav>
 
@@ -103,7 +102,6 @@
 <script src="assets/registra.js?v=3"></script>
 <script src="assets/attrezzoteca-op.js?v=3"></script>
 <script src="assets/messaggi-op.js?v=3"></script>
-<script src="assets/conversazioni-op.js?v=3"></script>
 <script src="assets/impostazioni-op.js?v=3"></script>
 </body>
 </html>
