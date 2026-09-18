@@ -60,6 +60,16 @@ Struttura semantica: `<header>` → `<main>` con la fascia di stato (`role="stat
 `<label for="selettore-casa">` associata, ora **visibile** (prima era solo per i lettori di schermo:
 anche chi vede ha bisogno di sapere cos'è quel menu).
 
+**Il calendario del mese** (sotto la riga «Oggi», 2026-09-18) è una `<table class="oggi-tabella">` vera,
+non una lista stilizzata: `<caption>` («Eventi di settembre 2026 a San Bao», riscritta al cambio di
+Casa), `<th scope="col">` per Giorno · Ora · Evento · Dove, `<th scope="row">` sul giorno di ogni
+riga. Le righe di oggi portano `aria-current="date"` **e** la parola «oggi» nella cella Giorno
+(`<span class="oggi-evento-oggi">`), oltre allo sfondo incassato e al filetto: l'informazione non è
+mai affidata al solo colore (1.4.1). Un mese senza eventi non nasconde la tabella ma la sostituisce
+con un paragrafo esplicito («Nessun evento in programma a febbraio 2027 per …»). Sotto i 640 px la
+tabella scorre in orizzontale **dentro** la sua scatola (`overflow-x: auto`), e la pagina resta a
+320 px senza scorrimento (`scrollWidth === 320`, misurato).
+
 **La disposizione non è più 2×2.** La gerarchia segue la frequenza d'uso reale: CHIEDI occupa tutta
 la larghezza (titolo 36 px), MAPPA e OSSERVATORIO stanno affiancati, REGISTRA/AGGIORNA — che è
 predisposto e non attivo — scende al terzo livello a tutta larghezza. Misurato sul DOM a 1280 px:
@@ -99,6 +109,10 @@ Misura su ogni nodo di testo visibile: colore calcolato del testo contro lo sfon
 | `span.destinazione-titolo` (spenta) | REGISTRA / AGGIORNA | **7,60** | 4,5 | PASS |
 | `span.destinazione-nota` | si apre con San Bao già impostata | **8,90** | 4,5 | PASS |
 | `p.piede` | Trasi · rete delle Case… | **8,03** | 4,5 | PASS |
+| `th.oggi-evento-giorno` | ven 18 (calendario del mese) | **17,07** | 4,5 | PASS |
+| `td.oggi-evento-ora`, `td.oggi-evento-dove`, `thead th`, `caption` | 15:00 · San Bao · Giorno · Eventi di… | **8,90** | 4,5 | PASS |
+| `td` della riga di oggi | testo tenue su sfondo incassato `#efede6` | **7,60** | 4,5 | PASS |
+| `span.oggi-evento-oggi` | OGGI (carta su `--testata`) | **10,03** | 4,5 | PASS |
 
 **Minimo misurato: 6,71:1** — sopra il 4,5:1 richiesto. La coppia più bassa è l'etichetta «Servizio
 non ancora attivo» (testo `--sole-scuro` su `--attenzione-sfondo`): è la stessa del design system, che
@@ -275,9 +289,10 @@ La riga «Oggi» è un `role="status"` (`aria-live="polite"`), quindi il passagg
 di oggi in corso…» al testo (o a «Dati non disponibili») è annunciato senza rubare il focus. L'esito
 dell'uscita è anch'esso un `role="status"`.
 
-La coda delle proposte **non** è una regione live: cambia insieme alla riga che è già annunciata, e
-due annunci simultanei per un solo cambiamento di Casa sarebbero rumore. Il conteggio sul riquadro
-OSSERVATORIO è testo normale, letto quando ci si arriva.
+La coda delle proposte e il calendario del mese **non** sono regioni live: cambiano insieme alla riga
+che è già annunciata, e due annunci simultanei per un solo cambiamento di Casa sarebbero rumore. Il
+calendario si nasconde durante la lettura e quando la lettura fallisce (la riga «Oggi» dice già «Dati
+non disponibili»). Il conteggio sul riquadro OSSERVATORIO è testo normale, letto quando ci si arriva.
 **Esito: conforme.**
 
 ---

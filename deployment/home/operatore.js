@@ -2,7 +2,8 @@
  *
  * Quattro compiti, tutti dietro la sessione dello shim:
  *   1. accesso (`POST /api/shim/login` → cookie HttpOnly, la pagina non tocca la sessione);
- *   2. chat con l'assistente **dentro Trasi** (`POST /api/shim/op/chat`, nessun salto di dominio);
+ *   2. «Chiedi»: il collegamento all'assistente in **Onyx**, l'unica superficie di conversazione
+ *      (`GET /api/shim/op/config` → `{onyx_url}`, aperto in una nuova scheda: qui non c'è una chat);
  *   3. registrazione della richiesta del colloquio (V5: niente dati della persona);
  *   4. attrezzoteca e messaggi interni (V6: la conferma decide, la piattaforma registra).
  *
@@ -62,6 +63,7 @@
     $("operatore-casa").textContent = casa;
     nascondi(vistaAccesso);
     vistaBanco.hidden = false;
+    collegaOnyx();
     caricaInventario("");
     caricaMovimenti();
     caricaMessaggi();
@@ -72,6 +74,7 @@
     $("operatore-casa").textContent = "accesso richiesto";
     vistaBanco.hidden = true;
     vistaAccesso.hidden = false;
+    scollegaOnyx();
   }
 
   $("modulo-accesso").addEventListener("submit", function (evento) {
@@ -98,7 +101,7 @@
 
   /* ------------------------------------------------------------ linguette */
 
-  var linguette = document.querySelectorAll(".linguetta");
+  var linguette = document.querySelectorAll(".linguetta[data-pannello]");
   for (var i = 0; i < linguette.length; i++) {
     linguette[i].addEventListener("click", function () {
       for (var j = 0; j < linguette.length; j++) linguette[j].setAttribute("aria-pressed", "false");
@@ -122,41 +125,43 @@
     return false;
   }
 
-  /* ---------------------------------------------------------------- chat */
+  /* ------------------------------------------------------- «Chiedi» → Onyx
+   *
+   * L'indirizzo lo dice lo shim, perché la pagina è statica e non lo conosce; si
+   * chiede **dopo** l'accesso, perché `/op/config` vuole la sessione. Nuova scheda,
+   * dichiarata a chi non la vede (`aria-label`); `rel="noopener"` perché Onyx è
+   * un'altra applicazione. Se lo shim non lo dà, il collegamento resta senza `href`
+   * e lo dice: mai un `href` vuoto, mai una chat dentro Trasi. */
 
-  var registro = $("chat-registro");
+  var TESTO_ONYX_NON_DISPONIBILE = "Onyx non disponibile";
+  var linguettaOnyx = $("linguetta-onyx");
 
-  function battuta(chi, testo) {
-    var voce = document.createElement("li");
-    voce.className = "chat-battuta chat-" + chi;
-    var chiEl = document.createElement("span");
-    chiEl.className = "chat-chi";
-    chiEl.textContent = chi === "operatore" ? "Tu" : "Assistente";
-    var testoEl = document.createElement("p");
-    testoEl.className = "chat-testo";
-    testoEl.textContent = testo;
-    voce.appendChild(chiEl);
-    voce.appendChild(testoEl);
-    registro.appendChild(voce);
-    voce.scrollIntoView({ block: "end" });
-    return testoEl;
-  }
-
-  $("chat-modulo").addEventListener("submit", function (evento) {
-    evento.preventDefault();
-    var testo = $("chat-testo").value.trim();
-    if (!testo || !casaCorrente) return;
-    battuta("operatore", testo);
-    $("chat-testo").value = "";
-    var attesa = battuta("assistente", "…");
-    chiama("/op/chat", { method: "POST", body: { messaggio: testo } }).then(function (dati) {
-      var risposta = dati && (dati.risposta || dati.testo || dati.answer);
-      attesa.textContent = typeof risposta === "string" && risposta.trim() ? risposta : JSON.stringify(dati);
+  function collegaOnyx() {
+    if (!linguettaOnyx) return;
+    chiama("/op/config").then(function (config) {
+      if (!config || typeof config.onyx_url !== "string" || !config.onyx_url) throw new Error("onyx_url assente");
+      linguettaOnyx.textContent = "Chiedi";
+      linguettaOnyx.removeAttribute("aria-disabled");
+      linguettaOnyx.setAttribute("href", config.onyx_url);
+      linguettaOnyx.setAttribute("target", "_blank");
+      linguettaOnyx.setAttribute("rel", "noopener");
+      linguettaOnyx.setAttribute("aria-label", "Chiedi (si apre in una nuova scheda)");
     }).catch(function (errore) {
       if (scaduta(errore)) return;
-      attesa.textContent = "L’assistente non risponde in questo momento (" + errore.message + ").";
+      scollegaOnyx();
+      linguettaOnyx.textContent = TESTO_ONYX_NON_DISPONIBILE;
     });
-  });
+  }
+
+  function scollegaOnyx() {
+    if (!linguettaOnyx) return;
+    linguettaOnyx.removeAttribute("href");
+    linguettaOnyx.removeAttribute("target");
+    linguettaOnyx.removeAttribute("rel");
+    linguettaOnyx.removeAttribute("aria-label");
+    linguettaOnyx.setAttribute("aria-disabled", "true");
+    linguettaOnyx.textContent = "Chiedi";
+  }
 
   /* ------------------------------------------------------------ richiesta */
 

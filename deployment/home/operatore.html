@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <title>Trasi — area operatore</title>
-<meta name="description" content="Area operatore Trasi: chat con l’assistente, registrazione richieste, attrezzoteca, messaggi interni.">
-<link rel="stylesheet" href="style.css?v=3">
+<meta name="description" content="Area operatore Trasi: accesso all’assistente in Onyx, registrazione richieste, attrezzoteca, messaggi interni.">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <!-- Area operatore: un solo indirizzo, nessun redirect verso altri domini.
@@ -59,26 +59,20 @@
   <h1 class="titolo">Banco di lavoro</h1>
 
   <nav class="linguette" aria-label="Funzioni operatore">
-    <button class="linguetta" type="button" data-pannello="chat" aria-pressed="true">Chiedi</button>
-    <button class="linguetta" type="button" data-pannello="richiesta" aria-pressed="false">Registra richiesta</button>
+    <!-- «Chiedi» non è una linguetta: è il collegamento all'assistente in Onyx, l'unica superficie
+         di conversazione. L'indirizzo lo dà lo shim (`GET /op/config`) appena c'è la sessione —
+         vedi `operatore.js`. Senza `href` finché non arriva: mai un collegamento vuoto. -->
+    <a class="linguetta" id="linguetta-onyx">Chiedi</a>
+    <button class="linguetta" type="button" data-pannello="richiesta" aria-pressed="true">Registra richiesta</button>
     <button class="linguetta" type="button" data-pannello="attrezzoteca" aria-pressed="false">Attrezzoteca</button>
     <button class="linguetta" type="button" data-pannello="messaggi" aria-pressed="false">Messaggi interni</button>
   </nav>
 
-  <!-- ------------------------------ chat -------------------------------- -->
-  <section class="pannello" id="pannello-chat" aria-labelledby="chat-titolo">
-    <h2 id="chat-titolo">Chiedi all’assistente</h2>
-    <ol class="chat-registro" id="chat-registro" aria-live="polite" aria-label="Conversazione"></ol>
-    <form class="chat-modulo" id="chat-modulo">
-      <label class="etichetta" for="chat-testo">Domanda</label>
-      <textarea id="chat-testo" rows="3" maxlength="2000" required></textarea>
-      <button class="riquadro-azione" type="submit">Invia</button>
-    </form>
-    <p class="messaggio-nota">La chat passa da Trasi e raggiunge l’assistente senza aprire altri siti. Ogni risposta dichiara la fonte.</p>
-  </section>
+  <!-- La chat interna non c'è più: la conversazione con l'assistente «Trasi Casa» vive in Onyx,
+       aperta da «Chiedi» in una nuova scheda. -->
 
   <!-- --------------------------- richiesta ------------------------------- -->
-  <section class="pannello" id="pannello-richiesta" hidden aria-labelledby="richiesta-titolo">
+  <section class="pannello" id="pannello-richiesta" aria-labelledby="richiesta-titolo">
     <h2 id="richiesta-titolo">Registra la richiesta del colloquio</h2>
     <p class="messaggio-nota">Nessun dato della persona: solo categoria, esito e destinazione. È la regola della piattaforma, non una scelta dell’operatore.</p>
     <form class="modulo" id="modulo-richiesta">
@@ -172,9 +166,9 @@
 
 <section id="aiuto" aria-labelledby="aiuto-titolo">
   <h2 id="aiuto-titolo">Aiuto</h2>
-  <p>Questa è l’area di lavoro dell’operatore: le quattro linguette corrispondono alle funzioni nuove della piattaforma.</p>
+  <p>Questa è l’area di lavoro dell’operatore: «Chiedi» apre l’assistente in Onyx, le tre linguette corrispondono alle funzioni della piattaforma.</p>
   <dl class="aiuto-elenco">
-    <dt>Chiedi</dt><dd>La stessa assistente della Home, dentro Trasi: nessun salto di sito. Le risposte dichiarano sempre la fonte.</dd>
+    <dt>Chiedi</dt><dd>Apre Onyx, l’assistente della rete, in una nuova scheda. Le risposte dichiarano sempre la fonte. La conversazione vive lì: dentro Trasi non c’è una chat.</dd>
     <dt>Registra richiesta</dt><dd>Una riga per colloquio: categoria, esito, destinazione. Mai il nome della persona.</dd>
     <dt>Attrezzoteca</dt><dd>Gli oggetti condivisi della rete. Il prestito si propone qui e conta solo dopo la conferma della Casa che riceve.</dd>
     <dt>Messaggi interni</dt><dd>Comunicazioni tra Case e Comune. L’assistente non legge e non risponde qui.</dd>

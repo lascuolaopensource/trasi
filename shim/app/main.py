@@ -200,6 +200,12 @@ def crea_app() -> FastAPI:
     applicazione.include_router(attrezzoteca.router, prefix="/op", include_in_schema=False)
     applicazione.include_router(messaggi.router, prefix="/op", include_in_schema=False)
 
+    # `GET /op/config`: la configurazione a runtime per la Home (indirizzo di Onyx). Router nudo,
+    # stessa forma di `attrezzoteca` e `messaggi`.
+    from . import config_op
+
+    applicazione.include_router(config_op.router, prefix="/op", include_in_schema=False)
+
     @applicazione.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:
         """Liveness del container: non tocca il database, così «healthy» significa «il processo risponde»."""

@@ -30,9 +30,16 @@
   var riquadroCoda = document.getElementById("coda");
   var testoCoda = document.getElementById("coda-testo");
   var listaEventi = document.getElementById("oggi-eventi");
+  var righeEventi = document.getElementById("oggi-eventi-righe");
+  var titoloEventi = document.getElementById("oggi-eventi-titolo");
+  var vuotoEventi = document.getElementById("oggi-eventi-vuoto");
   var contatore = document.getElementById("osservatorio-contatore");
   var notaChiedi = document.getElementById("chiedi-nota");
+  var riquadroChiedi = document.getElementById("riquadro-chiedi");
   var hrefInCorso = null;
+  /* Vero quando CHIEDI punta a Onyx: da lì in poi la Casa scelta non c'entra più
+     con l'indirizzo né con la nota del riquadro. */
+  var chiediSuOnyx = false;
 
   /* Lo slug è valido solo se è una delle opzioni del selettore: un residuo in
      `localStorage` non deve poter costruire un indirizzo arbitrario. */
@@ -95,7 +102,9 @@
      nota è un'informazione sbagliata. */
   function aggiornaNomi(slug) {
     var nome = nomeCasa(slug);
-    if (notaChiedi) notaChiedi.textContent = "si apre con " + nome + " gi\u00e0 impostata";
+    if (notaChiedi && !chiediSuOnyx) {
+      notaChiedi.textContent = "entra nell'area operatore con " + nome + ": da l\u00ec \u00abChiedi\u00bb apre Onyx";
+    }
     if (casaNota) {
       var scelta = opzione(slug);
       var provvisori = scelta && scelta.textContent.indexOf("dati provvisori") !== -1;
@@ -172,43 +181,89 @@
     if (contatore) contatore.hidden = true;
   }
 
-  /* Gli eventi del giorno, sotto il conteggio. Titolo, orario e luogo come li
-     dà `eventi_oggi`: nessuna formattazione qui che la chat non farebbe. La
-     lista è nascosta quando è vuota o quando la lettura fallisce — il conteggio
-     nella riga sopra è già la risposta, e una lista vuota sotto «2 eventi»
-     direbbe il falso. */
-  function mostraEventi(eventi) {
-    if (!listaEventi) return;
-    while (listaEventi.firstChild) listaEventi.removeChild(listaEventi.firstChild);
+  /* Il calendario del mese, sotto il conteggio: una riga per evento, Giorno · Ora ·
+     Evento · Dove, nell'ordine in cui lo shim li dà (`eventi_mese`, per inizio).
+     L'unica formattazione fatta qui è il giorno («gio 18») da `e.data`: ora, titolo
+     e luogo sono quelli dello shim, come li vede la chat. «Oggi» lo dice lo shim
+     (`dati.oggi`, nel fuso della rete), non l'orologio del browser: così le righe
+     evidenziate coincidono con la riga «Oggi» sopra. L'evidenza è la parola «oggi»
+     nella cella Giorno e `aria-current="date"`, prima che un colore.
+     Un mese vuoto si dichiara in parole: con il mese intero, l'assenza di righe non
+     è più spiegata dal conteggio della riga sopra, che parla solo di oggi. La
+     tabella si nasconde solo quando la lettura fallisce. */
+  var FORMATO_GIORNO = (typeof Intl === "object" && Intl.DateTimeFormat)
+    ? new Intl.DateTimeFormat("it-IT", { weekday: "short", day: "numeric" })
+    : null;
+  var FORMATO_MESE = (typeof Intl === "object" && Intl.DateTimeFormat)
+    ? new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" })
+    : null;
+
+  /* `AAAA-MM-GG` → Date locale (mezzogiorno, così nessun fuso la sposta di giorno). */
+  function dataLocale(iso) {
+    var parti = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+    return parti ? new Date(Number(parti[1]), Number(parti[2]) - 1, Number(parti[3]), 12) : null;
+  }
+
+  function testoGiorno(iso) {
+    var d = dataLocale(iso);
+    if (!d) return iso || "";
+    return FORMATO_GIORNO ? FORMATO_GIORNO.format(d) : String(d.getDate());
+  }
+
+  function testoMese(iso) {
+    var d = dataLocale(iso);
+    if (!d) return "";
+    return FORMATO_MESE ? FORMATO_MESE.format(d) : (d.getMonth() + 1) + "/" + d.getFullYear();
+  }
+
+  function cella(tag, classe, testo) {
+    var el = document.createElement(tag);
+    if (classe) el.className = classe;
+    el.textContent = testo;
+    return el;
+  }
+
+  function mostraEventi(dati, slug) {
+    if (!listaEventi || !righeEventi) return;
+    while (righeEventi.firstChild) righeEventi.removeChild(righeEventi.firstChild);
+    var eventi = dati && Array.isArray(dati.eventi) ? dati.eventi : [];
+    var mese = testoMese(dati && dati.dal);
+    var nome = nomeCasa((dati && dati.casa) || slug);
+    if (titoloEventi) titoloEventi.textContent = "Eventi di " + mese + " a " + nome;
+
     if (!eventi.length) {
-      nascondiEventi();
-      return;
-    }
-    for (var i = 0; i < eventi.length; i++) {
-      var e = eventi[i];
-      var voce = document.createElement("li");
-      voce.className = "oggi-evento";
-
-      var quando = e.ora_inizio ? e.ora_inizio + (e.ora_fine ? "\u2013" + e.ora_fine : "") : (e.orari_nota || "");
-      if (quando) {
-        var ora = document.createElement("span");
-        ora.className = "oggi-evento-ora";
-        ora.textContent = quando;
-        voce.appendChild(ora);
+      if (vuotoEventi) {
+        vuotoEventi.textContent = "Nessun evento in programma a " + mese + " per " + nome + ".";
+        vuotoEventi.hidden = false;
       }
+      righeEventi.parentNode.hidden = true;
+    } else {
+      if (vuotoEventi) vuotoEventi.hidden = true;
+      righeEventi.parentNode.hidden = false;
+      for (var i = 0; i < eventi.length; i++) {
+        var e = eventi[i];
+        var riga = document.createElement("tr");
+        riga.className = "oggi-evento";
+        var oggi = !!(dati.oggi && e.data === dati.oggi);
+        if (oggi) {
+          riga.classList.add("oggi-evento--oggi");
+          riga.setAttribute("aria-current", "date");
+        }
 
-      var titolo = document.createElement("span");
-      titolo.className = "oggi-evento-titolo";
-      titolo.textContent = e.titolo;
-      voce.appendChild(titolo);
+        var giorno = cella("th", "oggi-evento-giorno", testoGiorno(e.data));
+        giorno.setAttribute("scope", "row");
+        if (oggi) {
+          giorno.appendChild(document.createTextNode(" "));
+          giorno.appendChild(cella("span", "oggi-evento-oggi", "oggi"));
+        }
+        riga.appendChild(giorno);
 
-      if (e.dove) {
-        var dove = document.createElement("span");
-        dove.className = "oggi-evento-dove";
-        dove.textContent = e.dove;
-        voce.appendChild(dove);
+        var quando = e.ora_inizio ? e.ora_inizio + (e.ora_fine ? "\u2013" + e.ora_fine : "") : (e.orari_nota || "");
+        riga.appendChild(cella("td", "oggi-evento-ora", quando));
+        riga.appendChild(cella("td", "oggi-evento-titolo", e.titolo));
+        riga.appendChild(cella("td", "oggi-evento-dove", e.dove || ""));
+        righeEventi.appendChild(riga);
       }
-      listaEventi.appendChild(voce);
     }
     listaEventi.hidden = false;
     rigaOggi.setAttribute("data-eventi", "si");
@@ -252,9 +307,9 @@
     var richiestaEventi;
     try {
       richiesta = fetch(base + "oggi?casa=" + encodeURIComponent(slug), opzioni);
-      /* Stessa scadenza e stesso `abort` della riga: una lista della Casa
+      /* Stessa scadenza e stesso `abort` della riga: un calendario della Casa
          precedente non deve comparire sotto il conteggio di quella nuova. */
-      richiestaEventi = fetch(base + "eventi_oggi?casa=" + encodeURIComponent(slug), opzioni);
+      richiestaEventi = fetch(base + "eventi_mese?casa=" + encodeURIComponent(slug), opzioni);
     } catch (e) {
       window.clearTimeout(scadenza);
       hrefInCorso = null;
@@ -270,7 +325,7 @@
       })
       .then(function (dati) {
         finisci();
-        mostraEventi(dati && Array.isArray(dati.eventi) ? dati.eventi : []);
+        mostraEventi(dati, slug);
       })
       .catch(function () {
         finisci();
@@ -317,6 +372,44 @@
   }
 
   applica(casaScelta());
+
+  /* ------------------------------------------------------------- CHIEDI → Onyx
+   *
+   * Onyx è l'unica superficie di conversazione con l'assistente. L'indirizzo lo
+   * dice lo shim (`GET /op/config` → `{onyx_url}`), perché questa pagina è statica
+   * e non lo conosce; l'endpoint vuole la sessione operatore, quindi:
+   *   200 → il riquadro apre Onyx in una nuova scheda (e lo dichiara a chi non la vede);
+   *   401 → nessuna sessione: il riquadro resta la porta dell'area operatore, dove si
+   *         entra e da dove «Chiedi» apre Onyx (l'`href` dell'HTML, già corretto);
+   *   altro → il riquadro si spegne e dice «Onyx non disponibile». Mai un `href`
+   *         vuoto, mai una chat dentro Trasi. */
+  if (riquadroChiedi) {
+    fetch("/api/shim/op/config", { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (risposta) {
+        if (risposta.status === 401) return null;
+        if (!risposta.ok) throw new Error("risposta " + risposta.status);
+        return risposta.json();
+      })
+      .then(function (config) {
+        if (config === null) return;
+        if (!config || typeof config.onyx_url !== "string" || !config.onyx_url) throw new Error("onyx_url assente");
+        chiediSuOnyx = true;
+        riquadroChiedi.removeAttribute("data-modello");
+        riquadroChiedi.setAttribute("href", config.onyx_url);
+        riquadroChiedi.setAttribute("target", "_blank");
+        riquadroChiedi.setAttribute("rel", "noopener");
+        riquadroChiedi.setAttribute("aria-label", "CHIEDI (si apre in una nuova scheda)");
+        if (notaChiedi) notaChiedi.textContent = "si apre in Onyx, in una nuova scheda";
+      })
+      .catch(function () {
+        chiediSuOnyx = true;
+        riquadroChiedi.removeAttribute("data-modello");
+        riquadroChiedi.removeAttribute("href");
+        riquadroChiedi.setAttribute("aria-disabled", "true");
+        riquadroChiedi.classList.add("spenta");
+        if (notaChiedi) notaChiedi.textContent = "Onyx non disponibile";
+      });
+  }
 
   selettore.addEventListener("change", function () {
     var slug = casaScelta();

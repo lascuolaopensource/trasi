@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — ingresso</title>
 <meta name="description" content="Trasi: la porta della rete delle Case di Quartiere di Brindisi.">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <!-- Risorse locali, zero CDN. Le destinazioni sono URL protocol-relative (`//host`)
@@ -59,10 +59,27 @@
        da solo — accanto c'è sempre la parola. -->
   <section class="fascia" aria-label="Stato di oggi">
     <p class="oggi" id="oggi" role="status" aria-live="polite" aria-busy="true">Lettura dei dati di oggi in corso…</p>
-    <!-- La lista sotto il conteggio: gli eventi del giorno, titolo e orario, dalla
-         stessa memoria. Non è una regione live (cambia insieme alla riga, che è già
-         annunciata) e sparisce se la lettura fallisce: il conteggio basta. -->
-    <ul class="oggi-eventi" id="oggi-eventi" aria-label="Eventi di oggi" hidden></ul>
+    <!-- Il calendario del mese sotto il conteggio: tutti gli eventi del mese corrente della
+         Casa scelta, una riga per evento, dalla stessa memoria (`eventi_mese`). Non è una
+         regione live (cambia insieme alla riga, che è già annunciata) e sparisce se la
+         lettura fallisce. Le righe di oggi portano la parola «oggi» e `aria-current="date"`:
+         mai solo il colore. Un mese senza eventi lo dice in parole (`#oggi-eventi-vuoto`),
+         perché il conteggio della riga sopra parla di oggi, non del mese. -->
+    <div class="oggi-eventi" id="oggi-eventi" hidden>
+      <table class="oggi-tabella">
+        <caption id="oggi-eventi-titolo">Eventi del mese</caption>
+        <thead>
+          <tr>
+            <th scope="col">Giorno</th>
+            <th scope="col">Ora</th>
+            <th scope="col">Evento</th>
+            <th scope="col">Dove</th>
+          </tr>
+        </thead>
+        <tbody id="oggi-eventi-righe"></tbody>
+      </table>
+      <p class="oggi-eventi-vuoto" id="oggi-eventi-vuoto" hidden></p>
+    </div>
 
     <div class="coda" id="coda" hidden>
       <p class="coda-testo" id="coda-testo"></p>
@@ -80,10 +97,13 @@
     <!-- La gerarchia dice quanto una cosa si usa: CHIEDI decine di volte al giorno,
          MAPPA e OSSERVATORIO qualche volta, REGISTRA quando capita. Quattro riquadri
          uguali direbbero una cosa falsa. Vedi guidelines/analisi-architettura-informazione.md §1. -->
+    <!-- CHIEDI apre Onyx, l'assistente della rete, in una nuova scheda: l'indirizzo lo dà lo shim
+         (`GET /op/config`) a chi ha una sessione operatore — vedi `home.js`. Senza JS o senza
+         sessione il riquadro porta all'area operatore, dove si entra e da dove «Chiedi» apre Onyx. -->
     <a class="destinazione principale" id="riquadro-chiedi" data-modello="/operatore.html?casa={casa}" href="/operatore.html?casa=san-bao">
       <span class="destinazione-titolo principale-titolo">CHIEDI</span>
-      <span class="destinazione-testo principale-testo">L’assistente della rete: risponde alla persona che hai davanti — dove andare, con quali orari — e dichiara da dove viene ogni informazione.</span>
-      <span class="nota" id="chiedi-nota">si apre nella tua area operatore, con San Bao già impostata</span>
+      <span class="destinazione-testo principale-testo">L’assistente della rete, in Onyx: risponde alla persona che hai davanti — dove andare, con quali orari — e dichiara da dove viene ogni informazione.</span>
+      <span class="nota" id="chiedi-nota">entra nell'area operatore con San Bao: da lì «Chiedi» apre Onyx</span>
     </a>
 
     <div class="coppia">
@@ -115,7 +135,7 @@
     <h2 id="aiuto-titolo">Aiuto</h2>
     <p>Trasi è la porta della rete delle Case di Quartiere. Da qui si aprono quattro destinazioni, e ognuna si apre già sulla Casa scelta in alto.</p>
     <h3>CHIEDI</h3>
-    <p>La chat con l’assistente della rete. Si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali.</p>
+    <p>Apre Onyx, l’assistente della rete, in una nuova scheda. Lì si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali. Serve la sessione dell’area operatore: senza, il riquadro porta all’accesso.</p>
     <h3>MAPPA</h3>
     <p>I luoghi e le Case della rete su una mappa, da guardare insieme alla persona.</p>
     <h3>REGISTRA / AGGIORNA</h3>
@@ -133,11 +153,11 @@
     <h3>Le proposte</h3>
     <p>Trasi non cambia la memoria della rete da sola. Se in chat si segnala che un bar ha chiuso o che un orario è cambiato, nasce una proposta: resta in attesa finché una persona la approva. La riga in alto dice quante ne aspettano una decisione e da quanto tempo. Non c’è una scadenza da rispettare.</p>
     <h3>La riga «Oggi»</h3>
-    <p>È una lettura della memoria della rete per la Casa scelta: eventi, schede in scadenza, proposte. Sotto il conteggio compaiono gli eventi del giorno, con orario e luogo, nell’ordine in cui iniziano — anche quelli già finiti, perché «oggi» è la giornata intera. Se il servizio dati non risponde entro tre secondi, la riga dice «dati non disponibili»: è un’informazione, non un guasto, e le destinazioni funzionano comunque.</p>
+    <p>È una lettura della memoria della rete per la Casa scelta: eventi, schede in scadenza, proposte. Sotto il conteggio compare il calendario del mese corrente — tutti gli eventi della Casa, con giorno, orario e luogo, nell’ordine in cui iniziano, compresi quelli dei giorni già passati. Le righe di oggi sono segnate con la parola «oggi». Se il servizio dati non risponde entro tre secondi, la riga dice «dati non disponibili»: è un’informazione, non un guasto, e le destinazioni funzionano comunque.</p>
     <h3>La Casa in alto</h3>
     <p>Il selettore ricorda la Casa nel browser: al prossimo accesso è già quella. L’unica cosa conservata è il nome breve della Casa, nessun dato personale. Tuturano porta la nota «dati provvisori»: alcune sue schede non sono ancora complete.</p>
     <h3>Tastiera</h3>
-    <p>Si può usare tutto da tastiera: il tasto Tab passa dal salto alle destinazioni, al selettore della Casa, ad Aiuto ed Esci, poi a CHIEDI, MAPPA, OSSERVATORIO e alla coda delle proposte. Il riquadro giallo indica sempre dove sei.</p>
+    <p>Si può usare tutto da tastiera: il tasto Tab passa dal salto alle destinazioni, al selettore della Casa, ad Aiuto ed Esci, poi a CHIEDI (che apre Onyx in una nuova scheda), MAPPA, OSSERVATORIO e alla coda delle proposte. Il riquadro giallo indica sempre dove sei.</p>
 
     <p class="rinvio">La verifica di accessibilità delle tre applicazioni esterne (Onyx, Metabase, NocoDB) è rinviata alla settimana 2 del piano: qui è verificata la sola pagina Trasi Home.</p>
   </section>
@@ -147,6 +167,6 @@
   </footer>
 </main>
 
-<script src="home.js?v=2"></script>
+<script src="home.js?v=3"></script>
 </body>
 </html>
