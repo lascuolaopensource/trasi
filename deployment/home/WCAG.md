@@ -331,6 +331,17 @@ vero portandogli l'header `Host`: è lo stesso percorso della riga «Oggi», con
 proxy. `curl` con `-H 'Host: …'` è invece sufficiente per tutte le misure che non richiedono un
 browser.
 
+## 5c · La copertina della Home (aggiunta il 2026-09-18)
+
+In testa a `<main>` una `<section class="copertina" aria-labelledby>`: occhiello «Trasi», `<h1>` «Il portierato
+pubblico di Brindisi» e tre paragrafi di presentazione del servizio (testo del progetto, verbatim; terza persona,
+nessun imperativo). Sola tipografia (Commissioner locale): titolo `clamp(2rem, 4.2vw, 3.5rem)` — 53,8 px a 1280,
+32 px a 360 —, testo `clamp(1.125rem, 1.5vw, 1.375rem)` (19,2 px / 18 px), interlinea 1,55, misura di lettura
+36 rem. Il vecchio `<h1>` «La porta della rete…» è ora `<h2>`: una sola `<h1>` per pagina (1.3.1). Contrasti:
+titolo `--testata` su carta **11,12**; testo `--testo` **15,39**; chiusa `--testo-tenue` **8,90** (già misurati
+in §1.4.3). Reflow: a 360 px `scrollWidth === 360`. axe-core 4.10.2 WCAG 2.1 A/AA sulla Home → **0 violazioni**.
+Screenshot: `evidenze/home-copertina-{1280,360}.png`.
+
 ## 6 · Difetti reali trovati durante questa verifica
 
 **Della versione precedente (riportati perché sono lezioni, non storia):**
