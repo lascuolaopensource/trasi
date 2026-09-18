@@ -12,10 +12,17 @@
 (function () {
   "use strict";
 
-  /* Valori pubblici (slug delle Case), non dati personali: in `localStorage`
-     non entra nient'altro (V5). */
-  var CHIAVE_CASA = "trasi.casa_id";
-  var CASA_PREDEFINITA = "san-bao";
+  /* La Casa scelta (slug, `localStorage`, validazione contro le `<option>`) è in `casa.js`,
+     condiviso con la pagina Mappa: una sola copia della regola. Si carica **prima** di questo file. */
+  var Casa = window.TrasiCasa;
+  var CHIAVE_CASA = Casa.CHIAVE_CASA;
+  var CASA_PREDEFINITA = Casa.CASA_PREDEFINITA;
+  var opzione = Casa.opzione;
+  var casaValida = Casa.casaValida;
+  var casaScelta = Casa.casaScelta;
+  var nomeCasa = Casa.nomeCasa;
+  var memorizza = Casa.memorizza;
+  var ricorda = Casa.ricorda;
   var IDENTITA = "rete@trasi.local";
   var ATTESA_MS = 3000;
   var TESTO_ATTESA = "Lettura dei dati di oggi in corso\u2026";
@@ -40,50 +47,6 @@
   /* Vero quando CHIEDI punta a Onyx: da lì in poi la Casa scelta non c'entra più
      con l'indirizzo né con la nota del riquadro. */
   var chiediSuOnyx = false;
-
-  /* Lo slug è valido solo se è una delle opzioni del selettore: un residuo in
-     `localStorage` non deve poter costruire un indirizzo arbitrario. */
-  function opzione(slug) {
-    if (typeof slug !== "string" || slug === "") return null;
-    for (var i = 0; i < selettore.options.length; i++) {
-      if (selettore.options[i].value === slug) return selettore.options[i];
-    }
-    return null;
-  }
-
-  function casaValida(slug) {
-    return opzione(slug) ? slug : null;
-  }
-
-  function casaScelta() {
-    return casaValida(selettore.value) || CASA_PREDEFINITA;
-  }
-
-  /* Il nome della Casa senza la nota: nell'opzione di Tuturano il testo porta
-     anche «dati provvisori», che in una frase come «...a Tuturano» sarebbe di
-     troppo. Il nome è quello che precede il trattino lungo. */
-  function nomeCasa(slug) {
-    var scelta = opzione(slug);
-    if (!scelta) return slug;
-    return scelta.textContent.split(" \u2014 ")[0].trim();
-  }
-
-  function memorizza(slug) {
-    try {
-      window.localStorage.setItem(CHIAVE_CASA, slug);
-    } catch (e) {
-      /* Navigazione privata o storage disabilitato: la pagina funziona lo stesso,
-         semplicemente non ricorda la scelta. Non è un errore da mostrare. */
-    }
-  }
-
-  function ricorda(slug) {
-    try {
-      return casaValida(window.localStorage.getItem(CHIAVE_CASA));
-    } catch (e) {
-      return null;
-    }
-  }
 
   /* ---------------------------------------------------------- destinazioni */
 

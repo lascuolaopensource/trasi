@@ -11,7 +11,7 @@ dell'operatore già impostata.
 | Destinazione | Cosa apre oggi | Cosa ci fa l'operatore |
 |---|---|---|
 | **CHIEDI** | assistente Onyx (`?agentId=2`) | risponde alla persona davanti, con la fonte citata |
-| **MAPPA** | dashboard Metabase «Mappa» | guarda insieme alla persona dove sono i luoghi |
+| **MAPPA** | `mappa.html?casa=<slug>` — la mappa Leaflet delle dieci Case (tile OpenStreetMap, pin come testo) con l'elenco equivalente, centrata sulla Casa scelta | guarda insieme alla persona dove sono le Case della rete |
 | **REGISTRA / AGGIORNA** | NocoDB (dichiarato non ancora attivo nella Home) | schede, eventi, opportunità della Casa |
 | **OSSERVATORIO** | dashboard Metabase «Casa» + coda proposte | legge i numeri e decide sulle proposte |
 

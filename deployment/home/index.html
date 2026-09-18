@@ -120,9 +120,11 @@
     </a>
 
     <div class="coppia">
-      <a class="destinazione" id="riquadro-mappa" data-modello="/metabase/dashboard/4?casa={casa}" href="/metabase/dashboard/4?casa=san-bao">
+      <!-- MAPPA apre la pagina statica delle dieci Case (`mappa.html`), già centrata sulla Casa
+           scelta: `home.js` riscrive l'`href` da `data-modello` al cambio Casa. -->
+      <a class="destinazione" id="riquadro-mappa" data-modello="/mappa.html?casa={casa}" href="/mappa.html?casa=san-bao">
         <span class="destinazione-titolo">MAPPA</span>
-        <span class="destinazione-testo">Dove sono i luoghi e le Case vicine, da guardare insieme alla persona.</span>
+        <span class="destinazione-testo">Dove sono le dieci Case della rete, da guardare insieme alla persona.</span>
       </a>
       <a class="destinazione" id="riquadro-osservatorio" data-modello="/metabase/dashboard/3?casa={casa}" href="/metabase/dashboard/3?casa=san-bao">
         <span class="destinazione-intestazione">
@@ -150,7 +152,7 @@
     <h3>CHIEDI</h3>
     <p>Apre Onyx, l’assistente della rete, in una nuova scheda. Lì si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali. Serve la sessione dell’area operatore: senza, il riquadro porta all’accesso.</p>
     <h3>MAPPA</h3>
-    <p>I luoghi e le Case della rete su una mappa, da guardare insieme alla persona.</p>
+    <p>La mappa delle dieci Case della rete, con l’elenco equivalente sotto — stesse Case, stesso ordine, leggibile da tastiera. Si apre già centrata sulla Casa scelta; cambiando Casa la mappa si ricentra e l’elenco si riordina per distanza.</p>
     <h3>REGISTRA / AGGIORNA</h3>
     <p>Il registro delle schede, degli eventi e delle opportunità della Casa. Non è ancora attivo: fino all’attivazione le correzioni passano dalle proposte fatte in chat.</p>
     <h3>OSSERVATORIO</h3>
@@ -180,6 +182,7 @@
   </footer>
 </main>
 
-<script src="home.js?v=3"></script>
+<script src="casa.js?v=1"></script>
+<script src="home.js?v=4"></script>
 </body>
 </html>
