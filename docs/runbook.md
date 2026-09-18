@@ -1057,3 +1057,49 @@ docker compose -f deployment/docker-compose.yml exec -T db_trasi \
 docker compose -f deployment/docker-compose.yml exec -T db_trasi \
   psql -U automazioni -d trasi_db -c "SELECT trasi.p_text('email_report_pa');"
 ```
+
+## 13 · Provider LLM di Onyx (fix 2026-09-18: passaggio a `openai_compatible`)
+
+**Il problema.** Con il provider `ollama_chat` (path nativo Ollama) gli assistenti leakavano le tool
+call come **testo nel messaggio finale**, senza eseguirle. L'operatore leggeva
+`[Tool Call] name=eventi_oggi id=… args={…}` al posto della risposta. La causa è nel codice di Onyx:
+per `ollama_chat` la history delle tool call viene *riscritt* in testo (`_OllamaHistoryMessageFormatter`,
+`/opt/onyx/backend/onyx/chat/llm_step.py:756-784`) — i modelli cloud imparano quel formato e talvolta
+lo riemettono come risposta testuale invece che nel campo strutturato `tool_calls`. Il fallback di
+estrazione (`extract_tool_calls_from_response_text`) non lo cattura (riconosce solo JSON/XML), e il
+gate si attiva solo con `tool_choice=REQUIRED`, mentre Trasi usa `AUTO`.
+
+**La fix.** Ollama Cloud espone anche `https://ollama.com/v1` (endpoint OpenAI-compatibile). Con un
+provider `openai_compatible` Onyx usa il formatter standard OpenAI: le tool call viaggiano nel campo
+strutturato, il modello non vede mai il pattern testuale, il leak sparisce alla radice.
+
+**Verificato in produzione il 2026-09-18** (su `https://ollama.com/v1/chat/completions`, glm-5.3-flash):
+tool call → campo strutturato `tool_calls` con `finish_reason=tool_calls`; history strutturata con
+`assistant.tool_calls` + `role:tool` accettata; nessun leak.
+
+**Come si ri-applica (idempotente):**
+
+```bash
+# dalla radice del repo, sul server di Onyx
+python3 ops/provisiona_provider_llm_openai_compatible.py            # applica
+python3 ops/provisiona_provider_llm_openai_compatible.py --dry-run  # mostra cosa farebbe
+```
+
+Lo script:
+1. legge `OLLAMA_API_KEY` da `/opt/onyx/deployment/docker_compose/.env` (mai stampata);
+2. crea/aggiorna il provider `Ollama Cloud (OpenAI-compatible)` (provider `openai_compatible`,
+   `api_base=https://ollama.com/v1`, modello `glm-5.3-flash` visibile);
+3. imposta quel modello come default CHAT;
+4. marca tutti i modelli del provider legacy `ollama_chat` come `is_visible=false` (li nasconde
+   dalla UI senza cancellarli: rollback = rimetterli visibili dall'admin).
+
+**Rollback** (torna a `ollama_chat`): dall'admin UI di Onyx, abilita la visibilità del modello
+`glm-5.3-flash` nel provider «Ollama Cloud» e ri-impostalo come default CHAT. Oppure via DB:
+`UPDATE model_configuration SET is_visible = true WHERE llm_provider_id = 1 AND name = 'glm-5.3-flash';`
+poi impostare il `llm_model_flow` CHAT di default su quel `model_configuration_id`.
+
+**Perché non è una patch al codice di Onyx.** Onyx è del vendor (Onyx-app): modificarlo significa
+portarsi un fork. La scelta del provider è **configurazione** — cambia solo la riga
+`llm_provider.provider`, non il codice. Se un domani Onyx riscrive `_OllamaHistoryMessageFormatter`,
+questa configurazione resta valida.
+
