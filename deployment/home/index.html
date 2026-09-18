@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — ingresso</title>
 <meta name="description" content="Trasi: la porta della rete delle Case di Quartiere di Brindisi.">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <!-- Risorse locali, zero CDN. Le destinazioni sono URL protocol-relative (`//host`)
@@ -18,10 +18,10 @@
   <aside class="sidebar" aria-label="Navigazione">
     <div class="sidebar-testata">
       <p class="marchio">
-        <svg class="marchio-logo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi.svg"/></svg>
+        <img class="marchio-logo" src="assets/logo-trasi.svg" alt="" width="119" height="40">
         <span class="solo-lettore">Trasi</span>
       </p>
-      <svg class="sidebar-logo-solo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi-mark.svg"/></svg>
+      <img class="sidebar-logo-solo" src="assets/logo-trasi-mark.svg" alt="Trasi" width="26" height="26">
       <button class="sidebar-comprimi" type="button" data-sidebar-comprimi aria-expanded="true" aria-label="Comprimi il menu">
         <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-panel-left"/></svg>
       </button>
@@ -61,7 +61,6 @@
     <p class="casa-nota" id="casa-nota" hidden></p>
   </div>
       <div class="sidebar-piede">
-        <a class="azione" href="#aiuto">Aiuto</a>
         <!-- Logout dello shim, gestito da home.js; non chiude la sessione Onyx. -->
         <button class="azione" type="button" id="pulsante-esci" aria-label="Esci">
           <svg class="icona icona--piccola" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-log-out"/></svg>
@@ -157,8 +156,11 @@
     </div>
   </div>
 
-  <section id="aiuto" aria-labelledby="aiuto-titolo">
-    <h2 id="aiuto-titolo">Aiuto</h2>
+  <dialog id="aiuto" aria-labelledby="aiuto-titolo">
+    <div class="aiuto-testata">
+      <h2 id="aiuto-titolo">Aiuto</h2>
+      <form method="dialog"><button class="aiuto-chiudi" aria-label="Chiudi Aiuto" autofocus>×</button></form>
+    </div>
     <p>Trasi è la porta della rete delle Case di Quartiere. Da qui si aprono quattro destinazioni, e ognuna si apre già sulla Casa scelta in alto.</p>
     <h3>CHIEDI</h3>
     <p>Apre Onyx, l’assistente della rete, in una nuova scheda. Lì si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali. Serve la sessione dell’area operatore: senza, il riquadro porta all’accesso.</p>
@@ -183,10 +185,10 @@
     <h3>La Casa in alto</h3>
     <p>Il selettore ricorda la Casa nel browser: al prossimo accesso è già quella. L’unica cosa conservata è il nome breve della Casa, nessun dato personale. Tuturano porta la nota «dati provvisori»: alcune sue schede non sono ancora complete.</p>
     <h3>Tastiera</h3>
-    <p>Si può usare tutto da tastiera: Tab attraversa il salto alle destinazioni, il menu comprimibile, i collegamenti della sidebar, il selettore della Casa, Aiuto ed Esci, poi il contenuto. Il contorno arancione indica sempre dove sei.</p>
+    <p>Si può usare tutto da tastiera: Tab attraversa il salto alle destinazioni, il menu, il selettore della Casa e i contenuti. Il pulsante «?» apre l'Aiuto; Esc lo chiude e riporta al pulsante. Il focus dei campi cambia lo sfondo, senza anelli sovrapposti.</p>
 
     <p class="rinvio">La verifica di accessibilità delle tre applicazioni esterne (Onyx, Metabase, NocoDB) è rinviata alla settimana 2 del piano: qui è verificata la sola pagina Trasi Home.</p>
-  </section>
+  </dialog>
 
   <footer class="piede">
     <p>Trasi · rete delle Case di Quartiere di Brindisi. Questa pagina non conserva dati personali: la Casa scelta resta nel browser.</p>
@@ -194,6 +196,7 @@
 </main>
   </div>
 </div>
+<button class="aiuto-apri" type="button" data-aiuto-apri aria-controls="aiuto" aria-haspopup="dialog" aria-label="Aiuto" title="Aiuto">?</button>
 
 <!-- Il cassetto dell'evento: UNA istanza nel documento, fuori dalle sezioni che mostrano
      eventi (regola del prototipo). Lo riempie `home.js` con i dati della card premuta. -->
@@ -221,7 +224,7 @@
 
 <script src="casa.js?v=1"></script>
 <script src="assets/dropdown.js?v=1"></script>
-<script src="assets/shell.js?v=1"></script>
+<script src="assets/shell.js?v=2"></script>
 <script src="home.js?v=5"></script>
 </body>
 </html>

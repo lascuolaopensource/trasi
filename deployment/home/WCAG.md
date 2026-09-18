@@ -466,3 +466,12 @@ scontrino (stato, focus, contrasti calcolati):
 - Commissioner: corretto il range `wght` a 30–220 e tutti i pesi nelle tre pagine; corpo Regular 82, titoli Bold 148. I pesi 82/106/126/148/185/220 producono ora sei larghezze distinte nel browser, anziché convergere su Black.
 - Verifica visiva sull'istanza a 1440×900 e 360×800: copertina e destinazioni larghe rispettivamente 944 e 328 px, senza overflow orizzontale. Sidebar 240→72 px e `aria-expanded` aggiornato; dropdown Casa aperto correttamente sopra il selettore desktop.
 - Queste verifiche non costituiscono una nuova certificazione WCAG completa; i limiti delle sezioni precedenti restano dichiarati.
+
+## 9 · Sidebar, mappa e Aiuto su richiesta (18 settembre 2026)
+
+- Logo SVG come immagine con dimensioni esplicite, anche nel menu compresso. Sidebar desktop 352 px; «Centro di Aggregazione Bozzano» visibile per intero su una riga, anche a 360 px.
+- Mappa senza limite di larghezza del contenuto: verificata a 1440×900, 1088×900 con sidebar aperta e 1368 px di larghezza con sidebar compressa. A 360×800 riempie lo spazio sotto la testata senza scroll di pagina. Bozzano selezionato da URL, dieci Case e 25 tile caricati durante la verifica desktop; colori desaturati con controlli teal.
+- Testo bianco sulle CTA piene: arancio profondo `#AD5000`, contrasto calcolato **5,35:1**. «Esci» nella sidebar ha sfondo trasparente anziché bianco su bianco.
+- Focus degli input: solo bordo e sfondo celeste distinto dalla scheda, senza outline né box-shadow aggiuntivi; verificato visivamente sul campo password.
+- Home e Area operatore hanno pulsante «?» con nome accessibile «Aiuto». Dialogo nativo chiuso inizialmente; apertura, focus su «Chiudi Aiuto», Esc e ritorno al pulsante verificati. Eseguito l'handler logout in una sessione browser anonima: accesso visibile e Aiuto non espanso. Nessuna credenziale reale usata; transizione da una sessione operatore autenticata non esercitata.
+- Verifiche browser desktop/mobile e `node --check` dei due script modificati; non una nuova verifica WCAG completa.

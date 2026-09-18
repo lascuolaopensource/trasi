@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — area operatore</title>
 <meta name="description" content="Area operatore Trasi: accesso all’assistente in Onyx, registrazione richieste, attrezzoteca, messaggi interni.">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <!-- Area operatore: un solo indirizzo, nessun redirect verso altri domini.
@@ -15,17 +15,17 @@
 <a class="salta" href="#banco">Salta al banco di lavoro</a>
 
 <!-- ============================================================ IL GUSCIO ================
-     Stessa sidebar della Mappa (mappa.html): teal, 240 px, comprimibile con
+     Stessa sidebar della Mappa (mappa.html): teal, 352 px, comprimibile con
      `assets/shell.js`. La Casa in sessione e «Esci» stanno nel lato della sidebar,
      dove nel prototipo sta l'utente. -->
 <div class="guscio">
   <aside class="sidebar" aria-label="Navigazione">
     <div class="sidebar-testata">
       <p class="marchio">
-        <svg class="marchio-logo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi.svg"/></svg>
+        <img class="marchio-logo" src="assets/logo-trasi.svg" alt="" width="119" height="40">
         <span class="solo-lettore">Trasi</span>
       </p>
-      <svg class="sidebar-logo-solo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi-mark.svg"/></svg>
+      <img class="sidebar-logo-solo" src="assets/logo-trasi-mark.svg" alt="Trasi" width="26" height="26">
       <button class="sidebar-comprimi" type="button" data-sidebar-comprimi aria-expanded="true" aria-label="Comprimi il menu">
         <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-panel-left"/></svg>
       </button>
@@ -228,8 +228,11 @@
   </section>
 </main>
 
-<section id="aiuto" aria-labelledby="aiuto-titolo">
-  <h2 id="aiuto-titolo">Aiuto</h2>
+<dialog id="aiuto" aria-labelledby="aiuto-titolo">
+  <div class="aiuto-testata">
+    <h2 id="aiuto-titolo">Aiuto</h2>
+    <form method="dialog"><button class="aiuto-chiudi" aria-label="Chiudi Aiuto" autofocus>×</button></form>
+  </div>
   <p>Questa è l’area di lavoro dell’operatore: «Chiedi» apre l’assistente in Onyx, le tre linguette corrispondono alle funzioni della piattaforma.</p>
   <dl class="aiuto-elenco">
     <dt>Chiedi</dt><dd>Apre Onyx, l’assistente della rete, in una nuova scheda. Le risposte dichiarano sempre la fonte. La conversazione vive lì: dentro Trasi non c’è una chat.</dd>
@@ -239,16 +242,17 @@
   </dl>
   <h3>La sessione</h3>
   <p>L’accesso dura 12 ore e vale solo per la Casa scelta. Con «Esci» la sessione si chiude subito.</p>
-</section>
+</dialog>
 
 <footer class="piede">
   <p>Trasi · area operatore. La piattaforma non conserva dati personali dei cittadini.</p>
 </footer>
   </div>
 </div>
+<button class="aiuto-apri" type="button" data-aiuto-apri aria-controls="aiuto" aria-haspopup="dialog" aria-label="Aiuto" title="Aiuto">?</button>
 
 <script src="assets/dropdown.js?v=1"></script>
-<script src="assets/shell.js?v=1"></script>
+<script src="assets/shell.js?v=2"></script>
 <script src="operatore.js?v=4"></script>
 </body>
 </html>

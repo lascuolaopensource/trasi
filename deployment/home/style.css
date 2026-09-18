@@ -7,8 +7,7 @@
  *   - WCAG 2.1 AA: contrasto testo ≥ 4,5:1, focus sempre visibile, tutto da tastiera;
  *   - zero dipendenze esterne: Commissioner è locale, le icone sono uno sprite locale
  *     (`assets/icone.svg`), la mappa usa Leaflet vendorizzato;
- *   - i colori accesi non portano testo: l'arancio delle CTA porta l'inchiostro scuro,
- *     non il bianco (2,66:1 sarebbe un bocciatura AA);
+ *   - testo bianco sulle CTA: fondo arancio profondo, contrasto 5,35:1;
  *   - niente rosso: nulla è un allarme rivolto a una persona.
  */
 
@@ -24,7 +23,9 @@
   --primario-hover: #0A3F4E;
   --secondario: #F0821D;             /* arancio: CTA e accenti */
   --secondario-hover: #D66F0E;
-  --su-secondario: #12333D;          /* testo sopra l'arancio: 5,3:1 (il bianco darebbe 2,66) */
+  --su-secondario: #12333D;
+  --cta-sfondo: #AD5000;             /* arancio profondo: testo bianco leggibile */
+  --cta-hover: #8F4100;
 
   --testo: #0F303B;                  /* inchiostro teal: 11,4:1 su --sfondo */
   --testo-tenue: #6B6B69;            /* 4,8:1 su bianco · 4,5:1 su --sfondo */
@@ -53,8 +54,7 @@
   --attenzione-testo: #6B4A00;
   --attenzione-sfondo: #FFE9A8;
 
-  --focus: #F0821D;                  /* anello interno */
-  --focus-contorno: #0A3F4E;         /* anello esterno: visibile su celeste e su teal */
+  --focus: #0D5063;
 
   /* Commissioner locale: asse wght 30–220; Regular 82, Medium 106, SemiBold 126, Bold 148. */
   --font: "Commissioner", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -74,7 +74,7 @@
   --ombra-livello: 0 8px 24px rgba(13, 80, 99, .16);
 
   /* ---- guscio ---- */
-  --sidebar-larga: 15rem;            /* 240 px */
+  --sidebar-larga: 22rem;            /* 352 px: nomi delle Case su una riga */
   --sidebar-stretta: 4.5rem;         /* 72 px */
 
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
@@ -130,15 +130,19 @@ h1, h2, h3, h4, h5, h6, strong, b, th { font-weight: 148; }
 }
 .salta:focus { left: 0; }
 
-/* Focus: due anelli, visibile su celeste, su bianco e sulla sidebar teal. */
-:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 6px var(--focus-contorno); }
-
-/* Focus dei campi: lo sfondo cambia e restano i due anelli; il bordo NON cambia. */
+/* Un solo segno di focus. Nei campi cambia lo sfondo, senza anelli aggiuntivi. */
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.sidebar :focus-visible { outline-color: #fff; }
 .campo:focus,
-.campo:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible { background: var(--evidenzia); }
+input:focus,
+select:focus,
+textarea:focus,
+.tendina-grilletto:focus-visible {
+  background: var(--evidenzia);
+  border-color: var(--primario);
+  outline: none;
+  box-shadow: none;
+}
 
 .icona { width: 20px; height: 20px; flex: none; color: currentColor; }
 .icona--piccola { width: 16px; height: 16px; }
@@ -168,8 +172,8 @@ textarea:focus-visible { background: var(--evidenzia); }
 }
 
 .marchio { display: flex; align-items: center; gap: var(--s-4); min-width: 0; margin: 0; color: var(--primario); }
-/* Il logo è vettoriale con `fill="currentColor"`: il colore arriva da qui, senza immagine. */
-.marchio-logo { height: 34px; width: auto; color: currentColor; }
+/* Immagine SVG con dimensioni esplicite: non dipende da <use> senza frammento. */
+.marchio-logo { display: block; width: 119px; height: 40px; object-fit: contain; }
 .marchio-testo { display: flex; flex-direction: column; min-width: 0; }
 .marchio-nome { font-size: 1.375rem; font-weight: 148; letter-spacing: .12em; line-height: 1.2; }
 .marchio-sotto { font-size: .9375rem; color: var(--testo-tenue); }
@@ -207,8 +211,8 @@ textarea:focus-visible { background: var(--evidenzia); }
 
 .sidebar-testata { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: 34px; }
 .sidebar .marchio { color: #fff; }
-.sidebar .marchio .marchio-logo { height: 26px; }
-.sidebar-logo-solo { display: none; height: 26px; width: 26px; }
+.sidebar .marchio-logo { width: 119px; height: 40px; filter: brightness(0) invert(1); }
+.sidebar-logo-solo { display: none; width: 26px; height: 26px; object-fit: contain; filter: brightness(0) invert(1); }
 
 .sidebar-comprimi {
   display: inline-flex;
@@ -298,9 +302,10 @@ textarea:focus-visible { background: var(--evidenzia); }
 .azione--contorno:hover { background: var(--superficie-incassata); }
 /* Sulla testata bianca e nella sidebar teal: stesso segno, colore invertito. */
 .sidebar .azione, .testata--scura .azione { color: #fff; }
+.sidebar .azione--contorno { background: transparent; border-color: rgba(255, 255, 255, .7); }
 .sidebar .azione:hover, .testata--scura .azione:hover { background: var(--primario-hover); }
 
-/* CTA principale: arancio. Porta l'inchiostro scuro, non il bianco (AA). */
+/* CTA piena: testo e icone bianchi su arancio profondo. */
 .riquadro-azione {
   display: inline-flex;
   align-items: center;
@@ -311,16 +316,16 @@ textarea:focus-visible { background: var(--evidenzia); }
   font: inherit;
   font-size: 1rem;
   font-weight: 148;
-  color: var(--su-secondario);
-  background: var(--secondario);
-  border: 2px solid var(--secondario);
+  color: #fff;
+  background: var(--cta-sfondo);
+  border: 2px solid var(--cta-sfondo);
   border-radius: var(--raggio);
   text-decoration: none;
   cursor: pointer;
   box-shadow: var(--ombra-scheda);
   transition: var(--transizione);
 }
-.riquadro-azione:hover { background: var(--secondario-hover); border-color: var(--secondario-hover); }
+.riquadro-azione:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
 .riquadro-azione:active { transform: translateY(1px); box-shadow: none; }
 
 .riquadro-azione--secondario { color: #fff; background: var(--primario); border-color: var(--primario); }
@@ -764,14 +769,38 @@ a.linguetta:hover { color: var(--testo); }
 
 /* ============================================================ aiuto e piede */
 
-#aiuto {
-  margin: var(--s-8) 0;
-  padding: var(--s-8);
-  background: var(--superficie);
-  border: 1.5px solid var(--bordo);
-  border-radius: var(--raggio-grande);
-  box-shadow: var(--ombra-scheda);
+.aiuto-apri {
+  position: fixed;
+  top: var(--s-4);
+  right: var(--s-4);
+  z-index: 45;
+  width: var(--bersaglio-min);
+  height: var(--bersaglio-min);
+  padding: 0;
+  font: inherit;
+  font-size: 1.5rem;
+  font-weight: 148;
+  color: #fff;
+  background: var(--primario);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
 }
+.aiuto-apri:hover { background: var(--primario-hover); }
+#aiuto {
+  width: min(48rem, calc(100% - 2 * var(--s-4)));
+  max-height: calc(100dvh - 2 * var(--s-4));
+  margin: auto;
+  padding: var(--s-6);
+  color: var(--testo);
+  background: var(--superficie);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+  overflow-y: auto;
+}
+#aiuto::backdrop { background: rgba(10, 63, 78, .35); }
+.aiuto-testata { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); margin-bottom: var(--s-4); }
+.aiuto-chiudi { width: 44px; height: 44px; padding: 0; font: inherit; font-size: 1.5rem; border: 0; border-radius: 50%; background: var(--superficie-incassata); color: var(--primario); cursor: pointer; }
 #aiuto h2 { margin: 0 0 var(--s-3); font-size: 1.375rem; font-weight: 148; color: var(--primario); }
 #aiuto h3 { margin: var(--s-5) 0 6px; font-size: 1.125rem; font-weight: 148; color: var(--primario); }
 #aiuto p { margin: 0 0 10px; max-width: var(--misura-testo); line-height: 1.6; }
@@ -826,19 +855,22 @@ a.linguetta:hover { color: var(--testo); }
   .nav-voce span { display: none; }
   .nav-voce[aria-current="page"]::before { display: none; }
   .nav-voce[aria-current="page"] { background: var(--primario-hover); }
-  .sidebar-lato { flex-direction: row; flex-wrap: wrap; margin: 0 0 0 auto; align-items: center; min-width: 0; max-width: 100%; }
-  .sidebar .casa { flex: 1; min-width: 0; }
+  .sidebar-lato { flex-direction: row; flex-wrap: wrap; width: 100%; margin: 0; align-items: center; min-width: 0; }
+  .sidebar .casa { flex: 1 0 100%; min-width: 0; }
   .sidebar .tendina-pannello { top: calc(100% + var(--s-1)); bottom: auto; }
   .sidebar-piede { flex-direction: row; margin: 0; }
   .sidebar .privacy { display: none; }
+  .guscio--stretto .sidebar-testata { flex-direction: row; }
+  .guscio--stretto .nav { width: auto; }
   .guscio--stretto .sidebar .casa { display: flex; }
   .guscio--stretto .sidebar-piede .azione span { display: inline; }
+  .aiuto-apri { top: auto; bottom: var(--s-4); }
 }
 
 /* ============================================================ stampa */
 
 @media print {
-  .salta, .azioni, .fascia, .sidebar, .velo, .cassetto { display: none; }
+  .salta, .azioni, .fascia, .sidebar, .velo, .cassetto, .aiuto-apri, #aiuto { display: none; }
   .guscio { display: block; }
   body { background: #fff; }
   .destinazione, #aiuto, .evento-scheda { break-inside: avoid; }

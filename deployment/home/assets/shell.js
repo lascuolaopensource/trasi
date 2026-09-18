@@ -1,7 +1,5 @@
-/* shell.js — la sidebar comprimibile del guscio (240 px espansa, 72 px compressa).
- *
- * Una cosa sola, nient'altro: il bottone comprime la **propria** sidebar — `closest()`, non una
- * query globale, perché nel documento c'è una sidebar per pagina e non devono parlarsi.
+/* shell.js — sidebar comprimibile e Aiuto su richiesta.
+ * Il bottone comprime la propria sidebar tramite closest().
  * Lo stato non si conserva: al ricaricamento la sidebar torna espansa (niente dati
  * personali, neppure una preferenza — regola V5 del progetto).
  *
@@ -21,6 +19,13 @@
         this.setAttribute("aria-expanded", stretto ? "false" : "true");
         /* L'etichetta segue lo stato: quando è compresso il bottone «espande». */
         this.setAttribute("aria-label", stretto ? "Espandi il menu" : "Comprimi il menu");
+      });
+    }
+    var aiuti = document.querySelectorAll("[data-aiuto-apri]");
+    for (var j = 0; j < aiuti.length; j++) {
+      aiuti[j].addEventListener("click", function () {
+        var dialogo = document.getElementById(this.getAttribute("aria-controls"));
+        if (dialogo && !dialogo.open) dialogo.showModal();
       });
     }
   }
