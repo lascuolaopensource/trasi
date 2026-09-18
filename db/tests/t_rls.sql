@@ -1,4 +1,4 @@
--- Trasi — db/tests/t_rls.sql · T01…T15
+-- Trasi — db/tests/t_rls.sql · T01…T16
 -- La RLS è l'autorità: questi test girano SEMPRE come ruolo applicativo (SET ROLE), mai come
 -- superuser, altrimenti darebbero falsi positivi. Convenzione: PASS = NOTICE, FAIL = EXCEPTION
 -- (interrompe il run). Eseguito con `-1`: ogni INSERT di prova è rollbackato a fine file.
@@ -403,4 +403,128 @@ BEGIN
   END IF;
 
   RAISE NOTICE 'PASS T15 — oggetto: INSERT/UPDATE della propria Casa OK e fuori da v_scritture_senza_audit; cross-Casa 42501/0 righe; DELETE 42501; rete e shim_rw 42501';
+END $$;
+
+-- T16 · movimento bidirezionale (db/033): propone cedente o ricevente, decide la controparte -------------
+-- (a) la ricevente chiede un oggetto altrui (proposto_da = sé) → ok; con proposto_da = cedente → RLS;
+-- (b) su quella richiesta la proponente non decide (P0001 «spetta a buscicchio»), la cedente conferma →
+--     confermato, oggetto a Molo 12; (c) prestito proposto dalla cedente → decide la ricevente, la cedente
+--     riceve P0001; (d) 'rifiuta' → rifiutato, oggetto fermo; (e) 'rientro' dalla ricevente → P0001, dalla
+--     cedente → rientrato con condizione; (f) v_movimenti_da_confermare.decide_casa_slug coincide con chi
+--     è riuscito a confermare in (b)/(c). Fixture come trasi_owner, rollback a fine file.
+DO $$
+DECLARE busc int; molo int; ogg1 int; ogg2 int; ogg3 int; m1 int; m2 int; m3 int; n int; fallito boolean;
+        decide text; st text; casa_ogg int; cond text; msg text;
+BEGIN
+  SELECT id INTO busc FROM trasi.casa WHERE slug = 'buscicchio';
+  SELECT id INTO molo FROM trasi.casa WHERE slug = 'molo12';
+
+  EXECUTE 'SET ROLE casa_buscicchio';
+  INSERT INTO trasi.oggetto (casa_id, nome, quantita) VALUES (busc, 'Oggetto T16 richiesta', 2) RETURNING id INTO ogg1;
+  INSERT INTO trasi.oggetto (casa_id, nome, quantita) VALUES (busc, 'Oggetto T16 prestito', 1) RETURNING id INTO ogg2;
+  INSERT INTO trasi.oggetto (casa_id, nome, quantita) VALUES (busc, 'Oggetto T16 rifiuto', 1) RETURNING id INTO ogg3;
+  EXECUTE 'RESET ROLE';
+
+  -- (a) Molo 12 chiede in prestito l'oggetto di Buscicchio: propone sé stessa come ricevente.
+  EXECUTE 'SET ROLE casa_molo12';
+  INSERT INTO trasi.movimento (oggetto_id, da_casa_id, a_casa_id, proposto_da_casa_id)
+  VALUES (ogg1, busc, molo, molo) RETURNING id INTO m1;
+  -- …ma non può dichiarare che a proporre sia stata Buscicchio.
+  fallito := false;
+  BEGIN
+    INSERT INTO trasi.movimento (oggetto_id, da_casa_id, a_casa_id, proposto_da_casa_id) VALUES (ogg1, busc, molo, busc);
+    fallito := true;
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF fallito THEN RAISE EXCEPTION 'FAIL T16a — molo12 ha inserito un movimento «proposto da buscicchio» (atteso 42501)'; END IF;
+
+  -- (f) la vista dice chi decide: la controparte di chi ha proposto → buscicchio.
+  SELECT decide_casa_slug INTO decide FROM trasi.v_movimenti_da_confermare WHERE id = m1;
+  IF decide IS DISTINCT FROM 'buscicchio' THEN RAISE EXCEPTION 'FAIL T16f — decide_casa_slug = % (atteso buscicchio)', decide; END IF;
+
+  -- (b) la proponente non decide; la cedente conferma e l'oggetto passa a Molo 12.
+  EXECUTE 'SET ROLE casa_molo12';
+  fallito := false;
+  BEGIN
+    PERFORM trasi.conferma_movimento(m1, 'casa_molo12');
+    fallito := true;
+  EXCEPTION WHEN raise_exception THEN msg := SQLERRM;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF fallito THEN RAISE EXCEPTION 'FAIL T16b — molo12 ha confermato la richiesta che ha proposto'; END IF;
+  IF position('buscicchio' in msg) = 0 THEN RAISE EXCEPTION 'FAIL T16b — il P0001 non dice a chi spetta: %', msg; END IF;
+  EXECUTE 'SET ROLE casa_buscicchio';
+  PERFORM trasi.conferma_movimento(m1, 'casa_buscicchio', 'conferma');
+  EXECUTE 'RESET ROLE';
+  SELECT stato INTO st FROM trasi.movimento WHERE id = m1;
+  SELECT casa_id INTO casa_ogg FROM trasi.oggetto WHERE id = ogg1;
+  IF st <> 'confermato' OR casa_ogg <> molo THEN RAISE EXCEPTION 'FAIL T16b — stato % / oggetto presso % (attesi confermato / molo12)', st, casa_ogg; END IF;
+
+  -- (c) prestito proposto dalla cedente (il caso di prima): decide la ricevente, la cedente riceve P0001.
+  EXECUTE 'SET ROLE casa_buscicchio';
+  INSERT INTO trasi.movimento (oggetto_id, da_casa_id, a_casa_id, proposto_da_casa_id)
+  VALUES (ogg2, busc, molo, busc) RETURNING id INTO m2;
+  fallito := false;
+  BEGIN
+    PERFORM trasi.conferma_movimento(m2, 'casa_buscicchio');
+    fallito := true;
+  EXCEPTION WHEN raise_exception THEN NULL;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF fallito THEN RAISE EXCEPTION 'FAIL T16c — la cedente ha confermato il proprio prestito'; END IF;
+  SELECT decide_casa_slug INTO decide FROM trasi.v_movimenti_da_confermare WHERE id = m2;
+  IF decide IS DISTINCT FROM 'molo12' THEN RAISE EXCEPTION 'FAIL T16f — decide_casa_slug = % (atteso molo12)', decide; END IF;
+
+  -- (e) 'rientro' su un proposto → P0001; poi conferma dalla ricevente, rientro dalla ricevente → P0001,
+  --     rientro dalla cedente → rientrato con condizione dichiarata e oggetto tornato.
+  EXECUTE 'SET ROLE casa_molo12';
+  fallito := false;
+  BEGIN
+    PERFORM trasi.conferma_movimento(m2, 'casa_molo12', 'rientro');
+    fallito := true;
+  EXCEPTION WHEN raise_exception THEN NULL;
+  END;
+  IF fallito THEN EXECUTE 'RESET ROLE'; RAISE EXCEPTION 'FAIL T16e — rientro accettato su un movimento proposto'; END IF;
+  PERFORM trasi.conferma_movimento(m2, 'casa_molo12', 'conferma');
+  fallito := false;
+  BEGIN
+    PERFORM trasi.conferma_movimento(m2, 'casa_molo12', 'rientro');
+    fallito := true;
+  EXCEPTION WHEN raise_exception THEN NULL;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF fallito THEN RAISE EXCEPTION 'FAIL T16e — la ricevente ha registrato il rientro'; END IF;
+  EXECUTE 'SET ROLE casa_buscicchio';
+  PERFORM trasi.conferma_movimento(m2, 'casa_buscicchio', 'rientro', 'danneggiato');
+  EXECUTE 'RESET ROLE';
+  SELECT stato, condizione_rientro INTO st, cond FROM trasi.movimento WHERE id = m2;
+  SELECT casa_id INTO casa_ogg FROM trasi.oggetto WHERE id = ogg2;
+  IF st <> 'rientrato' OR cond <> 'danneggiato' OR casa_ogg <> busc THEN
+    RAISE EXCEPTION 'FAIL T16e — stato % / condizione % / oggetto presso % (attesi rientrato / danneggiato / buscicchio)', st, cond, casa_ogg;
+  END IF;
+
+  -- (d) rifiuto dalla controparte: rifiutato, oggetto fermo, voce fuori dalla vista.
+  EXECUTE 'SET ROLE casa_molo12';
+  INSERT INTO trasi.movimento (oggetto_id, da_casa_id, a_casa_id, proposto_da_casa_id)
+  VALUES (ogg3, busc, molo, molo) RETURNING id INTO m3;
+  EXECUTE 'RESET ROLE';
+  EXECUTE 'SET ROLE casa_buscicchio';
+  PERFORM trasi.conferma_movimento(m3, 'casa_buscicchio', 'rifiuta');
+  EXECUTE 'RESET ROLE';
+  SELECT stato INTO st FROM trasi.movimento WHERE id = m3;
+  SELECT casa_id INTO casa_ogg FROM trasi.oggetto WHERE id = ogg3;
+  SELECT count(*) INTO n FROM trasi.v_movimenti_da_confermare WHERE id = m3;
+  IF st <> 'rifiutato' OR casa_ogg <> busc OR n <> 0 THEN
+    RAISE EXCEPTION 'FAIL T16d — stato % / oggetto presso % / in vista % (attesi rifiutato / buscicchio / 0)', st, casa_ogg, n;
+  END IF;
+  -- Il rifiuto non sposta l'oggetto: nessuna riga audit «oggetto» per m3, ma una per il movimento.
+  SELECT count(*) INTO n FROM trasi.audit WHERE azione = 'conferma_movimento' AND entita = 'movimento' AND entita_id = m3;
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL T16d — audit del rifiuto: % righe (attesa 1)', n; END IF;
+
+  -- La contabilità V4 resta pulita: gli oggetti spostati hanno la loro riga audit.
+  SELECT count(*) INTO n FROM trasi.v_scritture_senza_audit WHERE entita = 'oggetto' AND entita_id IN (ogg1, ogg2, ogg3);
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL T16 — % oggetti in v_scritture_senza_audit dopo i movimenti', n; END IF;
+
+  RAISE NOTICE 'PASS T16 — movimento bidirezionale: richiesta della ricevente OK (proposto_da ≠ sé → 42501); decide la controparte (P0001 alla proponente); conferma sposta, rifiuta no, rientro solo dalla cedente con condizione; decide_casa_slug coerente; 0 violazioni V4';
 END $$;

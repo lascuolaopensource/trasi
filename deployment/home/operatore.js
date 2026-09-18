@@ -75,6 +75,7 @@
     vistaBanco.hidden = true;
     vistaAccesso.hidden = false;
     scollegaOnyx();
+    sincronizzaTimerAttrezzoteca();
   }
 
   $("modulo-accesso").addEventListener("submit", function (evento) {
@@ -114,9 +115,9 @@
          aggiunto dalla chat Onyx (`salva_dato` con `entita=oggetto`) deve comparire qui senza
          ricaricare la pagina. Stessa query dello shim per entrambe le porte (`inventario()`). */
       if (pannello === "attrezzoteca" && casaCorrente) {
-        caricaInventario($("cerca-oggetto").value.trim());
-        caricaMovimenti();
+        aggiornaAttrezzoteca();
       }
+      sincronizzaTimerAttrezzoteca();
     });
   }
 
@@ -188,178 +189,306 @@
     });
   });
 
-  /* --------------------------------------------------------- attrezzoteca */
+  /* --------------------------------------------------------- attrezzoteca
+   *
+   * Quattro regole, tutte lette dai dati e non ricalcolate qui:
+   *   1. su un oggetto **proprio** disponibile si propone un prestito (`a_casa`); su un oggetto di
+   *      un'**altra** Casa disponibile si chiede in prestito (`da_casa`, db/033); a disponibilità 0 nessun
+   *      pulsante, solo la parola;
+   *   2. nei movimenti in attesa i pulsanti («Conferma ricezione»/«Conferma prestito» e «Rifiuta»)
+   *      compaiono **solo** a chi deve decidere: `decide_casa_slug` viene dalla vista del database, la UI
+   *      lo confronta con la Casa della sessione e basta; chi ha proposto legge «In attesa della
+   *      decisione di …»;
+   *   3. i moduli sono **in linea** nella tabella (niente `window.prompt`): un `<form>` nella riga sotto,
+   *      raggiungibile da tastiera, con Annulla che riporta il focus al pulsante;
+   *   4. l'inventario si rilegge da solo mentre la linguetta è visibile — ogni 30 s e al ritorno del
+   *      focus/visibilità (l'operatore torna dalla scheda di Onyx) — e a mano con «Aggiorna». La riga
+   *      «Inventario aggiornato alle HH:MM» dice quando.
+   */
+
+  var ATTREZZOTECA_INTERVALLO_MS = 30000;
+  var timerAttrezzoteca = null;
+  var moduloAperto = null;   /* la <tr> del modulo in linea aperto, una sola per volta */
+
+  function nodo(tag, classe, testo) {
+    var el = document.createElement(tag);
+    if (classe) el.className = classe;
+    if (testo !== undefined && testo !== null) el.textContent = String(testo);
+    return el;
+  }
+
+  function oggiIso() { return new Date().toISOString().slice(0, 10); }
+
+  /* Gli slug validi sono quelli che la pagina già elenca nel selettore di accesso: leggerli da lì
+     evita una seconda copia della lista delle Case nel JS. */
+  function caseDellaRete() {
+    var opzioni = document.querySelectorAll("#accesso-casa option");
+    var lista = [];
+    for (var i = 0; i < opzioni.length; i++) lista.push({ slug: opzioni[i].value, nome: opzioni[i].textContent });
+    return lista;
+  }
+
+  function chiudiModulo() {
+    if (!moduloAperto) return;
+    var apertoDa = moduloAperto.apertoDa;
+    if (moduloAperto.parentNode) moduloAperto.parentNode.removeChild(moduloAperto);
+    moduloAperto = null;
+    if (apertoDa && apertoDa.isConnected) apertoDa.focus();
+  }
+
+  /* Un modulo in linea sotto la riga dell'oggetto. `campi` è una lista di {nome, etichetta, tipo, opzioni?}. */
+  function apriModulo(rigaOggetto, bottone, titolo, campi, invia) {
+    chiudiModulo();
+    var riga = nodo("tr", "op-riga-modulo");
+    riga.apertoDa = bottone;
+    var cella = nodo("td");
+    cella.colSpan = 6;
+    var modulo = nodo("form", "op-modulo");
+    modulo.setAttribute("aria-label", titolo);
+    modulo.appendChild(nodo("p", "op-modulo-titolo", titolo));
+    var primo = null;
+    campi.forEach(function (campo, i) {
+      var id = "op-campo-" + rigaOggetto.dataset.oggetto + "-" + campo.nome;
+      var blocco = nodo("div", "op-campo");
+      var etichetta = nodo("label", "etichetta", campo.etichetta);
+      etichetta.setAttribute("for", id);
+      var controllo;
+      if (campo.tipo === "select") {
+        controllo = nodo("select");
+        campo.opzioni.forEach(function (op) {
+          var o = nodo("option", null, op.nome);
+          o.value = op.slug;
+          controllo.appendChild(o);
+        });
+      } else {
+        controllo = nodo("input");
+        controllo.type = campo.tipo;
+        if (campo.valore) controllo.value = campo.valore;
+        if (campo.min) controllo.min = campo.min;
+      }
+      controllo.id = id;
+      controllo.name = campo.nome;
+      controllo.required = true;
+      blocco.appendChild(etichetta);
+      blocco.appendChild(controllo);
+      modulo.appendChild(blocco);
+      if (i === 0) primo = controllo;
+    });
+    var azioni = nodo("div", "op-modulo-azioni");
+    var conferma = nodo("button", "riquadro-azione", "Invia");
+    conferma.type = "submit";
+    var annulla = nodo("button", "riquadro-azione riquadro-azione--quieto", "Annulla");
+    annulla.type = "button";
+    annulla.addEventListener("click", chiudiModulo);
+    azioni.appendChild(conferma);
+    azioni.appendChild(annulla);
+    modulo.appendChild(azioni);
+    modulo.addEventListener("keydown", function (ev) { if (ev.key === "Escape") { ev.preventDefault(); chiudiModulo(); } });
+    modulo.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var valori = {};
+      campi.forEach(function (campo) { valori[campo.nome] = modulo.elements[campo.nome].value; });
+      invia(valori);
+    });
+    cella.appendChild(modulo);
+    riga.appendChild(cella);
+    rigaOggetto.parentNode.insertBefore(riga, rigaOggetto.nextSibling);
+    moduloAperto = riga;
+    if (primo) primo.focus();
+  }
+
+  function esitoAttrezzoteca(ok, testo) {
+    if (ok) { mostra($("attrezzoteca-ok"), testo); nascondi($("attrezzoteca-errore")); }
+    else { mostra($("attrezzoteca-errore"), testo); nascondi($("attrezzoteca-ok")); }
+  }
+
+  function registraMovimento(corpo, testoOk) {
+    chiama("/op/movimento", { method: "POST", body: corpo }).then(function () {
+      chiudiModulo();
+      esitoAttrezzoteca(true, testoOk);
+      aggiornaAttrezzoteca();
+    }).catch(function (errore) {
+      if (scaduta(errore)) return;
+      esitoAttrezzoteca(false, "Movimento non registrato: " + errore.message);
+    });
+  }
 
   function rigaInventario(o) {
-    var riga = document.createElement("tr");
-    function cella(testo) {
-      var td = document.createElement("td");
-      td.textContent = testo == null ? "—" : String(testo);
-      return td;
-    }
-    riga.appendChild(cella(o.nome + (o.descrizione ? " — " + o.descrizione : "")));
-    riga.appendChild(cella(o.casa_slug || o.casa));
-    riga.appendChild(cella(o.quantita_disponibile != null ? o.quantita_disponibile : o.quantita));
-    riga.appendChild(cella(o.condizione));
-    riga.appendChild(cella(o.fonte || ""));
-    var azione = document.createElement("td");
-    /* Il pulsante c'è **solo sulla riga dell'oggetto della propria Casa**, e non è una rifinitura.
-       `mov_ins_casa` (db/014) pretende `oggetto.casa_id = casa_corrente()`: prestando un oggetto
-       altrui la RLS respinge l'INSERT. Mostrando il pulsante su ogni riga, l'operatore che vuole il
-       microfono di Bozzano — cioè il caso d'uso normale, «5 microfoni per domani, dove?» (US-5.1) —
-       preme l'unico pulsante disponibile e riceve un rifiuto: l'inventario della rete serve proprio
-       a **chiedere in prestito**, e la richiesta non ha un pulsante suo. Meglio dichiararlo qui che
-       far scoprire il confine con un errore. Il confronto è con `casa` della sessione (lo stesso
-       valore che `/me` restituisce e che l'intestazione mostra). */
-    var propria = String(o.casa_slug || o.casa || "") === String(casaCorrente || "");
-    if (propria) {
-      var bottone = document.createElement("button");
-      bottone.type = "button";
-      bottone.className = "riquadro-azione";
-      bottone.textContent = "Proponi prestito";
-      bottone.addEventListener("click", function () { proponiMovimento(o); });
-      azione.appendChild(bottone);
+    var riga = nodo("tr");
+    riga.dataset.oggetto = o.oggetto_id;
+    var disponibili = o.quantita_disponibile != null ? o.quantita_disponibile : o.quantita;
+    riga.appendChild(nodo("td", null, o.nome + (o.descrizione ? " — " + o.descrizione : "")));
+    riga.appendChild(nodo("td", null, o.casa_slug || o.casa));
+    riga.appendChild(nodo("td", null, disponibili == null ? "—" : disponibili));
+    riga.appendChild(nodo("td", null, o.condizione == null ? "—" : o.condizione));
+    riga.appendChild(nodo("td", null, o.fonte || ""));
+    var azione = nodo("td");
+    var slugOggetto = String(o.casa_slug || o.casa || "");
+    var propria = slugOggetto === String(casaCorrente || "");
+    if (!(disponibili > 0)) {
+      azione.textContent = "Non disponibile ora";
+    } else if (propria) {
+      /* Prestito: la cedente sceglie la destinataria fra le altre Case (`movimento_case_distinte`:
+         la propria non è nell'elenco, così il vincolo non può scattare) e la data di rientro. */
+      var presta = nodo("button", "riquadro-azione", "Proponi prestito a\u2026");
+      presta.type = "button";
+      presta.setAttribute("aria-label", "Proponi in prestito " + o.nome + " a un'altra Casa");
+      presta.addEventListener("click", function () {
+        var altre = caseDellaRete().filter(function (c) { return c.slug !== casaCorrente; });
+        apriModulo(riga, presta, "Prestito di «" + o.nome + "»", [
+          { nome: "a_casa", etichetta: "A quale Casa", tipo: "select", opzioni: altre },
+          { nome: "al", etichetta: "Fino a quando (rientro previsto)", tipo: "date", valore: oggiIso(), min: oggiIso() }
+        ], function (v) {
+          registraMovimento({ oggetto_id: o.oggetto_id, a_casa: v.a_casa, dal: oggiIso(), al: v.al },
+            "Prestito proposto a " + v.a_casa + ": conta dalla sua conferma.");
+        });
+      });
+      azione.appendChild(presta);
     } else {
-      azione.textContent = "Di un'altra Casa: si chiede a loro";
+      /* Richiesta: la ricevente chiede l'oggetto di un'altra Casa (db/033); decide la cedente. */
+      var chiedi = nodo("button", "riquadro-azione", "Chiedi in prestito");
+      chiedi.type = "button";
+      chiedi.setAttribute("aria-label", "Chiedi in prestito " + o.nome + " a " + slugOggetto);
+      chiedi.addEventListener("click", function () {
+        apriModulo(riga, chiedi, "Richiesta di «" + o.nome + "» a " + slugOggetto, [
+          { nome: "al", etichetta: "Fino a quando (rientro previsto)", tipo: "date", valore: oggiIso(), min: oggiIso() }
+        ], function (v) {
+          registraMovimento({ oggetto_id: o.oggetto_id, da_casa: slugOggetto, dal: oggiIso(), al: v.al },
+            "Richiesta inviata a " + slugOggetto + ": conta dalla sua conferma.");
+        });
+      });
+      azione.appendChild(chiedi);
     }
     riga.appendChild(azione);
     return riga;
   }
 
+  function oraLocale() {
+    var d = new Date();
+    return (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes();
+  }
+
   function caricaInventario(q) {
     var corpo = $("corpo-inventario");
+    var stato = $("attrezzoteca-aggiornato");
+    chiudiModulo();
     corpo.innerHTML = "";
-    var vuoto = document.createElement("tr");
-    vuoto.innerHTML = "<td colspan=\"6\">Caricamento…</td>";
-    corpo.appendChild(vuoto);
-    chiama("/op/attrezzoteca" + (q ? "?q=" + encodeURIComponent(q) : "")).then(function (dati) {
+    var attesa = nodo("tr");
+    attesa.appendChild(nodo("td", null, "Caricamento\u2026")).colSpan = 6;
+    corpo.appendChild(attesa);
+    return chiama("/op/attrezzoteca" + (q ? "?q=" + encodeURIComponent(q) : "")).then(function (dati) {
       corpo.innerHTML = "";
-      /* Il campo è `items`: è quello che `GET /op/attrezzoteca` restituisce
-         (`{"items": [...]}`), e leggerne un altro significava mostrare «Nessun
-         oggetto trovato» a inventario **pieno** — non un caso limite, ma il
-         comportamento di ogni ricerca, perché `dati.oggetti` e `dati.risultati`
-         restano `undefined` e `dati` è un oggetto, quindi `Array.isArray(dati)`
-         è falso. */
-      var elenco = dati && (dati.items || dati.oggetti || dati.risultati);
+      var elenco = dati && dati.items;
       if (!Array.isArray(elenco) || elenco.length === 0) {
-        var r = document.createElement("tr");
-        r.innerHTML = "<td colspan=\"6\">Nessun oggetto trovato.</td>";
+        var r = nodo("tr");
+        r.appendChild(nodo("td", null, "Nessun oggetto trovato.")).colSpan = 6;
         corpo.appendChild(r);
-        return;
+      } else {
+        for (var i = 0; i < elenco.length; i++) corpo.appendChild(rigaInventario(elenco[i]));
       }
-      for (var i = 0; i < elenco.length; i++) corpo.appendChild(rigaInventario(elenco[i]));
+      if (stato) stato.textContent = "Inventario aggiornato alle " + oraLocale();
     }).catch(function (errore) {
       if (scaduta(errore)) return;
-      corpo.innerHTML = "<tr><td colspan=\"6\">Inventario non disponibile: " + errore.message + "</td></tr>";
+      corpo.innerHTML = "";
+      var r = nodo("tr");
+      r.appendChild(nodo("td", null, "Inventario non disponibile: " + errore.message)).colSpan = 6;
+      corpo.appendChild(r);
     });
   }
 
-  /* Gli slug validi sono quelli che la pagina già elenca nel selettore di accesso: leggerli da lì
-     evita una seconda copia della lista delle Case nel JS, che sarebbe un secondo elenco da tenere
-     allineato al seed. */
-  function caseDellaRete() {
-    var opzioni = document.querySelectorAll("#accesso-casa option");
-    var slug = [];
-    for (var i = 0; i < opzioni.length; i++) slug.push(opzioni[i].value);
-    return slug;
-  }
-
-  function proponiMovimento(o) {
-    var oggi = new Date().toISOString().slice(0, 10);
-    /* La destinataria si chiede finché non è una Casa **diversa dalla propria**, e non è pignoleria:
-       `movimento_case_distinte` (db/014) è un CHECK, e il default precedente era `casaCorrente` —
-       cioè il valore che il vincolo rifiuta *sempre*. Chi premeva «Proponi prestito» e accettava il
-       valore proposto otteneva un 422 su una data o su una Casa, a seconda di quale prompt
-       correggeva: un modulo che propone come default l'unico valore non ammesso. Il confronto è con
-       la Casa della sessione, la stessa che l'intestazione mostra. */
-    var aCasa = null;
-    while (true) {
-      var risposta = window.prompt(
-        "A quale Casa va «" + o.nome + "»? (slug, es. bozzano)",
-        o.casa_slug && o.casa_slug !== casaCorrente ? o.casa_slug : ""
-      );
-      if (risposta === null) return;
-      aCasa = risposta.trim();
-      if (!aCasa) return;
-      if (aCasa === casaCorrente) {
-        mostra($("attrezzoteca-errore"), "La Casa destinataria deve essere diversa dalla tua: un prestito va a un'altra Casa.");
-        nascondi($("attrezzoteca-ok"));
-        continue;
-      }
-      if (caseDellaRete().indexOf(aCasa) < 0) {
-        mostra($("attrezzoteca-errore"), "Casa «" + aCasa + "» non riconosciuta: usa lo slug di una Casa della rete (es. bozzano).");
-        nascondi($("attrezzoteca-ok"));
-        continue;
-      }
-      break;
-    }
-    var al = window.prompt("Fino a quando? (AAAA-MM-GG)", oggi);
-    if (!al) return;
-    nascondi($("attrezzoteca-errore"));
-    /* I nomi dei campi sono quelli dell'endpoint, e sono **tre** correzioni in un
-       punto solo — ognuna faceva fallire il pulsante:
-         * `oggetto_id`: l'inventario espone `oggetto_id`, non `id`;
-         * `a_casa`: l'endpoint vuole lo slug del destinatario in `a_casa`, non in
-           `a_casa_slug` (che è un campo in più, quindi 422 `extra` non ammesso);
-         * `dal`/`al` sono date ISO: l'endpoint le valida come `date`, quindi una
-           stringa malformata è 422 — nessun `Date` va serializzato a mano qui. */
-    chiama("/op/movimento", {
-      method: "POST",
-      body: { oggetto_id: o.oggetto_id, a_casa: aCasa, dal: oggi, al: al }
-    }).then(function () {
-      mostra($("attrezzoteca-ok"), "Prestito proposto. Conta dalla conferma della Casa che riceve.");
-      caricaInventario("");
-      caricaMovimenti();
-    }).catch(function (errore) {
-      if (scaduta(errore)) return;
-      mostra($("attrezzoteca-errore"), "Proposta non registrata: " + errore.message);
-    });
+  function decidiMovimento(m, azione, testoOk) {
+    chiama("/op/movimento/" + encodeURIComponent(m.id) + "/conferma", { method: "POST", body: { azione: azione } })
+      .then(function (dati) {
+        esitoAttrezzoteca(true, testoOk + " (stato: " + (dati && dati.stato) + ").");
+        aggiornaAttrezzoteca();
+      }).catch(function (errore) {
+        if (scaduta(errore)) return;
+        esitoAttrezzoteca(false, "Decisione non registrata: " + errore.message);
+      });
   }
 
   function caricaMovimenti() {
     var lista = $("movimenti-da-confermare");
     lista.innerHTML = "";
-    chiama("/op/movimenti_da_confermare").then(function (dati) {
-      var elenco = dati && (dati.movimenti || dati.items || dati);
+    return chiama("/op/movimenti_da_confermare").then(function (dati) {
+      var elenco = dati && dati.movimenti;
       if (!Array.isArray(elenco) || elenco.length === 0) {
-        lista.innerHTML = "<li>Nessun movimento in attesa di conferma.</li>";
+        lista.appendChild(nodo("li", null, "Nessun movimento in attesa di conferma."));
         return;
       }
-      for (var i = 0; i < elenco.length; i++) {
-        (function (m) {
-          var voce = document.createElement("li");
-          var testo = document.createElement("span");
-          testo.textContent = (m.oggetto || ("oggetto #" + m.oggetto_id)) + " da " + (m.da_casa_slug || m.da_casa_id) +
-            " a " + (m.a_casa_slug || m.a_casa_id) + " (" + m.dal + " → " + m.al + ") ";
-          var bottone = document.createElement("button");
-          bottone.type = "button";
-          bottone.className = "riquadro-azione";
-          bottone.textContent = "Conferma ricezione";
-          bottone.addEventListener("click", function () {
-            chiama("/op/movimento/" + encodeURIComponent(m.id) + "/conferma", { method: "POST" }).then(function () {
-              mostra($("attrezzoteca-ok"), "Ricezione confermata: l’oggetto ora risulta alla tua Casa.");
-              caricaMovimenti();
-              caricaInventario("");
-            }).catch(function (errore) {
-              if (scaduta(errore)) return;
-              mostra($("attrezzoteca-errore"), "Conferma non riuscita: " + errore.message);
-            });
+      elenco.forEach(function (m) {
+        var voce = nodo("li", "op-movimento");
+        var testo = (m.oggetto || ("oggetto #" + m.oggetto_id)) + " \u00b7 da " + m.da_casa_slug + " a " + m.a_casa_slug +
+          " \u00b7 " + m.dal + " \u2192 " + (m.al || "\u2014") + " \u00b7 proposto da " + m.proposto_da_casa_slug;
+        voce.appendChild(nodo("span", "op-movimento-testo", testo));
+        if (m.decide_casa_slug === casaCorrente) {
+          /* Decide questa Casa: come ricevente conferma la ricezione (prestito proposto dalla cedente), come
+             cedente conferma il prestito (richiesta della ricevente). In entrambi i casi può rifiutare. */
+          var etichetta = m.ruolo_mio === "ricevente" ? "Conferma ricezione" : "Conferma prestito";
+          var conferma = nodo("button", "riquadro-azione", etichetta);
+          conferma.type = "button";
+          conferma.setAttribute("aria-label", etichetta + ": " + (m.oggetto || "oggetto") + " da " + m.da_casa_slug + " a " + m.a_casa_slug);
+          conferma.addEventListener("click", function () {
+            decidiMovimento(m, "conferma", m.ruolo_mio === "ricevente"
+              ? "Ricezione confermata: l\u2019oggetto ora risulta alla tua Casa"
+              : "Prestito confermato: l\u2019oggetto ora risulta a " + m.a_casa_slug);
           });
-          voce.appendChild(testo);
-          voce.appendChild(bottone);
-          lista.appendChild(voce);
-        })(elenco[i]);
-      }
+          var rifiuta = nodo("button", "riquadro-azione riquadro-azione--quieto", "Rifiuta");
+          rifiuta.type = "button";
+          rifiuta.setAttribute("aria-label", "Rifiuta: " + (m.oggetto || "oggetto") + " da " + m.da_casa_slug + " a " + m.a_casa_slug);
+          rifiuta.addEventListener("click", function () {
+            decidiMovimento(m, "rifiuta", "Movimento rifiutato: l\u2019oggetto resta dov\u2019\u00e8");
+          });
+          voce.appendChild(conferma);
+          voce.appendChild(rifiuta);
+        } else {
+          voce.appendChild(nodo("span", "op-movimento-attesa", "In attesa della decisione di " + m.decide_casa_slug));
+        }
+        lista.appendChild(voce);
+      });
     }).catch(function (errore) {
       if (scaduta(errore)) return;
-      lista.innerHTML = "<li>Movimenti non disponibili: " + errore.message + "</li>";
+      lista.innerHTML = "";
+      lista.appendChild(nodo("li", null, "Movimenti non disponibili: " + errore.message));
     });
   }
+
+  /* Rilettura completa con il termine di ricerca corrente. */
+  function aggiornaAttrezzoteca() {
+    if (!casaCorrente) return;
+    caricaInventario($("cerca-oggetto").value.trim());
+    caricaMovimenti();
+  }
+
+  function attrezzotecaVisibile() {
+    return Boolean(casaCorrente) && !$("pannello-attrezzoteca").hidden && document.visibilityState === "visible";
+  }
+
+  /* Il timer vive solo con la linguetta visibile e la finestra in primo piano: una pagina in secondo piano
+     non interroga lo shim ogni 30 s per nessuno. */
+  function sincronizzaTimerAttrezzoteca() {
+    if (attrezzotecaVisibile()) {
+      if (!timerAttrezzoteca) timerAttrezzoteca = window.setInterval(aggiornaAttrezzoteca, ATTREZZOTECA_INTERVALLO_MS);
+    } else if (timerAttrezzoteca) {
+      window.clearInterval(timerAttrezzoteca);
+      timerAttrezzoteca = null;
+    }
+  }
+
+  /* Al ritorno (dalla scheda di Onyx, da un'altra finestra) si rilegge subito: è il momento in cui
+     l'operatore si aspetta di vedere ciò che ha appena scritto in chat. */
+  function alRitorno() {
+    if (attrezzotecaVisibile()) aggiornaAttrezzoteca();
+    sincronizzaTimerAttrezzoteca();
+  }
+  document.addEventListener("visibilitychange", alRitorno);
+  window.addEventListener("focus", alRitorno);
 
   $("modulo-cerca-oggetto").addEventListener("submit", function (evento) {
     evento.preventDefault();
     caricaInventario($("cerca-oggetto").value.trim());
   });
+  $("aggiorna-attrezzoteca").addEventListener("click", aggiornaAttrezzoteca);
 
   /* ------------------------------------------------------------- messaggi */
 

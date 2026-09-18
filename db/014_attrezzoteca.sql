@@ -5,9 +5,10 @@
 --   * `oggetto` — nascita e modifica DIRETTE della propria Casa (D1: policy `ogg_ins_casa`/`ogg_upd_casa`
 --     qui sotto + GRANT in db/032); via proposta (tipi nuovo_oggetto / modifica_oggetto /
 --     ritira_oggetto in db/006, decide l'AT) per gli oggetti delle altre Case. Inventario = memoria della rete;
---   * `movimento` — evento operativo tra due Case: INSERT diretto della Casa cedente
---     (stato 'proposto'), conferma SOLO della ricevente via conferma_movimento() (db/006,
---     audit su ogni passaggio). Mai DELETE (coerente con V4 regola 7).
+--   * `movimento` — evento operativo tra due Case: INSERT diretto della Casa che propone —
+--     la cedente (prestito) **o** la ricevente (richiesta, db/033) — in stato 'proposto';
+--     decide la **controparte** via conferma_movimento() (conferma | rifiuta; rientro della
+--     cedente; db/006 + db/033, audit su ogni passaggio). Mai DELETE (coerente con V4 regola 7).
 --
 -- Vincoli applicati: RLS ENABLE+FORCE; policy con USING **e** WITH CHECK; nessun ruolo
 -- con BYPASSRLS; impronta di scrittura (aggiornato_ts/aggiornato_da) via trigger generico.
@@ -210,7 +211,9 @@ CREATE POLICY mov_sel ON trasi.movimento FOR SELECT
       OR a_casa_id = (SELECT trasi.casa_corrente())
       OR current_user IN ('rete','ti','automazioni','shim_rw'));
 
--- movimento: INSERT solo della Casa CEDENTE e verso l'inventario della propria Casa.
+-- movimento: INSERT della Casa CEDENTE su un proprio oggetto. **Sostituita da db/033** (`mov_ins_casa`
+-- bidirezionale: propone la Casa della sessione come cedente o come ricevente, l'oggetto sta presso la
+-- cedente); resta qui perché db/000–029 sono congelati e l'apply riesegue questo file prima del 033.
 DROP POLICY IF EXISTS mov_ins_casa ON trasi.movimento;
 CREATE POLICY mov_ins_casa ON trasi.movimento FOR INSERT
   TO casa_santaspazio, casa_molo12, casa_erranti, casa_buscicchio, casa_sanbao,
@@ -221,8 +224,9 @@ CREATE POLICY mov_ins_casa ON trasi.movimento FOR INSERT
                              AND o.casa_id = (SELECT trasi.casa_corrente())
                              AND o.attivo));
 
--- Nessuna policy UPDATE per i ruoli Casa: la conferma passa da conferma_movimento()
--- (SECURITY DEFINER owner `applicatore`, con audit). Mai DELETE: nessuna policy DELETE.
+-- Nessuna policy UPDATE per i ruoli Casa: ogni transizione passa da conferma_movimento()
+-- (SECURITY DEFINER owner `applicatore`, con audit; dal 033: conferma | rifiuta della controparte,
+-- rientro della cedente). Mai DELETE: nessuna policy DELETE.
 
 -- ---------------------------------------------------------------------------
 -- 4. GRANT

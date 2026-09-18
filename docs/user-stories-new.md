@@ -165,11 +165,15 @@ AC:
 - ❓ Politica di risoluzione conflitti (priorità? mediazione?) non definita nella scheda.
 
 ### US-5.3 — Registrazione spostamento con conferma
-Come operatore della CdQ cedente, voglio registrare lo spostamento e ottenere conferma dalla CdQ ricevente, per tenere l'inventario affidabile.
+Come operatore della CdQ cedente o ricevente, voglio registrare lo spostamento (o la richiesta) e ottenere la conferma dalla controparte, per tenere l'inventario affidabile.
 
 AC:
 - ✅ Spostamento registrato → notifica alla CdQ ricevente → conferma esplicita → stato aggiornato.
 - ✅ Traccia: chi sposta, da dove a dove, quando.
+- ✅ (db/033, 2026-09-18) Il movimento può nascere da **entrambe** le Case: richiesta della ricevente
+  (`da_casa`) o prestito della cedente (`a_casa`); decide la **controparte** di chi ha proposto, con conferma
+  o rifiuto (rifiuto = oggetto fermo, `stato='rifiutato'`); il rientro lo registra la cedente con la condizione.
+  La UI legge chi decide da `v_movimenti_da_confermare.decide_casa_slug`.
 - ✅ Ad ogni passaggio si registra la condizione (integro / danneggiato / mancante di parti).
 
 ### US-5.4 — Manutenzione e statistiche d'uso

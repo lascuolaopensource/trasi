@@ -384,6 +384,32 @@ titolo `--testata` su carta **11,12**; testo `--testo` **15,39**; chiusa `--test
 in §1.4.3). Reflow: a 360 px `scrollWidth === 360`. axe-core 4.10.2 WCAG 2.1 A/AA sulla Home → **0 violazioni**.
 Screenshot: `evidenze/home-copertina-{1280,360}.png`.
 
+## 5d · L'area operatore: la sezione Attrezzoteca (aggiornata il 2026-09-18)
+
+Quattro difetti corretti in `operatore.html`/`operatore.js` (vedi PR movimenti bidirezionali), con verifica a
+scontrino (stato, focus, contrasti calcolati):
+
+- **Movimenti in attesa**: i pulsanti («Conferma ricezione» per chi riceve, «Conferma prestito» per chi presta,
+  «Rifiuta» per entrambi) compaiono **solo** sulla voce che questa Casa deve decidere — `decide_casa_slug` arriva
+  dalla vista del database e la UI lo confronta con la Casa della sessione. Chi ha proposto legge «In attesa della
+  decisione di <casa>» come testo normale. Prima il pulsante «Conferma ricezione» compariva a entrambe, e la
+  cedente riceveva un rifiuto del database **dopo** aver premuto.
+- **Moduli in linea** (2.1.1): niente più `window.prompt` (finestra modale del browser, non annunciata). Il
+  «Proponi prestito a…» e il «Chiedi in prestito» aprono un `<form>` in linea **nella riga** (`<tr>` con
+  `background` incassato): `<select>` delle Case (per il prestito, senza la propria — il CHECK di db/014 non può
+  scattare) e `<input type="date">` con `min` = oggi; `Annulla` ed `Esc` chiudono e riportano il **focus** al
+  pulsante che ha aperto; un solo modulo aperto per volta. Etichette associate con `for`.
+- **Aggiornamento automatico** (4.1.3): la riga `role="status" aria-live="polite"` «Inventario aggiornato alle
+  HH:MM» dice quando è avvenuta l'ultima lettura; il timer di 30 s vive **solo** con la linguetta «Attrezzoteca»
+  visibile e `document.visibilityState === "visible"`, e si spegne altrimenti (nessuna interrogazione a pagina
+  chiusa o in secondo piano); al ritorno del focus/visibilità (l'operatore torna dalla scheda di Onyx) rilettura
+  immediata; bottone «Aggiorna» esplicito accanto alla ricerca. Il termine di ricerca corrente è mantenuto nelle
+  riletture.
+- **Chiedi in prestito** (db/033): sugli oggetti di altre Case con disponibilità > 0 il pulsante «Chiedi in
+  prestito» apre lo stesso modulo in linea; a disponibilità 0 solo il testo «Non disponibile ora», senza
+  pulsante. Contrasti: etichette `--testo-tenue` su `--superficie-incassata` **7,60** (§1.4.3), riga di stato
+  tenue su bianco **8,90**, riga di attenzione `--attenzione-*` **6,71**.
+
 ## 6 · Difetti reali trovati durante questa verifica
 
 **Della versione precedente (riportati perché sono lezioni, non storia):**

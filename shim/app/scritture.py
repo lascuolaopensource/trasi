@@ -425,8 +425,9 @@ ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa", "persona", "oggetto"
 #: flusso export cancella il documento da Onyx. Vedi `db/029_persone_casa.sql`.
 #:
 #: Per `oggetto` (db/014 + db/032, decisione 2026-09-18): l'attrezzoteca della propria Casa si scrive come
-#: la scheda — `nome` e `quantita` obbligatori alla creazione (sono `NOT NULL`), `attivo=false` con `id` è
-#: il **ritiro** (V4 regola 7: mai DELETE). I tipi di proposta `*_oggetto` restano per il cross-Casa (AT).
+#: la scheda — `nome` obbligatorio alla creazione (è `NOT NULL`), `quantita` se omessa vale 1 (l'operatore in chat
+#: dice «aggiungi il proiettore» e l'assistente scrive subito, senza chiedere quanti: db/033), `attivo=false` con
+#: `id` è il **ritiro** (V4 regola 7: mai DELETE). I tipi di proposta `*_oggetto` restano per il cross-Casa (AT).
 COLONNE_DIRETTE: dict[str, tuple[str, ...]] = {
     "scheda_servizio": ("titolo", "descrizione", "categoria", "orari", "referente_ruolo", "scadenza", "url"),
     "opportunita": ("titolo", "descrizione", "categoria", "scadenza", "url"),
@@ -511,7 +512,9 @@ class SalvaDatoIn(BaseModel):
             if self.id is None and (self.nome is None or not self.nome.strip()):
                 raise ValueError("nome è obbligatorio per creare «oggetto»")
             if self.id is None and self.quantita is None:
-                raise ValueError("quantita è obbligatoria per creare «oggetto» (esemplari presenti, almeno 1)")
+                # Un pezzo, se non detto: l'assistente scrive al primo messaggio invece di chiedere «quanti?»;
+                # la quantità si corregge dopo con `id`. `exclude_unset` non la vedrebbe: la si imposta qui.
+                self.quantita = 1
             if self.id is None and self.attivo is not None:
                 raise ValueError("attivo si usa con id: false ritira l'oggetto, true lo riammette")
             if any(v is not None for v in (self.titolo, self.categoria, self.orari, self.referente_ruolo,
