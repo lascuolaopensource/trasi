@@ -240,6 +240,121 @@ def test_eventi_oggi_restituisce_gli_eventi_della_data_richiesta(client, db_vivo
     assert evento["dove"] == "Sala di prova"
 
 
+# --- eventi_mese (fuori contratto: il calendario della Home) ---------------------------------------------------
+
+
+def _dsn_admin_connessione():
+    import asyncpg
+
+    return asyncpg.connect(_dsn_admin())
+
+
+@pytest.mark.live
+def test_eventi_mese_restituisce_gli_eventi_del_mese_in_ordine_e_non_quelli_del_mese_dopo(client, db_vivo, dsn):
+    """Due eventi in giorni diversi del mese richiesto compaiono in ordine di inizio; uno del mese successivo no.
+
+    Il mese è scelto **lontano** (fra 14 mesi) per non dipendere dagli eventi già in calendario: si prova il
+    contratto dell'intervallo (`dal` = 1, `al` = ultimo giorno, tutti e soli gli eventi in mezzo), non lo stato del
+    database. Gli eventi di prova sono creati con la connessione amministrativa e rimossi alla fine.
+    """
+    if not db_vivo:
+        pytest.skip("database non raggiungibile")
+
+    import calendar
+
+    oggi = date.today()
+    anno, mese = (oggi.year + 1, oggi.month + 2) if oggi.month <= 10 else (oggi.year + 2, oggi.month - 10)
+    primo = date(anno, mese, 1)
+    ultimo = date(anno, mese, calendar.monthrange(anno, mese)[1])
+    mese_dopo = date(anno + (mese == 12), mese % 12 + 1, 3)
+    # Inseriti in ordine **inverso** rispetto a quello atteso: l'ordine della risposta deve venire da `inizio`.
+    prove = [
+        ("Evento di prova mese — 20 (rimosso dal test)", datetime.combine(date(anno, mese, 20), time(10, 0), tzinfo=FUSO_LOCALE)),
+        ("Evento di prova mese — 5 (rimosso dal test)", datetime.combine(date(anno, mese, 5), time(18, 30), tzinfo=FUSO_LOCALE)),
+        ("Evento di prova mese dopo (rimosso dal test)", datetime.combine(mese_dopo, time(9, 0), tzinfo=FUSO_LOCALE)),
+    ]
+
+    async def inserisci() -> list[int]:
+        conn = await _dsn_admin_connessione()
+        try:
+            return [
+                await conn.fetchval(
+                    """
+                    INSERT INTO trasi.evento (casa_id, titolo, inizio, luogo_testo, affidabilita)
+                    SELECT c.id, $1, $2, 'Sala di prova', 3 FROM trasi.casa c WHERE c.slug = 'san-bao'
+                    RETURNING id
+                    """,
+                    titolo,
+                    inizio,
+                )
+                for titolo, inizio in prove
+            ]
+        finally:
+            await conn.close()
+
+    async def rimuovi(identificativi: list[int]) -> None:
+        conn = await _dsn_admin_connessione()
+        try:
+            await conn.execute("DELETE FROM trasi.evento WHERE id = ANY($1::bigint[])", identificativi)
+        finally:
+            await conn.close()
+
+    identificativi = asyncio.run(inserisci())
+    try:
+        risposta = client.get(
+            f"{URL.format(email=EMAIL_RETE)}/eventi_mese?casa=san-bao&mese={primo.strftime('%Y-%m')}"
+        )
+    finally:
+        asyncio.run(rimuovi(identificativi))
+
+    assert risposta.status_code == 200
+    corpo = risposta.json()
+    assert corpo["casa"] == "san-bao"
+    assert corpo["dal"] == primo.isoformat()
+    assert corpo["al"] == ultimo.isoformat()
+    assert corpo["oggi"] == oggi.isoformat(), "«oggi» lo dice lo shim, nel fuso della rete"
+    assert [e["titolo"] for e in corpo["eventi"]] == [prove[1][0], prove[0][0]]
+    assert [e["data"] for e in corpo["eventi"]] == [date(anno, mese, 5).isoformat(), date(anno, mese, 20).isoformat()]
+    assert corpo["eventi"][0]["ora_inizio"] == "18:30"
+
+
+def test_eventi_mese_con_casa_inesistente_risponde_404(client, sessione_finta):
+    """Stessa regola di `eventi_oggi`: una Casa che non esiste è 404, non un mese vuoto."""
+    sessione_finta(righe=[], valore=None)
+    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_mese?casa=casa-che-non-esiste")
+
+    assert risposta.status_code == 404
+    assert "casa non trovata" in risposta.json()["detail"]
+
+
+@pytest.mark.parametrize("mese", ["2026-13", "2026-00", "settembre", "2026-9", "2026-09-01"])
+def test_eventi_mese_con_mese_malformato_risponde_422(client, sessione_finta, mese):
+    """`mese` è `AAAA-MM` con mese fra 01 e 12: qualunque altra forma è un parametro non ammesso, dichiarato."""
+    sessione_finta()
+    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_mese?casa=san-bao&mese={mese}")
+
+    assert risposta.status_code == 422
+    assert risposta.json()["detail"].startswith("parametri non ammessi")
+
+
+def test_eventi_mese_senza_mese_usa_il_mese_corrente(client, sessione_finta):
+    """Senza `mese` l'intervallo è il mese di oggi, dal primo all'ultimo giorno, e `oggi` è dentro."""
+    sessione_finta(righe=[], valore=5)  # `valore` è la risposta a `SQL_CASA_ESISTE`: la Casa c'è, il mese è vuoto
+    risposta = client.get(f"{URL.format(email=EMAIL_OP_SANBAO)}/eventi_mese?casa=san-bao")
+
+    assert risposta.status_code == 200
+    corpo = risposta.json()
+    dal, al, oggi = date.fromisoformat(corpo["dal"]), date.fromisoformat(corpo["al"]), date.fromisoformat(corpo["oggi"])
+    assert dal.day == 1 and (al + timedelta(days=1)).day == 1
+    assert dal <= oggi <= al
+    assert corpo["eventi"] == []
+
+
+def test_eventi_mese_e_fuori_dal_contratto_congelato(client):
+    """La rotta non compare nello schema OpenAPI generato: le operazioni esposte restano le nove congelate (V-09)."""
+    percorsi = client.get("/openapi.json").json()["paths"]
+    assert not any(p.endswith("/eventi_mese") for p in percorsi)
+
 @pytest.mark.live
 def test_l_operatore_della_rete_vede_gli_eventi_di_ogni_casa(client, db_vivo):
     """Il ruolo `rete` (AT/AQ) non è legato a una Casa e vede il calendario di tutte: è il principio 3."""

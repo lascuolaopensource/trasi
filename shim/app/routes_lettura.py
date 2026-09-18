@@ -15,6 +15,7 @@ Due scelte che vale la pena dichiarare:
 
 from __future__ import annotations
 
+import calendar
 import re
 from datetime import date
 
@@ -29,6 +30,7 @@ from .schemi import (
     ItemLuogo,
     ItemStatisticheAmbito,
     RispostaCercaLuogo,
+    RispostaEventiMese,
     RispostaEventiOggi,
     RispostaStatistiche,
     WhoAmI,
@@ -80,6 +82,10 @@ SQL_CASA_ESISTE = "SELECT id FROM trasi.casa WHERE slug = $1"
 
 # Il giorno si ritaglia nel fuso del database (`TimeZone` = Europe/Rome dal compose), non in UTC: l'evento delle
 # 21:30 di oggi appartiene a oggi, e confrontare un `timestamptz` con una data in UTC lo sposterebbe a domani.
+#
+# L'intervallo è **chiuso** (`BETWEEN $2 AND $3`): `eventi_oggi` passa lo stesso giorno due volte e ottiene
+# esattamente quello che otteneva con `= $2`; `eventi_mese` passa il primo e l'ultimo giorno del mese. Una sola
+# query per due letture, così il filtro «annullato», il badge e l'ordine non possono divergere.
 SQL_EVENTI = """
 SELECT e.id, e.titolo, e.inizio, e.fine, e.luogo_testo,
        COALESCE(e.url, f.url) AS url,
@@ -92,9 +98,13 @@ JOIN trasi.casa c ON c.id = e.casa_id
 LEFT JOIN trasi.fonte f ON f.id = e.fonte_id
 WHERE c.slug = $1
   AND e.annullato = false
-  AND e.inizio::date = $2
+  AND e.inizio::date BETWEEN $2 AND $3
 ORDER BY e.inizio
 """
+
+# `mese=AAAA-MM` di `eventi_mese`: la forma si controlla qui, il valore (mese 01-12) lo controlla `date()`.
+FORMA_MESE = re.compile(r"^(\d{4})-(\d{2})$")
+DETAIL_MESE_NON_AMMESSO = "parametri non ammessi — mese: atteso AAAA-MM con mese fra 01 e 12"
 
 
 @router.get(
@@ -166,18 +176,12 @@ async def eventi_oggi(
 
     La Casa, se non indicata, è quella dell'operatore: l'assistente non deve conoscerla (v. `slug_casa_da_identita`).
     """
-    slug = (casa or "").strip() or await slug_casa_da_identita(sess)
-    if not slug:
-        raise errore(422, "parametri non ammessi — casa: obbligatoria per un ruolo senza Casa (es. rete)")
-    # Il modello scrive il nome («San Bao») più spesso dello slug: si prova a riconoscerlo. Solo se non è una
-    # Casa riconoscibile si ripiega su quella dell'operatore (v. `routes_geo`), com'era prima.
-    if await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
-        slug = await risolvi_slug_casa(sess, slug) or await slug_casa_da_identita(sess) or slug
+    slug = await _slug_casa_richiesta(casa, sess)
 
     riferimento = data or oggi_locale()
     # Il parametro è un `date`, non una stringa ISO: `$2::date` fa dedurre ad asyncpg il tipo del parametro, e una
     # stringa lì è un `DataError` a runtime (verificato: `'str' object has no attribute 'toordinal'`).
-    righe = await sess.fetch(SQL_EVENTI, slug, riferimento)
+    righe = await sess.fetch(SQL_EVENTI, slug, riferimento, riferimento)
 
     if not righe and await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
         raise errore(404, f"casa non trovata: nessuna Casa di Quartiere con slug «{slug}»")
@@ -185,6 +189,71 @@ async def eventi_oggi(
     return RispostaEventiOggi(
         casa=slug, data=riferimento, eventi=[_item_evento(riga) for riga in righe]
     )
+
+
+@router.get(
+    "/eventi_mese",
+    summary="Gli eventi di una Casa in un mese (il corrente se non indicato): il calendario della Home.",
+    include_in_schema=False,
+    response_model=RispostaEventiMese,
+)
+async def eventi_mese(
+    casa: str | None = Query(
+        default=None,
+        description="Slug della Casa di Quartiere. Se omesso si usa la Casa dell'operatore autenticato.",
+    ),
+    mese: str | None = Query(default=None, description="Mese `AAAA-MM`; se omesso, il mese corrente."),
+    sess: Sessione = Depends(dipendenza_sessione),
+) -> RispostaEventiMese:
+    """Gli eventi di una Casa in un mese intero, dal primo all'ultimo giorno, in ordine di inizio.
+
+    **Fuori dal contratto congelato** (`include_in_schema=False`): non è uno strumento del LLM, è la lettura del
+    calendario della Home — che è pubblica e passa dal canale con chiave (`/v1/u/rete@trasi.local/…`, Caddy), lo
+    stesso di `eventi_oggi`. Stessa risoluzione della Casa, stessa query, stesso `ItemEvento`: cambia solo
+    l'intervallo.
+
+    `oggi` è nella risposta perché è lo shim, nel fuso della rete, a dire che giorno è: la Home evidenzia le righe
+    di oggi confrontando `evento.data` con questo valore, non con l'orologio del browser — così l'evidenza coincide
+    con la riga «Oggi» della stessa pagina.
+    """
+    slug = await _slug_casa_richiesta(casa, sess)
+
+    oggi = oggi_locale()
+    if mese is None or not mese.strip():
+        anno, numero_mese = oggi.year, oggi.month
+    else:
+        forma = FORMA_MESE.match(mese.strip())
+        if not forma:
+            raise errore(422, DETAIL_MESE_NON_AMMESSO)
+        anno, numero_mese = int(forma.group(1)), int(forma.group(2))
+        if not 1 <= numero_mese <= 12:
+            raise errore(422, DETAIL_MESE_NON_AMMESSO)
+    dal = date(anno, numero_mese, 1)
+    al = date(anno, numero_mese, calendar.monthrange(anno, numero_mese)[1])
+
+    righe = await sess.fetch(SQL_EVENTI, slug, dal, al)
+
+    if not righe and await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
+        raise errore(404, f"casa non trovata: nessuna Casa di Quartiere con slug «{slug}»")
+
+    return RispostaEventiMese(
+        casa=slug, dal=dal, al=al, oggi=oggi, eventi=[_item_evento(riga) for riga in righe]
+    )
+
+
+async def _slug_casa_richiesta(casa: str | None, sess: Sessione) -> str:
+    """Lo slug della Casa di una lettura del calendario: il parametro, o la Casa dell'operatore.
+
+    Il modello scrive il nome («San Bao») più spesso dello slug: si prova a riconoscerlo. Solo se non è una Casa
+    riconoscibile si ripiega su quella dell'operatore (v. `routes_geo`), com'era prima. Condivisa da `eventi_oggi`
+    ed `eventi_mese`: la Casa si risolve in un modo solo.
+    """
+    slug = (casa or "").strip() or await slug_casa_da_identita(sess)
+    if not slug:
+        raise errore(422, "parametri non ammessi — casa: obbligatoria per un ruolo senza Casa (es. rete)")
+    if await sess.fetchval(SQL_CASA_ESISTE, slug) is None:
+        slug = await risolvi_slug_casa(sess, slug) or await slug_casa_da_identita(sess) or slug
+    return slug
 
 
 def _item_luogo(riga) -> ItemLuogo:
@@ -359,8 +428,10 @@ def _item_luogo(riga) -> ItemLuogo:
 
 
 __all__ = [
+    "DETAIL_MESE_NON_AMMESSO",
     "MIN_LUNGHEZZA_RICERCA",
     "SQL_CERCA_LUOGO",
     "SQL_EVENTI",
+    "eventi_mese",
     "router",
 ]
