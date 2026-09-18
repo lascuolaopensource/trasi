@@ -232,6 +232,9 @@ body {
 .nav-voce { color: var(--azione); border-radius: var(--raggio, 10px); }
 .nav-voce:hover { background: var(--azione-sfondo-hover); }
 .nav-voce[aria-current="page"] { color: var(--mare-notte); background: var(--superficie-incassata); }
+/* «Onyx non disponibile»: la voce resta al suo posto, senza `href`, e non finge di essere un'azione. */
+.nav-voce[aria-disabled="true"] { color: var(--testo-tenue); cursor: default; }
+.nav-voce[aria-disabled="true"]:hover { background: transparent; }
 
 /* ------------------------------------------------------------ piede */
 .azione, .bottone {
