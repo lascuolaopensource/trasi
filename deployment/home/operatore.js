@@ -147,6 +147,7 @@
     if (!linguettaOnyx) return;
     chiama("/op/config").then(function (config) {
       if (!config || typeof config.onyx_url !== "string" || !config.onyx_url) throw new Error("onyx_url assente");
+      window.TrasiShell.aggiornaChiedi(config.onyx_url);
       linguettaOnyx.textContent = "Chiedi";
       linguettaOnyx.removeAttribute("aria-disabled");
       linguettaOnyx.setAttribute("href", config.onyx_url);
@@ -156,11 +157,13 @@
     }).catch(function (errore) {
       if (scaduta(errore)) return;
       scollegaOnyx();
+      window.TrasiShell.aggiornaChiedi(false);
       linguettaOnyx.textContent = TESTO_ONYX_NON_DISPONIBILE;
     });
   }
 
   function scollegaOnyx() {
+    window.TrasiShell.aggiornaChiedi(null);
     if (!linguettaOnyx) return;
     linguettaOnyx.removeAttribute("href");
     linguettaOnyx.removeAttribute("target");

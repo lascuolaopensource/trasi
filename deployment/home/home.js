@@ -478,6 +478,7 @@
       .then(function (config) {
         if (config === null) return;
         if (!config || typeof config.onyx_url !== "string" || !config.onyx_url) throw new Error("onyx_url assente");
+        window.TrasiShell.aggiornaChiedi(config.onyx_url);
         chiediSuOnyx = true;
         riquadroChiedi.removeAttribute("data-modello");
         riquadroChiedi.setAttribute("href", config.onyx_url);
@@ -487,6 +488,7 @@
         if (notaChiedi) notaChiedi.textContent = "si apre in Onyx, in una nuova scheda";
       })
       .catch(function () {
+        window.TrasiShell.aggiornaChiedi(false);
         chiediSuOnyx = true;
         riquadroChiedi.removeAttribute("data-modello");
         riquadroChiedi.removeAttribute("href");
@@ -525,6 +527,7 @@
     pulsanteEsci.addEventListener("click", function () {
       fetch("/api/shim/logout", { method: "POST", credentials: "same-origin" })
         .then(function (risposta) {
+          if (risposta.ok) window.TrasiShell.aggiornaChiedi(null);
           esitoUscita.textContent = risposta.ok
             ? "Sessione chiusa."
             : "Uscita non riuscita (risposta " + risposta.status + ").";
