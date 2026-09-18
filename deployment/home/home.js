@@ -478,6 +478,7 @@
       .then(function (config) {
         if (config === null) return;
         if (!config || typeof config.onyx_url !== "string" || !config.onyx_url) throw new Error("onyx_url assente");
+        window.TrasiShell.aggiornaChiedi(config.onyx_url);
         chiediSuOnyx = true;
         riquadroChiedi.removeAttribute("data-modello");
         riquadroChiedi.setAttribute("href", config.onyx_url);
@@ -487,6 +488,7 @@
         if (notaChiedi) notaChiedi.textContent = "si apre in Onyx, in una nuova scheda";
       })
       .catch(function () {
+        window.TrasiShell.aggiornaChiedi(false);
         chiediSuOnyx = true;
         riquadroChiedi.removeAttribute("data-modello");
         riquadroChiedi.removeAttribute("href");
@@ -523,16 +525,18 @@
   var esitoUscita = document.getElementById("esito-uscita");
   if (pulsanteEsci && esitoUscita) {
     pulsanteEsci.addEventListener("click", function () {
+      pulsanteEsci.disabled = true;
+      esitoUscita.hidden = true;
       fetch("/api/shim/logout", { method: "POST", credentials: "same-origin" })
         .then(function (risposta) {
-          esitoUscita.textContent = risposta.ok
-            ? "Sessione chiusa."
-            : "Uscita non riuscita (risposta " + risposta.status + ").";
-          esitoUscita.hidden = false;
+          if (!risposta.ok) throw new Error("risposta " + risposta.status);
+          window.TrasiShell.aggiornaChiedi(null);
+          window.location.replace("/operatore.html");
         })
-        .catch(function () {
-          esitoUscita.textContent = "Uscita non riuscita: servizio non raggiungibile.";
+        .catch(function (errore) {
+          esitoUscita.textContent = "Uscita non riuscita: " + errore.message + ". Riprova.";
           esitoUscita.hidden = false;
+          pulsanteEsci.disabled = false;
         });
     });
   }

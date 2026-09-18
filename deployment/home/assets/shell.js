@@ -1,7 +1,5 @@
-/* shell.js — la sidebar comprimibile del guscio (240 px espansa, 72 px compressa).
- *
- * Una cosa sola, nient'altro: il bottone comprime la **propria** sidebar — `closest()`, non una
- * query globale, perché nel documento c'è una sidebar per pagina e non devono parlarsi.
+/* shell.js — sidebar comprimibile e Aiuto su richiesta.
+ * Il bottone comprime la propria sidebar tramite closest().
  * Lo stato non si conserva: al ricaricamento la sidebar torna espansa (niente dati
  * personali, neppure una preferenza — regola V5 del progetto).
  *
@@ -23,9 +21,39 @@
         this.setAttribute("aria-label", stretto ? "Espandi il menu" : "Comprimi il menu");
       });
     }
+    var aiuti = document.querySelectorAll("[data-aiuto-apri]");
+    for (var j = 0; j < aiuti.length; j++) {
+      aiuti[j].addEventListener("click", function () {
+        var dialogo = document.getElementById(this.getAttribute("aria-controls"));
+        if (dialogo && !dialogo.open) dialogo.showModal();
+      });
+    }
   }
 
-  window.TrasiShell = { pronte: pronte };
+  /* Home e operatore riusano la loro lettura di /op/config; solo la Mappa la avvia qui.
+     null = accesso richiesto, false = servizio non disponibile, stringa = URL Onyx. */
+  function aggiornaChiedi(url) {
+    var link = document.getElementById("sidebar-chiedi");
+    if (!link) return;
+    link.removeAttribute("target");
+    link.removeAttribute("rel");
+    link.removeAttribute("aria-disabled");
+    link.setAttribute("aria-label", "Chiedi");
+    if (url === false) {
+      link.removeAttribute("href");
+      link.setAttribute("aria-disabled", "true");
+      link.setAttribute("aria-label", "Chiedi — Onyx non disponibile");
+    } else {
+      link.setAttribute("href", url || "/operatore.html");
+      if (url) {
+        link.setAttribute("target", "_blank");
+        link.setAttribute("rel", "noopener");
+        link.setAttribute("aria-label", "Chiedi (si apre in una nuova scheda)");
+      }
+    }
+  }
+
+  window.TrasiShell = { pronte: pronte, aggiornaChiedi: aggiornaChiedi };
 
   /* Le pagine caricano questo file a fine `<body>`: il guscio c'è già. */
   pronte();

@@ -47,6 +47,7 @@
           throw new Error(typeof dettaglio === "string" ? dettaglio : "errore " + risposta.status);
         });
       }
+      if (risposta.status === 204) return null;
       var tipo = risposta.headers.get("content-type") || "";
       return tipo.indexOf("json") >= 0 ? risposta.json() : risposta.text();
     });
@@ -101,9 +102,16 @@
   });
 
   $("pulsante-esci").addEventListener("click", function () {
-    chiama("/logout", { method: "POST" }).catch(function () { /* la sessione lato server scade da sé */ });
-    mostra($("esito-uscita"), "Sessione chiusa.");
-    fuoriSessione();
+    var pulsante = this;
+    pulsante.disabled = true;
+    nascondi($("esito-uscita"));
+    chiama("/logout", { method: "POST" }).then(function () {
+      fuoriSessione();
+      window.location.replace("/operatore.html");
+    }).catch(function (errore) {
+      mostra($("esito-uscita"), "Uscita non riuscita: " + errore.message + ". Riprova.");
+      pulsante.disabled = false;
+    });
   });
 
   /* ------------------------------------------------------------ linguette */
@@ -147,6 +155,7 @@
     if (!linguettaOnyx) return;
     chiama("/op/config").then(function (config) {
       if (!config || typeof config.onyx_url !== "string" || !config.onyx_url) throw new Error("onyx_url assente");
+      window.TrasiShell.aggiornaChiedi(config.onyx_url);
       linguettaOnyx.textContent = "Chiedi";
       linguettaOnyx.removeAttribute("aria-disabled");
       linguettaOnyx.setAttribute("href", config.onyx_url);
@@ -156,11 +165,13 @@
     }).catch(function (errore) {
       if (scaduta(errore)) return;
       scollegaOnyx();
+      window.TrasiShell.aggiornaChiedi(false);
       linguettaOnyx.textContent = TESTO_ONYX_NON_DISPONIBILE;
     });
   }
 
   function scollegaOnyx() {
+    window.TrasiShell.aggiornaChiedi(null);
     if (!linguettaOnyx) return;
     linguettaOnyx.removeAttribute("href");
     linguettaOnyx.removeAttribute("target");

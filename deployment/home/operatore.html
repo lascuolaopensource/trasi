@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — area operatore</title>
 <meta name="description" content="Area operatore Trasi: accesso all’assistente in Onyx, registrazione richieste, attrezzoteca, messaggi interni.">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 <!-- Area operatore: un solo indirizzo, nessun redirect verso altri domini.
@@ -15,17 +15,17 @@
 <a class="salta" href="#banco">Salta al banco di lavoro</a>
 
 <!-- ============================================================ IL GUSCIO ================
-     Stessa sidebar della Mappa (mappa.html): teal, 240 px, comprimibile con
+     Stessa sidebar della Mappa (mappa.html): teal, 352 px, comprimibile con
      `assets/shell.js`. La Casa in sessione e «Esci» stanno nel lato della sidebar,
      dove nel prototipo sta l'utente. -->
 <div class="guscio">
   <aside class="sidebar" aria-label="Navigazione">
     <div class="sidebar-testata">
       <p class="marchio">
-        <svg class="marchio-logo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi.svg"/></svg>
+        <img class="marchio-logo" src="assets/logo-trasi.svg" alt="" width="119" height="40">
         <span class="solo-lettore">Trasi</span>
       </p>
-      <svg class="sidebar-logo-solo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi-mark.svg"/></svg>
+      <img class="sidebar-logo-solo" src="assets/logo-trasi-mark.svg" alt="Trasi" width="26" height="26">
       <button class="sidebar-comprimi" type="button" data-sidebar-comprimi aria-expanded="true" aria-label="Comprimi il menu">
         <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-panel-left"/></svg>
       </button>
@@ -35,6 +35,10 @@
       <a class="nav-voce" href="/">
         <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-home"/></svg>
         <span>Home</span>
+      </a>
+      <a class="nav-voce" id="sidebar-chiedi" href="/operatore.html" aria-label="Chiedi">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-message-circle"/></svg>
+        <span>Chiedi</span>
       </a>
       <a class="nav-voce" href="/mappa.html">
         <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-map"/></svg>
@@ -61,35 +65,38 @@
 
   <div class="area">
 
-<!-- ============================ accesso ================================== -->
-<main id="accesso" hidden>
-  <!-- L'accesso come scheda del prototipo (vista Login): centrata, bianca, bordo netto,
-       ombra morbida. Il `<main>` resta `#accesso` per `operatore.js`. -->
-  <div class="scheda-accesso">
-  <h1 class="titolo"><svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-key"/></svg>Accesso operatori</h1>
-  <form class="modulo" id="modulo-accesso" novalidate>
-    <p>
-      <label class="etichetta" for="accesso-casa">Casa di Quartiere</label>
-      <select id="accesso-casa" data-tendina required>
-        <option value="san-bao">San Bao</option>
-        <option value="bozzano">Centro di Aggregazione Bozzano</option>
-        <option value="buscicchio">Parco Buscicchio</option>
-        <option value="dream">Dream: Laboratorio Creativo</option>
-        <option value="erranti">Accademia degli Erranti</option>
-        <option value="minimus">Minimus</option>
-        <option value="molo12">Molo 12</option>
-        <option value="pop">POP — Piccolo Opificio Popolare</option>
-        <option value="santa-spazio">Santa Spazio Culturale</option>
-        <option value="tuturano">Tuturano</option>
-      </select>
-    </p>
-    <p>
-      <label class="etichetta" for="accesso-password">Parola d’ordine della Casa</label>
-      <input id="accesso-password" type="password" autocomplete="current-password" required>
-    </p>
-    <p><button class="riquadro-azione" type="submit">Entra</button></p>
-    <p class="messaggio-errore" id="accesso-errore" role="alert" hidden></p>
-  </form>
+<main class="accesso" id="accesso" hidden>
+  <!-- L'ingresso come nel mockup 3.jpg: sfondo a tutta pagina a sinistra, pannello bianco
+       a destra. Il `<main>` resta `#accesso` per `operatore.js`; niente scheda flottante. -->
+  <div class="accesso-sfondo" aria-hidden="true"></div>
+  <div class="accesso-pannello">
+    <img class="accesso-marchio" src="assets/logo-trasi.svg" alt="Trasi" width="119" height="40">
+    <h1 class="accesso-saluto">Bentornato</h1>
+    <p class="accesso-suggerimento">Accedi alla tua area riservata</p>
+    <form class="modulo" id="modulo-accesso" novalidate>
+      <p>
+        <label class="etichetta" for="accesso-casa">Casa di Quartiere</label>
+        <select id="accesso-casa" data-tendina required>
+          <option value="san-bao">San Bao</option>
+          <option value="bozzano">Centro di Aggregazione Bozzano</option>
+          <option value="buscicchio">Parco Buscicchio</option>
+          <option value="dream">Dream: Laboratorio Creativo</option>
+          <option value="erranti">Accademia degli Erranti</option>
+          <option value="minimus">Minimus</option>
+          <option value="molo12">Molo 12</option>
+          <option value="pop">POP — Piccolo Opificio Popolare</option>
+          <option value="santa-spazio">Santa Spazio Culturale</option>
+          <option value="tuturano">Tuturano</option>
+        </select>
+      </p>
+      <p>
+        <label class="etichetta" for="accesso-password">Parola d’ordine della Casa</label>
+        <input id="accesso-password" type="password" autocomplete="current-password" required>
+      </p>
+      <p><button class="riquadro-azione" type="submit">Accedi</button></p>
+      <p class="messaggio-errore accesso-errore" id="accesso-errore" role="alert" hidden></p>
+    </form>
+    <p class="accesso-nota">Non hai un account? Contatta la tua casa di quartiere.</p>
   </div>
 </main>
 
@@ -157,7 +164,7 @@
     .op-aggiornato:empty { display: none; }
     .op-riga-modulo > td { background: var(--superficie-incassata); }
     .op-modulo { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: end; }
-    .op-modulo-titolo { flex-basis: 100%; margin: 0 0 var(--s-1); font-weight: 600; }
+    .op-modulo-titolo { flex-basis: 100%; margin: 0 0 var(--s-1); font-weight: 126; }
     .op-campo { display: flex; flex-direction: column; gap: var(--s-1); }
     .op-campo label { font-size: .875rem; color: var(--testo-tenue); }
     .op-modulo-azioni { display: flex; gap: var(--s-2); }
@@ -228,8 +235,11 @@
   </section>
 </main>
 
-<section id="aiuto" aria-labelledby="aiuto-titolo">
-  <h2 id="aiuto-titolo">Aiuto</h2>
+<dialog id="aiuto" aria-labelledby="aiuto-titolo">
+  <div class="aiuto-testata">
+    <h2 id="aiuto-titolo">Aiuto</h2>
+    <form method="dialog"><button class="aiuto-chiudi" aria-label="Chiudi Aiuto" autofocus>×</button></form>
+  </div>
   <p>Questa è l’area di lavoro dell’operatore: «Chiedi» apre l’assistente in Onyx, le tre linguette corrispondono alle funzioni della piattaforma.</p>
   <dl class="aiuto-elenco">
     <dt>Chiedi</dt><dd>Apre Onyx, l’assistente della rete, in una nuova scheda. Le risposte dichiarano sempre la fonte. La conversazione vive lì: dentro Trasi non c’è una chat.</dd>
@@ -239,16 +249,16 @@
   </dl>
   <h3>La sessione</h3>
   <p>L’accesso dura 12 ore e vale solo per la Casa scelta. Con «Esci» la sessione si chiude subito.</p>
-</section>
+</dialog>
 
 <footer class="piede">
   <p>Trasi · area operatore. La piattaforma non conserva dati personali dei cittadini.</p>
 </footer>
   </div>
 </div>
+<button class="aiuto-apri" type="button" data-aiuto-apri aria-controls="aiuto" aria-haspopup="dialog" aria-label="Aiuto" title="Aiuto">?</button>
 
-<script src="assets/dropdown.js?v=1"></script>
-<script src="assets/shell.js?v=1"></script>
-<script src="operatore.js?v=4"></script>
+<script src="assets/shell.js?v=4"></script>
+<script src="operatore.js?v=7"></script>
 </body>
 </html>

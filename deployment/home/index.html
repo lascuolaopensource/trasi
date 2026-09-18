@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — ingresso</title>
 <meta name="description" content="Trasi: la porta della rete delle Case di Quartiere di Brindisi.">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <!-- Risorse locali, zero CDN. Le destinazioni sono URL protocol-relative (`//host`)
@@ -14,16 +14,37 @@
      resta 0. Il perché di ogni scelta di veste sta in design/readme.md. -->
 <a class="salta" href="#destinazioni">Salta alle destinazioni</a>
 
-<header class="testata">
-  <p class="marchio">
-    <!-- Logo vettoriale (assets/logo-trasi.svg): riempimento `currentColor`, quindi
-         la testata lo tinge di teal senza una seconda immagine. -->
-    <svg class="marchio-logo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi.svg"/></svg>
-    <span class="solo-lettore">Trasi</span>
-    <span class="marchio-testo">
-      <span class="marchio-sotto">Rete delle Case di Quartiere di Brindisi</span>
-    </span>
-  </p>
+<div class="guscio">
+  <aside class="sidebar" aria-label="Navigazione">
+    <div class="sidebar-testata">
+      <p class="marchio">
+        <img class="marchio-logo" src="assets/logo-trasi.svg" alt="" width="119" height="40">
+        <span class="solo-lettore">Trasi</span>
+      </p>
+      <img class="sidebar-logo-solo" src="assets/logo-trasi-mark.svg" alt="Trasi" width="26" height="26">
+      <button class="sidebar-comprimi" type="button" data-sidebar-comprimi aria-expanded="true" aria-label="Comprimi il menu">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-panel-left"/></svg>
+      </button>
+    </div>
+    <nav class="nav" aria-label="Destinazioni">
+      <a class="nav-voce" href="/" aria-current="page" aria-label="Home">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-home"/></svg>
+        <span>Home</span>
+      </a>
+      <a class="nav-voce" id="sidebar-chiedi" href="/operatore.html" aria-label="Chiedi">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-message-circle"/></svg>
+        <span>Chiedi</span>
+      </a>
+      <a class="nav-voce" href="/mappa.html" data-modello="/mappa.html?casa={casa}" aria-label="Mappa">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-map"/></svg>
+        <span>Mappa</span>
+      </a>
+      <a class="nav-voce" href="/operatore.html" data-modello="/operatore.html?casa={casa}" aria-label="Area operatore">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-wrench"/></svg>
+        <span>Area operatore</span>
+      </a>
+    </nav>
+    <div class="sidebar-lato">
   <div class="casa">
     <label class="casa-etichetta" for="selettore-casa">Casa di riferimento</label>
     <!-- L'elenco delle Case sta solo qui. L'opzione di Tuturano porta la nota
@@ -43,22 +64,23 @@
     </select>
     <p class="casa-nota" id="casa-nota" hidden></p>
   </div>
-  <nav class="azioni" aria-label="Aiuto e uscita">
-    <a class="azione" href="/operatore.html"><svg class="icona icona--piccola" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-wrench"/></svg>Area operatore</a>
-    <a class="azione" href="#aiuto">Aiuto</a>
-    <!-- Esci chiude la sessione **dello shim**, non quella di Onyx: prima era un
-         invio del browser a un altro dominio. Il logout ora è
-         `POST /api/shim/logout` (cookie HttpOnly revocato sul database),
-         gestito in `home.js`. -->
-    <button class="azione azione--contorno" type="button" id="pulsante-esci"><svg class="icona icona--piccola" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-log-out"/></svg>Esci</button>
-    <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
-  </nav>
-</header>
+      <div class="sidebar-piede">
+        <!-- Logout dello shim, gestito da home.js; non chiude la sessione Onyx. -->
+        <button class="azione" type="button" id="pulsante-esci" aria-label="Esci">
+          <svg class="icona icona--piccola" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-log-out"/></svg>
+          <span>Esci</span>
+        </button>
+        <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
+        <p class="privacy">Non conserva dati personali.</p>
+      </div>
+    </div>
+  </aside>
+  <div class="area">
 
 <main>
   <!-- ====================================================== LA COPERTINA DEL SERVIZIO ======
        La Home è la copertina di Trasi: prima di tutto dice che cos'è, in grande e con aria.
-       Tipografia sola (Commissioner locale, misura di lettura stretta, interlinea ampia): niente
+       Tipografia sola (Commissioner locale, larghezza delle altre sezioni): niente
        immagini, niente riquadri. Il testo è quello del progetto, verbatim; terza persona, nessun
        imperativo (design/readme.md, «Content fundamentals»). -->
   <section class="copertina" aria-labelledby="copertina-titolo">
@@ -69,10 +91,7 @@
     <p class="copertina-testo copertina-testo--chiusa">Trasi è un servizio gestito dagli operatori e dalle operatrici di quartiere, supportati/e nel lavoro da uno strumento digitale.</p>
   </section>
 
-  <!-- Le due sole cose che cambiano da sole stanno in testa: si leggono prima di
-       scegliere dove andare, non dopo. Il filetto di 4 px a sinistra è il segno di
-       stato del sistema: blu mare per «Oggi», terracotta per la coda. Mai il colore
-       da solo — accanto c'è sempre la parola. -->
+  <!-- Lo stato di oggi e della coda è sempre dichiarato in parole. -->
   <section class="fascia" aria-label="Stato di oggi">
     <p class="oggi" id="oggi" role="status" aria-live="polite" aria-busy="true">Lettura dei dati di oggi in corso…</p>
 
@@ -141,8 +160,11 @@
     </div>
   </div>
 
-  <section id="aiuto" aria-labelledby="aiuto-titolo">
-    <h2 id="aiuto-titolo">Aiuto</h2>
+  <dialog id="aiuto" aria-labelledby="aiuto-titolo">
+    <div class="aiuto-testata">
+      <h2 id="aiuto-titolo">Aiuto</h2>
+      <form method="dialog"><button class="aiuto-chiudi" aria-label="Chiudi Aiuto" autofocus>×</button></form>
+    </div>
     <p>Trasi è la porta della rete delle Case di Quartiere. Da qui si aprono quattro destinazioni, e ognuna si apre già sulla Casa scelta in alto.</p>
     <h3>CHIEDI</h3>
     <p>Apre Onyx, l’assistente della rete, in una nuova scheda. Lì si scrive la domanda della persona e l’assistente risponde con luogo, orari e fonte. Da lì si può stampare un promemoria in formato A6, senza dati personali. Serve la sessione dell’area operatore: senza, il riquadro porta all’accesso.</p>
@@ -167,15 +189,18 @@
     <h3>La Casa in alto</h3>
     <p>Il selettore ricorda la Casa nel browser: al prossimo accesso è già quella. L’unica cosa conservata è il nome breve della Casa, nessun dato personale. Tuturano porta la nota «dati provvisori»: alcune sue schede non sono ancora complete.</p>
     <h3>Tastiera</h3>
-    <p>Si può usare tutto da tastiera: il tasto Tab passa dal salto alle destinazioni, al selettore della Casa, ad Aiuto ed Esci, poi a CHIEDI (che apre Onyx in una nuova scheda), MAPPA, OSSERVATORIO e alla coda delle proposte. Il riquadro giallo indica sempre dove sei.</p>
+    <p>Si può usare tutto da tastiera: Tab attraversa il salto alle destinazioni, il menu, il selettore della Casa e i contenuti. Il pulsante «?» apre l'Aiuto; Esc lo chiude e riporta al pulsante. Il focus dei campi cambia lo sfondo, senza anelli sovrapposti.</p>
 
     <p class="rinvio">La verifica di accessibilità delle tre applicazioni esterne (Onyx, Metabase, NocoDB) è rinviata alla settimana 2 del piano: qui è verificata la sola pagina Trasi Home.</p>
-  </section>
+  </dialog>
 
   <footer class="piede">
     <p>Trasi · rete delle Case di Quartiere di Brindisi. Questa pagina non conserva dati personali: la Casa scelta resta nel browser.</p>
   </footer>
 </main>
+  </div>
+</div>
+<button class="aiuto-apri" type="button" data-aiuto-apri aria-controls="aiuto" aria-haspopup="dialog" aria-label="Aiuto" title="Aiuto">?</button>
 
 <!-- Il cassetto dell'evento: UNA istanza nel documento, fuori dalle sezioni che mostrano
      eventi (regola del prototipo). Lo riempie `home.js` con i dati della card premuta. -->
@@ -203,6 +228,7 @@
 
 <script src="casa.js?v=1"></script>
 <script src="assets/dropdown.js?v=1"></script>
-<script src="home.js?v=5"></script>
+<script src="assets/shell.js?v=4"></script>
+<script src="home.js?v=8"></script>
 </body>
 </html>

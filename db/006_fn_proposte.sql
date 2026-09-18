@@ -324,7 +324,7 @@ CREATE TRIGGER evento_ical_01_audit
 --    proposta (un errore non abbatte il batch), FOR UPDATE SKIP LOCKED, audit
 --    con prima/dopo dell'ENTITA'.
 -- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION trasi.applica_proposte_approvate(p_limit int DEFAULT 100)
+CREATE OR REPLACE FUNCTION trasi.applica_proposte_approvate(p_limit int, p_ids bigint[])
 RETURNS TABLE (proposta_id bigint, tipo text, entita text, entita_id int, esito text)
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = trasi, pg_catalog
@@ -359,6 +359,7 @@ BEGIN
      -- applicata. `scadi_proposte()` la marca `scaduta` e la riga esce da questo filtro.
      WHERE p.stato = 'approvata'
        AND (p.scade_il IS NULL OR p.scade_il >= current_date)
+       AND (p_ids IS NULL OR p.id = ANY (p_ids))
      ORDER BY p.id
      LIMIT v_limit
        FOR UPDATE SKIP LOCKED
@@ -553,7 +554,7 @@ BEGIN
             now())
           RETURNING id INTO v_eid;
 
-        -- -------- E. casa (solo orari) -------------------------------------
+        -- -------- E. casa (orari o coordinate verificate) ------------------
         WHEN 'modifica_orari_casa' THEN
           v_eid := COALESCE(v_rec.entita_id, (v_rec.payload->>'casa_id')::int, v_rec.casa_id);
           IF v_eid IS NULL THEN
@@ -570,6 +571,24 @@ BEGIN
           IF NOT FOUND THEN
             RAISE EXCEPTION 'casa % inesistente: orari non applicabili', v_eid;
           END IF;
+
+        -- Il CHECK proposta_coordinate_casa verifica anche la provenienza.
+        -- Il luogo casa_quartiere resta una modifica_luogo distinta, con il
+        -- proprio diff/audit; l'operazione ops applica la coppia in transazione.
+        WHEN 'modifica_coordinate_casa' THEN
+          v_eid := v_rec.entita_id;
+          PERFORM 1 FROM trasi.casa WHERE id = v_eid FOR UPDATE;
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'casa % inesistente: coordinate non applicabili', v_eid;
+          END IF;
+          v_prima := trasi.snapshot_entita('casa', v_eid);
+          UPDATE trasi.casa SET
+            geom = public.ST_SetSRID(public.ST_MakePoint(
+                     (v_rec.payload->>'lon')::float8,
+                     (v_rec.payload->>'lat')::float8), 4326)::public.geography,
+            geom_qualita = 'verificata',
+            aggiornato_ts = now()
+          WHERE id = v_eid;
 
         -- -------- F. oggetto (attrezzoteca, US-5.x; tabella db/014) ---------
         WHEN 'nuovo_oggetto' THEN
@@ -649,6 +668,20 @@ BEGIN
     RETURN NEXT;
   END LOOP;
 END;
+$fn$;
+
+ALTER FUNCTION trasi.applica_proposte_approvate(int, bigint[]) OWNER TO applicatore;
+REVOKE ALL ON FUNCTION trasi.applica_proposte_approvate(int, bigint[]) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION trasi.applica_proposte_approvate(int, bigint[]) TO automazioni, ti;
+
+-- La coda notturna mantiene il contratto storico; un'operazione puntuale usa
+-- l'overload con gli ID espliciti (array vuoto = nessuna proposta).
+CREATE OR REPLACE FUNCTION trasi.applica_proposte_approvate(p_limit int DEFAULT 100)
+RETURNS TABLE (proposta_id bigint, tipo text, entita text, entita_id int, esito text)
+LANGUAGE sql SECURITY DEFINER
+SET search_path = trasi, pg_catalog
+AS $fn$
+  SELECT * FROM trasi.applica_proposte_approvate(p_limit, NULL::bigint[]);
 $fn$;
 
 ALTER FUNCTION trasi.applica_proposte_approvate(int) OWNER TO applicatore;
@@ -806,6 +839,10 @@ GRANT SELECT ON trasi.v_scritture_senza_audit TO casa_santaspazio, casa_molo12,
   casa_erranti, casa_buscicchio, casa_sanbao, casa_minimus, casa_pop, casa_bozzano,
   casa_dream, casa_tuturano, rete, ti, shim_rw, metabase_ro, automazioni, applicatore;
 
+-- La funzione SECURITY DEFINER aggiorna solo la geometria verificata della Casa.
+-- Il ruolo applicatore riceve esclusivamente le colonne necessarie a quel ramo.
+GRANT UPDATE (geom, geom_qualita) ON trasi.casa TO applicatore;
+
 -- ---------------------------------------------------------------------------
 -- 10. Verifica di installazione
 -- ---------------------------------------------------------------------------
@@ -878,11 +915,33 @@ ALTER TABLE trasi.proposta
     -- nove tipi del dominio di territorio (db/001 §7.1, invariati)
     'nuovo_luogo','modifica_luogo','chiudi_luogo','modifica_scheda','nuova_scheda',
     'modifica_evento','nuova_opportunita','promuovi_esterno','modifica_orari_casa',
+    'modifica_coordinate_casa',
     -- tre tipi dell'attrezzoteca: nascita/modifica/ritiro di `oggetto`. Il
     -- MOVIMENTO non è qui: è un evento operativo con INSERT diretto e conferma
     -- della Casa ricevente (eccezione V4 documentata in deployment/README.md),
     -- non una proposta.
     'nuovo_oggetto','modifica_oggetto','ritira_oggetto'));
+
+-- Coordinate pubbliche della rete: approvatore_default le assegna ad AT,
+-- come modifica_luogo. Nessun grant/policy di dominio viene allargato.
+ALTER TABLE trasi.proposta DROP CONSTRAINT IF EXISTS proposta_coordinate_casa;
+ALTER TABLE trasi.proposta ADD CONSTRAINT proposta_coordinate_casa CHECK (
+  tipo <> 'modifica_coordinate_casa' OR COALESCE(
+    entita = 'casa' AND entita_id IS NOT NULL AND casa_id = entita_id
+    AND payload->>'geom_qualita' = 'verificata'
+    AND jsonb_typeof(payload->'fonte_url') = 'string'
+    AND payload->>'fonte_url' ~ '^https://[^[:space:]]+$'
+    AND jsonb_typeof(payload->'maps_url') = 'string'
+    AND payload->>'maps_url' ~ '^https://[^[:space:]]+$'
+    AND jsonb_typeof(payload->'indirizzo') = 'string'
+    AND length(btrim(payload->>'indirizzo')) > 0
+    AND CASE WHEN jsonb_typeof(payload->'lat') = 'number'
+                   AND jsonb_typeof(payload->'lon') = 'number'
+             THEN (payload->>'lat')::numeric BETWEEN -90 AND 90
+                  AND (payload->>'lon')::numeric BETWEEN -180 AND 180
+             ELSE false END,
+    false)
+);
 
 -- `approvatore_default` (db/001) decide chi approva in base al tipo: i tre tipi
 -- dell'attrezzoteca non sono nel suo CASE e ricadono su `at` (la rete). Non si

@@ -101,7 +101,7 @@ vivono in filetti, fondi e marchio. Il testo usa le varianti profonde (`--mare-p
 (#06405A). **Un solo colore di sfondo** per la pagina e uno per la testata: non ce ne sono altri.
 Nessun rosso, da nessuna parte: in Trasi nulla è un allarme rivolto a una persona.
 
-**Tipografia.** Il carattere dell'interfaccia è **Commissioner**, incluso localmente come variabile (`assets/CommissionerVF.ttf`) e seguito da uno stack di sistema come fallback. Base 16 px, scala breve (15 · 16 · 17 · 18 · 20 · 22 · 28 · 36). Pesi 400 / 600 / 700, niente leggeri. Il monospaziato di sistema è riservato alle **etichette di provenienza**, perché sono stringhe da citare e si devono poter confrontare carattere per carattere. Il marchio «TRASI» è tipografico, con 0,12 em di spaziatura; il logo «Case di Quartiere» è in **Janna LT Bold** e resta un'immagine.
+**Tipografia.** Commissioner è incluso localmente come variabile (`assets/CommissionerVF.ttf`), con fallback di sistema e base 16 px. Il file distribuito ha asse `wght` **30–220**, non 100–900: Regular **82**, Medium **106**, SemiBold **126**, Bold **148**, ExtraBold **185**, Black **220**. Il corpo usa 82; controlli e titoli hanno pesi distinti. Non usare 400–900 su Commissioner: il browser li limita a 220, rendendo tutto Black. Le etichette di provenienza in monospaziato di sistema mantengono invece la scala standard 400/700.
 
 **Sfondi.** Nessuna immagine di sfondo, nessun gradiente, nessuna texture, nessun pattern. La carta
 calda e il bianco fanno tutto il lavoro. L'unica immagine della pagina è il logo della rete.

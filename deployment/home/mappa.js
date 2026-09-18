@@ -75,6 +75,14 @@
     sfondo.addTo(mappa);
     livello = L.layerGroup().addTo(mappa);
     L.control.zoom({ zoomInTitle: "Avvicina la mappa", zoomOutTitle: "Allontana la mappa" }).addTo(mappa);
+    /* La sidebar cambia la tela senza un resize della finestra; vale anche per la testata che
+       va a capo e per l'altezza dinamica del browser mobile. Il centro scelto non si sposta. */
+    var dimensioni = new ResizeObserver(function (voci) {
+      if (voci[0].contentRect.width && voci[0].contentRect.height) {
+        mappa.invalidateSize({ pan: true, debounceMoveend: true });
+      }
+    });
+    dimensioni.observe(tela);
     return mappa;
   }
 
