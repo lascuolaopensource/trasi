@@ -40,7 +40,6 @@ def _cerca(client: TestClient, query: str, email: str = ambiente.EMAIL_SANBAO):
     ("corpo", "frammento"),
     [
         pytest.param({"entita": "oggetto", "quantita": 5}, "nome è obbligatorio", id="senza_nome"),
-        pytest.param({"entita": "oggetto", "nome": "sedie pieghevoli"}, "quantita è obbligatoria", id="senza_quantita"),
         pytest.param({"entita": "oggetto", "nome": "sedie pieghevoli", "quantita": 0}, "quantita", id="quantita_zero"),
         pytest.param({"entita": "oggetto", "nome": "sedie pieghevoli", "quantita": 5, "attivo": False},
                      "attivo si usa con id", id="ritiro_senza_id"),
@@ -99,6 +98,25 @@ def test_salva_dato_oggetto_inserisce_nella_casa_dell_identita(app_cliente):
     sql, argomenti = insert[0]
     assert "casa_id" in sql and argomenti[0] == 5, "la Casa viene dall'identità"
     assert "fonte_id" not in sql and "affidabilita" not in sql
+
+
+def test_salva_dato_oggetto_senza_quantita_scrive_un_pezzo(app_cliente):
+    """Senza `quantita` l'oggetto nasce con 1 pezzo: l'assistente scrive al primo messaggio invece di chiedere «quanti?»."""
+    sessione_finta = SessioneFinta(casa_id=5)
+
+    async def fetchval(sql: str, *args: Any) -> Any:
+        sessione_finta.eseguite.append((sql, args))
+        return 77 if "INSERT INTO trasi.oggetto" in sql else None
+
+    sessione_finta.fetchval = fetchval  # type: ignore[method-assign]
+    client = app_cliente(sessione_finta)
+
+    risposta = _salva(client, {"entita": "oggetto", "nome": "proiettore"})
+
+    assert risposta.status_code == 201, risposta.text
+    sql, argomenti = [c for c in sessione_finta.eseguite if "INSERT INTO trasi.oggetto" in c[0]][0]
+    colonne = sql.split("(")[1].split(")")[0].replace(" ", "").split(",")
+    assert dict(zip(colonne, argomenti))["quantita"] == 1
 
 
 def test_cerca_oggetto_casa_inesistente_404(app_cliente):

@@ -8,12 +8,14 @@ Entità **nuova** che la decisione §2 dichiara in due metà diverse, e il codic
 - **La lettura dell'inventario** è una sola query (`inventario()`, su `v_inventario`) servita da due porte: il
   browser dell'operatore (`GET /op/attrezzoteca`, cookie) e Onyx (`cerca_oggetto`, contratto congelato, chiave).
   Portale e chat non possono dire numeri diversi perché leggono la stessa funzione.
-- **Il movimento** (prestito/spostamento) è invece **evento operativo** con scrittura immediata, come la registrazione
-  della richiesta: il ritiro delle sedie non può aspettare una coda serale. La scrittura è comunque **mediata**:
-  l'INSERT crea solo `stato='proposto'` e il passaggio a `confermato`/`rientrato` avviene solo per
-  `trasi.conferma_movimento` (SECURITY DEFINER dell'owner `applicatore`), che verifica la casa del chiamante — la
-  regola «conferma solo la destinataria, rientro solo la cedente/rete» vive **là dentro**, non qui. Lo shim
-  traduce l'esito (righe toccate o errore parlante), non decide i permessi.
+- **Il movimento** (prestito/richiesta/rientro) è invece **evento operativo** con scrittura immediata, come la
+  registrazione della richiesta: il ritiro delle sedie non può aspettare una coda serale. Lo propone la Casa della
+  sessione, come **cedente** (`a_casa`: presto il mio oggetto) o come **ricevente** (`da_casa`: chiedo in prestito,
+  db/033). La scrittura è comunque **mediata**: l'INSERT crea solo `stato='proposto'` e ogni transizione avviene solo
+  per `trasi.conferma_movimento` (SECURITY DEFINER dell'owner `applicatore`): decide la **controparte** di chi ha
+  proposto (conferma → l'oggetto passa alla ricevente; rifiuta → resta fermo), il rientro lo registra la cedente.
+  La regola vive **là dentro**, e la UI legge chi decide da `v_movimenti_da_confermare.decide_casa_slug`: lo shim
+  traduce l'esito (stato letto dalla riga, o P0001 → 409 parlante), non decide i permessi.
 
 «Errori DB → 403/422 parlanti, mai 500»: le violazioni di CHECK (`quantita`, `condizione`, transizione vietata
 dalla funzione) devono arrivare al LLM in italiano leggibile, perché possa correggersi invece di dichiarare guasti.
@@ -34,6 +36,7 @@ from asyncpg.exceptions import (
     CheckViolationError,
     ForeignKeyViolationError,
     InsufficientPrivilegeError,
+    NotNullViolationError,
     RaiseError,
 )
 from fastapi import APIRouter, Depends, Query
@@ -266,7 +269,8 @@ async def op_movimenti_da_confermare(sess: SessioneOperatore = Depends(sessione_
     righe = await sess.fetch(
         """
         SELECT id, oggetto_id, oggetto_nome, oggetto_quantita, da_casa_id, da_casa_slug,
-               a_casa_id, a_casa_slug, dal, al, motivazione, ts, giorni_attesa
+               a_casa_id, a_casa_slug, proposto_da_casa_id, proposto_da_casa_slug,
+               decide_casa_id, decide_casa_slug, dal, al, motivazione, ts, giorni_attesa
           FROM trasi.v_movimenti_da_confermare
          WHERE da_casa_id = $1 OR a_casa_id = $1
          ORDER BY ts, id
@@ -283,6 +287,11 @@ async def op_movimenti_da_confermare(sess: SessioneOperatore = Depends(sessione_
             "da_casa_slug": r["da_casa_slug"],
             "a_casa_id": r["a_casa_id"],
             "a_casa_slug": r["a_casa_slug"],
+            # Chi ha proposto e chi decide (la controparte) vengono dalla **vista** (db/033): la UI li legge, non
+            # ricalcola la regola. `ruolo_mio` è l'unico confronto ammesso qui — con la Casa della sessione.
+            "proposto_da_casa_slug": r["proposto_da_casa_slug"],
+            "decide_casa_slug": r["decide_casa_slug"],
+            "ruolo_mio": "cedente" if r["da_casa_id"] == sess.casa_id else "ricevente",
             "dal": r["dal"].isoformat(),
             "al": r["al"].isoformat() if r["al"] is not None else None,
             "motivazione": r["motivazione"],
@@ -296,36 +305,56 @@ async def op_movimenti_da_confermare(sess: SessioneOperatore = Depends(sessione_
 
 # --- Movimenti (`POST /op/movimento`, `POST /op/movimento/{id}/conferma`) -------------------------------------
 
-CONDIZIONI = ("integro", "danneggiato", "mancante_di_parti")
-
 
 class MovimentoIn(BaseModel):
-    """Il corpo di `POST /op/movimento`: il prestito di un oggetto della propria Casa verso un'altra.
+    """Il corpo di `POST /op/movimento`: un prestito **dalla** propria Casa (`a_casa`) o una richiesta **verso** la
+    propria Casa (`da_casa`, db/033). Chi propone è sempre la Casa della sessione.
 
-    `da_casa` non è una chiave: chi sposta è la Casa della sessione (la cedente), e nessuna Casa registra un
-    prestito «a nome di» un'altra. L'oggetto è per `id` (il nome non è univoco). Niente date precompilate dal
-    chiamante per il passato: se manca, `dal` è oggi.
+    Due forme, una sola per richiesta: `a_casa` = «presto il mio oggetto a quella Casa» (cedente); `da_casa` =
+    «chiedo in prestito l'oggetto di quella Casa» (ricevente). Entrambe diverse dalla propria Casa (il CHECK
+    `movimento_case_distinte` le rifiuterebbe comunque: qui il 422 lo dice in italiano). L'oggetto è per `id`.
 
-    `dal`/`al` sono `date`, non stringhe ISO: è la convenzione del resto dello shim (`eventi_oggi`) e non una
-    preferenza di stile — asyncpg deduce il tipo del parametro dal cast `$4::date` della query, e legarci una stringa
-    è un `DataError` a runtime (`'str' object has no attribute 'toordinal'`), cioè un 500 al posto di un 201. Con
-    `date`, una data scritta male è un 422 di pydantic in italiano, prima di toccare il database.
+    `dal`/`al` sono `date`, non stringhe ISO: asyncpg deduce il tipo dal cast `$::date` della query, e legarci una
+    stringa è un `DataError` a runtime (500 al posto di un 201). Con `date`, una data scritta male è un 422 di
+    pydantic in italiano, prima di toccare il database.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     oggetto_id: int = Field(ge=1)
-    a_casa: str = Field(min_length=1, description="Slug della Casa destinataria (es. bozzano).")
+    a_casa: str | None = Field(default=None, min_length=1, description="Slug della Casa destinataria (prestito della propria Casa).")
+    da_casa: str | None = Field(default=None, min_length=1, description="Slug della Casa cedente (richiesta verso la propria Casa).")
     dal: date | None = Field(default=None, description="Data inizio prestito ISO AAAA-MM-GG; se omessa, oggi.")
     al: date | None = Field(default=None, description="Data rientro prevista ISO AAAA-MM-GG.")
+
+    @model_validator(mode="after")
+    def _una_sola_controparte(self) -> "MovimentoIn":
+        if (self.a_casa is None) == (self.da_casa is None):
+            raise ValueError("indicare una sola controparte: a_casa (presto il mio oggetto) oppure da_casa (chiedo in prestito)")
+        return self
+
+
+class ConfermaIn(BaseModel):
+    """Il corpo di `POST /op/movimento/{id}/conferma`: l'azione e, solo per il rientro, la condizione."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    azione: Literal["conferma", "rifiuta", "rientro"] = "conferma"
+    condizione_rientro: Literal["integro", "danneggiato", "mancante_di_parti"] | None = None
+
+    @model_validator(mode="after")
+    def _condizione_solo_al_rientro(self) -> "ConfermaIn":
+        if self.condizione_rientro is not None and self.azione != "rientro":
+            raise ValueError("condizione_rientro si dichiara solo con azione=rientro")
+        return self
 
 
 @router.post(
     "/movimento",
     operation_id="op_movimento",
     status_code=201,
-    summary="Registra lo spostamento (prestito) di un oggetto dalla propria Casa a un'altra: nasce 'proposto' e "
-    "diventa effettivo solo dopo conferma della Casa ricevente (V6: decide la destinataria).",
+    summary="Registra un movimento di un oggetto fra due Case: prestito dalla propria Casa (a_casa) o richiesta "
+    "verso la propria Casa (da_casa). Nasce 'proposto' e diventa effettivo solo dopo la decisione della controparte (V6).",
     tags=["op"],
 )
 async def op_movimento(
@@ -333,19 +362,24 @@ async def op_movimento(
 ) -> dict[str, Any]:
     """POST /op/movimento — INSERT diretto con `stato='proposto'` (evento operativo, eccezione documentata V4).
 
-    La `a_casa` è risolta in `casa_id` **nel DB** (`slug → id`), perché un `id` nel corpo lascerebbe al chiamante la
-    scelta di una Casa arbitraria; lo slug è il vocabolario che l'operatore vede. La condizione di partenza non è
-    richiesta: è rilevata al rientro (`conferma`), quando chi riceve la vede.
+    La controparte è risolta in `casa_id` **nel DB** (`slug → id`): lo slug è il vocabolario che l'operatore vede.
+    `proposto_da_casa_id` è sempre la Casa della sessione; la policy `mov_ins_casa` (db/033) lo impone e verifica che
+    l'oggetto stia presso la cedente — la RLS resta l'autorità, il 422 qui è solo la parola prima del 403.
     """
     pii.rifiuta_se_presente(corpo.model_dump(exclude_unset=True, mode="json"))
+    controparte = corpo.a_casa or corpo.da_casa
+    if controparte == sess.casa_slug:
+        raise errore(422, "la controparte deve essere un'altra Casa: un movimento va da una Casa a un'altra")
+    richiesta = corpo.da_casa is not None
     try:
         riga = await sess.fetchrow(
             """
-            INSERT INTO trasi.movimento (oggetto_id, da_casa_id, a_casa_id, dal, al, stato)
+            INSERT INTO trasi.movimento (oggetto_id, da_casa_id, a_casa_id, proposto_da_casa_id, dal, al, stato)
             VALUES (
                 $1,
+                CASE WHEN $6 THEN (SELECT c.id FROM trasi.casa c WHERE c.slug = $3) ELSE $2 END,
+                CASE WHEN $6 THEN $2 ELSE (SELECT c.id FROM trasi.casa c WHERE c.slug = $3) END,
                 $2,
-                (SELECT c.id FROM trasi.casa c WHERE c.slug = $3),
                 COALESCE($4::date, current_date),
                 $5::date,
                 'proposto'
@@ -354,65 +388,58 @@ async def op_movimento(
             """,
             corpo.oggetto_id,
             sess.casa_id,
-            corpo.a_casa,
+            controparte,
             corpo.dal,
             corpo.al,
+            richiesta,
         )
     except Exception as exc:  # noqa: BLE001
+        if isinstance(exc, NotNullViolationError):
+            # La sotto-select non ha trovato lo slug: la Casa non esiste (il NOT NULL parla prima della FK).
+            raise errore(422, f"Casa sconosciuta: «{controparte}»") from exc
         _traduci_db(exc)
-    if riga is None:
-        # La sotto-select non ha trovato lo slug della destinataria (a_casa_id NULL violerebbe il vincolo, quindi
-        # la FK avrebbe già parlato); se arriviamo qui è solo perché la Casa non esiste.
-        raise errore(422, f"Casa destinataria sconosciuta: «{corpo.a_casa}»")
-    return {"movimento_id": riga["id"], "stato": riga["stato"]}
+    return {
+        "movimento_id": riga["id"],
+        "stato": riga["stato"],
+        "ruolo_mio": "ricevente" if richiesta else "cedente",
+        "decide_casa_slug": controparte,
+    }
 
 
 @router.post(
     "/movimento/{movimento_id}/conferma",
     operation_id="op_movimento_conferma",
-    summary="Conferma, rifiuta o marca il rientro di uno spostamento. Decide chi riceve (destinataria) sul "
-    "proposto; chi presta (cedente) o la rete sul rientro. La regola è nel DB, non qui.",
+    summary="Conferma o rifiuta un movimento proposto (decide la controparte di chi l'ha proposto), o registra il "
+    "rientro di un prestito confermato (la Casa cedente). La regola è nel DB, non qui.",
     tags=["op"],
 )
 async def op_movimento_conferma(
     movimento_id: int,
-    corpo: dict[str, Any] | None = None,
+    corpo: ConfermaIn | None = None,
     sess: SessioneOperatore = Depends(sessione_corrente),
 ) -> dict[str, Any]:
-    """POST /op/movimento/{id}/conferma — delega a `trasi.conferma_movimento` (SECURITY DEFINER).
+    """POST /op/movimento/{id}/conferma `{azione, condizione_rientro?}` → `{movimento_id, stato}` letto dalla riga.
 
-    Lo shim **non** fa UPDATE su `movimento`: non ne ha il permesso (per design, UPDATE solo di `applicatore`), e
-    non deve avercelo — così la transizione con la verifica della casa («solo la destinataria conferma», «solo la
-    cedente marca il rientro») sta in un punto solo del database. Il `ruolo` passato è quello della sessione.
+    Lo shim **non** fa UPDATE su `movimento`: delega a `trasi.conferma_movimento` (SECURITY DEFINER, db/033), che
+    decide chi può fare cosa e solleva P0001 parlanti → 409. Lo `stato` della risposta è quello **letto** dopo la
+    chiamata, non l'azione richiesta: fino al 2026-09-18 l'endpoint rispondeva `stato: "rifiuta"` avendo confermato.
     """
-    azione = "conferma"
-    condizione: str | None = None
-    if corpo:
-        chiavi_extra = set(corpo) - {"azione", "condizione_rientro"}
-        if chiavi_extra:
-            raise errore(422, "parametri non ammessi — chiavi non previste: " + ", ".join(sorted(chiavi_extra)))
-        azione = corpo.get("azione", "conferma")
-        condizione = corpo.get("condizione_rientro")
-        if condizione is not None and condizione not in CONDIZIONI:
-            raise errore(422, "condizione_rientro non ammessa — valori: " + ", ".join(CONDIZIONI))
-        if "condizione_rientro" in corpo:
-            pii.rifiuta_se_presente({"condizione_rientro": condizione or ""})
-
+    corpo = corpo or ConfermaIn()
     try:
         await sess.execute(
-            "SELECT trasi.conferma_movimento($1, $2)", movimento_id, sess.ruolo
+            "SELECT trasi.conferma_movimento($1, $2, $3, $4)",
+            movimento_id, sess.ruolo, corpo.azione, corpo.condizione_rientro,
         )
+        stato = await sess.fetchval("SELECT stato FROM trasi.movimento WHERE id = $1", movimento_id)
     except RaiseError as exc:
-        testo = str(exc).strip()
-        # La funzione distingue «non spetta a te» (P0001 con «ruolo»/«destinatario») da «transizione impossibile».
-        # Il testo va al chiamante così com'è (parlante, senza valori del payload).
-        raise errore(409, testo) from exc
+        raise errore(409, str(exc).strip()) from exc
     except Exception as exc:  # noqa: BLE001
         _traduci_db(exc)
-    return {"movimento_id": movimento_id, "stato": azione if azione in ("conferma", "rifiuta", "rientro") else "aggiornato"}
+    return {"movimento_id": movimento_id, "stato": stato}
 
 
 __all__ = [
+    "ConfermaIn",
     "MovimentoIn",
     "RegistraRichiestaIn",
     "cerca_oggetto",

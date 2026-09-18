@@ -599,8 +599,8 @@ paths:
                 quantita:
                   type: integer
                   minimum: 1
-                  description: 'Solo per `entita=oggetto`: esemplari presenti presso la Casa (almeno 1).
-                    **Obbligatorio alla creazione**; con `id` aggiorna la quantità.'
+                  description: 'Solo per `entita=oggetto`: esemplari presenti presso la Casa (almeno 1). Se omessa
+                    alla creazione, 1 — si scrive subito e si corregge dopo con `id`; con `id` aggiorna la quantità.'
                 condizione:
                   type: string
                   enum:

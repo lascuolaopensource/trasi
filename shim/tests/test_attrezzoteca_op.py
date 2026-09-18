@@ -350,3 +350,113 @@ def test_movimenti_da_confermare_senza_sessione_risponde_401(chiave):
 
     assert risposta.status_code == 401
     assert risposta.json()["detail"]
+
+
+# --- movimenti bidirezionali (db/033): richiesta della ricevente, decide la controparte, rifiuto, rientro ---------
+
+
+def _conferma(client: TestClient, movimento_id: int, **corpo: Any):
+    return client.post(f"/op/movimento/{movimento_id}/conferma", headers=_intestazioni(), json=corpo or None)
+
+
+@pytest.mark.live
+def test_richiesta_in_prestito_della_ricevente_decide_la_cedente(accedi):
+    """Molo 12 chiede l'oggetto di Buscicchio (`da_casa`): nasce proposto con `ruolo_mio=ricevente` e decide Buscicchio.
+
+    La proponente non può confermare la propria richiesta (409 parlante dal DB); la cedente conferma → stato letto
+    dalla riga `confermato`, oggetto presso Molo 12. È il caso che il modello non aveva (US-5.1/5.2).
+    """
+    oggetto = asyncio.run(_crea_oggetto("buscicchio", NOME_OGGETTO))
+    movimenti: list[int] = []
+    try:
+        richiesta = accedi("molo12").post("/op/movimento", headers=_intestazioni(),
+                                          json={"oggetto_id": oggetto, "da_casa": "buscicchio"})
+        assert richiesta.status_code == 201, richiesta.text
+        corpo = richiesta.json()
+        movimenti.append(corpo["movimento_id"])
+        assert corpo["stato"] == "proposto"
+        assert corpo["ruolo_mio"] == "ricevente" and corpo["decide_casa_slug"] == "buscicchio"
+
+        voce = _trova(_movimenti(accedi("molo12")), movimenti[0])
+        assert voce is not None
+        assert voce["proposto_da_casa_slug"] == "molo12" and voce["decide_casa_slug"] == "buscicchio"
+        assert voce["ruolo_mio"] == "ricevente" and voce["da_casa_slug"] == "buscicchio" and voce["a_casa_slug"] == "molo12"
+
+        # La proponente non decide.
+        negata = _conferma(accedi("molo12"), movimenti[0])
+        assert negata.status_code == 409, negata.text
+        assert "buscicchio" in negata.json()["detail"]
+
+        # La cedente vede la stessa voce come cedente e conferma.
+        voce_cedente = _trova(_movimenti(accedi("buscicchio")), movimenti[0])
+        assert voce_cedente is not None and voce_cedente["ruolo_mio"] == "cedente"
+        conferma = _conferma(accedi("buscicchio"), movimenti[0], azione="conferma")
+        assert conferma.status_code == 200, conferma.text
+        assert conferma.json() == {"movimento_id": movimenti[0], "stato": "confermato"}
+        assert asyncio.run(_stato_movimento(movimenti[0])) == "confermato"
+
+        inventario = accedi("molo12").get("/op/attrezzoteca", headers=_intestazioni()).json()["items"]
+        assert [i["casa"] for i in inventario if i["oggetto_id"] == oggetto] == ["molo12"]
+    finally:
+        asyncio.run(_pulisci([oggetto], movimenti))
+
+
+@pytest.mark.live
+def test_rifiuto_della_controparte_lascia_l_oggetto_fermo(accedi):
+    """`azione: rifiuta` dalla controparte → `stato: rifiutato` letto dalla riga, oggetto dove stava, voce sparita."""
+    oggetto = asyncio.run(_crea_oggetto(SLUG_CEDENTE, NOME_OGGETTO))
+    movimenti: list[int] = []
+    try:
+        movimenti.append(_proponi(accedi(SLUG_CEDENTE), oggetto, SLUG_PRINCIPALE))
+        rifiuto = _conferma(accedi(SLUG_PRINCIPALE), movimenti[0], azione="rifiuta")
+        assert rifiuto.status_code == 200, rifiuto.text
+        assert rifiuto.json()["stato"] == "rifiutato"
+        assert asyncio.run(_stato_movimento(movimenti[0])) == "rifiutato"
+        inventario = accedi(SLUG_PRINCIPALE).get("/op/attrezzoteca", headers=_intestazioni()).json()["items"]
+        assert [i["casa"] for i in inventario if i["oggetto_id"] == oggetto] == [SLUG_CEDENTE]
+        assert _trova(_movimenti(accedi(SLUG_PRINCIPALE)), movimenti[0]) is None
+        assert _trova(_movimenti(accedi(SLUG_CEDENTE)), movimenti[0]) is None
+    finally:
+        asyncio.run(_pulisci([oggetto], movimenti))
+
+
+@pytest.mark.live
+def test_rientro_su_proposto_e_409_e_chiave_estranea_e_422(accedi):
+    """`azione: rientro` su un movimento ancora proposto è 409 (decide il DB); una chiave non prevista nel corpo è 422."""
+    oggetto = asyncio.run(_crea_oggetto(SLUG_CEDENTE, NOME_OGGETTO))
+    movimenti: list[int] = []
+    try:
+        movimenti.append(_proponi(accedi(SLUG_CEDENTE), oggetto, SLUG_PRINCIPALE))
+        rientro = _conferma(accedi(SLUG_PRINCIPALE), movimenti[0], azione="rientro")
+        assert rientro.status_code == 409, rientro.text
+        assert "proposto" in rientro.json()["detail"]
+        assert asyncio.run(_stato_movimento(movimenti[0])) == "proposto"
+
+        estranea = _conferma(accedi(SLUG_PRINCIPALE), movimenti[0], azione="rifiuta", nota="x")
+        assert estranea.status_code == 422, estranea.text
+        assert asyncio.run(_stato_movimento(movimenti[0])) == "proposto"
+
+        # `condizione_rientro` fuori dal rientro è un 422, non un campo ignorato.
+        fuori_posto = _conferma(accedi(SLUG_PRINCIPALE), movimenti[0], azione="conferma", condizione_rientro="integro")
+        assert fuori_posto.status_code == 422, fuori_posto.text
+    finally:
+        asyncio.run(_pulisci([oggetto], movimenti))
+
+
+def test_movimento_con_due_controparti_o_nessuna_e_422(chiave):
+    """`a_casa` e `da_casa` sono mutuamente esclusivi e uno dei due è obbligatorio: il corpo lo dichiara prima del DB."""
+    from app import auth
+    from app.main import crea_app
+
+    class Sessione:
+        casa_id, casa_slug, ruolo, email = 5, "san-bao", "casa_sanbao", ""
+
+    applicazione = crea_app()
+    applicazione.dependency_overrides[auth.sessione_corrente] = lambda: Sessione()
+    with TestClient(applicazione, raise_server_exceptions=False) as client:
+        for corpo in ({"oggetto_id": 1}, {"oggetto_id": 1, "a_casa": "bozzano", "da_casa": "pop"}):
+            risposta = client.post("/op/movimento", headers={"X-Trasi-Key": chiave}, json=corpo)
+            assert risposta.status_code == 422, (corpo, risposta.text)
+        propria = client.post("/op/movimento", headers={"X-Trasi-Key": chiave}, json={"oggetto_id": 1, "da_casa": "san-bao"})
+        assert propria.status_code == 422
+        assert "un'altra Casa" in propria.json()["detail"]
