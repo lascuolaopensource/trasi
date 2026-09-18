@@ -59,10 +59,27 @@
        da solo — accanto c'è sempre la parola. -->
   <section class="fascia" aria-label="Stato di oggi">
     <p class="oggi" id="oggi" role="status" aria-live="polite" aria-busy="true">Lettura dei dati di oggi in corso…</p>
-    <!-- La lista sotto il conteggio: gli eventi del giorno, titolo e orario, dalla
-         stessa memoria. Non è una regione live (cambia insieme alla riga, che è già
-         annunciata) e sparisce se la lettura fallisce: il conteggio basta. -->
-    <ul class="oggi-eventi" id="oggi-eventi" aria-label="Eventi di oggi" hidden></ul>
+    <!-- Il calendario del mese sotto il conteggio: tutti gli eventi del mese corrente della
+         Casa scelta, una riga per evento, dalla stessa memoria (`eventi_mese`). Non è una
+         regione live (cambia insieme alla riga, che è già annunciata) e sparisce se la
+         lettura fallisce. Le righe di oggi portano la parola «oggi» e `aria-current="date"`:
+         mai solo il colore. Un mese senza eventi lo dice in parole (`#oggi-eventi-vuoto`),
+         perché il conteggio della riga sopra parla di oggi, non del mese. -->
+    <div class="oggi-eventi" id="oggi-eventi" hidden>
+      <table class="oggi-tabella">
+        <caption id="oggi-eventi-titolo">Eventi del mese</caption>
+        <thead>
+          <tr>
+            <th scope="col">Giorno</th>
+            <th scope="col">Ora</th>
+            <th scope="col">Evento</th>
+            <th scope="col">Dove</th>
+          </tr>
+        </thead>
+        <tbody id="oggi-eventi-righe"></tbody>
+      </table>
+      <p class="oggi-eventi-vuoto" id="oggi-eventi-vuoto" hidden></p>
+    </div>
 
     <div class="coda" id="coda" hidden>
       <p class="coda-testo" id="coda-testo"></p>
@@ -133,7 +150,7 @@
     <h3>Le proposte</h3>
     <p>Trasi non cambia la memoria della rete da sola. Se in chat si segnala che un bar ha chiuso o che un orario è cambiato, nasce una proposta: resta in attesa finché una persona la approva. La riga in alto dice quante ne aspettano una decisione e da quanto tempo. Non c’è una scadenza da rispettare.</p>
     <h3>La riga «Oggi»</h3>
-    <p>È una lettura della memoria della rete per la Casa scelta: eventi, schede in scadenza, proposte. Sotto il conteggio compaiono gli eventi del giorno, con orario e luogo, nell’ordine in cui iniziano — anche quelli già finiti, perché «oggi» è la giornata intera. Se il servizio dati non risponde entro tre secondi, la riga dice «dati non disponibili»: è un’informazione, non un guasto, e le destinazioni funzionano comunque.</p>
+    <p>È una lettura della memoria della rete per la Casa scelta: eventi, schede in scadenza, proposte. Sotto il conteggio compare il calendario del mese corrente — tutti gli eventi della Casa, con giorno, orario e luogo, nell’ordine in cui iniziano, compresi quelli dei giorni già passati. Le righe di oggi sono segnate con la parola «oggi». Se il servizio dati non risponde entro tre secondi, la riga dice «dati non disponibili»: è un’informazione, non un guasto, e le destinazioni funzionano comunque.</p>
     <h3>La Casa in alto</h3>
     <p>Il selettore ricorda la Casa nel browser: al prossimo accesso è già quella. L’unica cosa conservata è il nome breve della Casa, nessun dato personale. Tuturano porta la nota «dati provvisori»: alcune sue schede non sono ancora complete.</p>
     <h3>Tastiera</h3>
