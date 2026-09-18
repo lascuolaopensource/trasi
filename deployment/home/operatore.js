@@ -63,6 +63,9 @@
     $("operatore-casa").textContent = casa;
     nascondi(vistaAccesso);
     vistaBanco.hidden = false;
+    /* Con la sessione c'è il guscio: sidebar, Casa in sessione, «Esci». */
+    var guscio = document.querySelector(".guscio");
+    if (guscio) guscio.classList.remove("guscio--pubblico");
     collegaOnyx();
     caricaInventario("");
     caricaMovimenti();
@@ -74,10 +77,13 @@
     $("operatore-casa").textContent = "accesso richiesto";
     vistaBanco.hidden = true;
     vistaAccesso.hidden = false;
+    /* Senza sessione resta la sola scheda di accesso (vista Login del prototipo):
+       la sidebar è del lavoro in sessione, non dell'ingresso. */
+    var guscio = document.querySelector(".guscio");
+    if (guscio) guscio.classList.add("guscio--pubblico");
     scollegaOnyx();
     sincronizzaTimerAttrezzoteca();
   }
-
   $("modulo-accesso").addEventListener("submit", function (evento) {
     evento.preventDefault();
     nascondi($("accesso-errore"));

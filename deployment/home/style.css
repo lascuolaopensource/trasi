@@ -1,29 +1,87 @@
-/* Trasi Home — foglio unico, zero CDN. Contrasti in `docs/wcag-home.md`; le due
-   regole non ovvie, in `design/readme.md`: i colori di marca non portano mai
-   testo, e non c'è rosso (nulla è un allarme verso una persona). */
+/* Trasi — foglio unico, zero CDN.
+ *
+ * VESTE IBRIDA (2026-09): struttura e interazioni del prototipo `design/design.html`
+ * (Figma), palette e tipografia di `design/prompt-implementazione-index.md`.
+ *
+ * Le regole del progetto che restano (design/readme.md):
+ *   - WCAG 2.1 AA: contrasto testo ≥ 4,5:1, focus sempre visibile, tutto da tastiera;
+ *   - zero dipendenze esterne: Commissioner è locale, le icone sono uno sprite locale
+ *     (`assets/icone.svg`), la mappa usa Leaflet vendorizzato;
+ *   - i colori accesi non portano testo: l'arancio delle CTA porta l'inchiostro scuro,
+ *     non il bianco (2,66:1 sarebbe un bocciatura AA);
+ *   - niente rosso: nulla è un allarme rivolto a una persona.
+ */
 
 :root {
-  /* I colori di marca non portano mai testo (su bianco: 1,9-3,6:1): stanno nei
-     filetti. Per il testo le varianti profonde, con i contrasti in
-     `docs/wcag-home.md`. Non c'e' rosso: nulla e' un allarme verso una persona. */
-  --mare: #0b90cb; --terra: #cc7e5b;
-  --testo: #1c1c1a; --testo-tenue: #4a4a46; --carta: #f5f3ee;
-  --superficie: #ffffff; --superficie-incassata: #efede6;
-  --testata: #06405a; --testata-bordo: #043044;
-  --azione: #07577b; --azione-sfondo-hover: #eaf2f7; --azione-attiva: #043044;
-  --bordo: #8a8377; --bordo-tenue: #c9c3b6; --bordo-forte: #06405a;
-  --kb-testo: #07577b; --esterna-testo: #7a3d20; --coda-testo: #7a3d20;
-  --attenzione-testo: #6b4a00; --attenzione-sfondo: #ffe9a8;
-  --focus: #f6af37; --focus-contorno: #043044;
-  /* Commissioner è locale: il monospaziato resta solo per le etichette di
-     provenienza, che sono stringhe da citare carattere per carattere. */
+  /* ---- palette (prompt-implementazione-index.md) ---- */
+  --sfondo: #DFEFF5;                 /* celeste chiaro, sfondo pagina */
+  --superficie: #FFFFFF;             /* card e campi */
+  --superficie-incassata: #EAF3F6;   /* hover, superfici quieta */
+  --evidenzia: #CDE7EE;              /* focus dei campi: solo background */
+  --carta: #FFFFFF;
+
+  --primario: #0D5063;               /* teal scuro: sidebar, enfasi, collegamenti */
+  --primario-hover: #0A3F4E;
+  --secondario: #F0821D;             /* arancio: CTA e accenti */
+  --secondario-hover: #D66F0E;
+  --su-secondario: #12333D;          /* testo sopra l'arancio: 5,3:1 (il bianco darebbe 2,66) */
+
+  --testo: #0F303B;                  /* inchiostro teal: 11,4:1 su --sfondo */
+  --testo-tenue: #6B6B69;            /* 4,8:1 su bianco · 4,5:1 su --sfondo */
+
+  --testata: #0D5063;
+  --testata-bordo: #0A3F4E;
+
+  --azione: #0D5063;                 /* collegamenti: 7,5:1 */
+  --azione-hover: #0A3F4E;
+  --azione-sfondo-hover: #EAF3F6;
+  --azione-attiva: #0A3F4E;
+
+  --bordo: #CFE1E7;                  /* filetti e bordi delle card */
+  --bordo-tenue: #DDEAEE;            /* righe di tabella */
+  --bordo-forte: #0D5063;            /* contorni di controllo (≥ 3:1, WCAG 1.4.11) */
+
+  /* provenienza: KB = la rete lo sa · Esterna = trovato fuori (restano i semantici di marca) */
+  --kb-testo: #0D5063;
+  --kb-sfondo: #EAF3F6;
+  --esterna-testo: #7A3D20;
+  --esterna-sfondo: #FBF0EA;
+  --coda-testo: #7A3D20;
+  --coda-filetto: #CC7E5B;
+
+  /* attenzione — mai rosso */
+  --attenzione-testo: #6B4A00;
+  --attenzione-sfondo: #FFE9A8;
+
+  --focus: #F0821D;                  /* anello interno */
+  --focus-contorno: #0A3F4E;         /* anello esterno: visibile su celeste e su teal */
+
+  /* ---- tipografia: Commissioner locale (variabile, pesi 100–900) ---- */
   --font: "Commissioner", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --misura-lettura: 62rem;
+  --misura-testo: 36rem;
+
+  /* ---- forma: bordi netti + ombre morbide tinte di teal ---- */
+  --raggio-piccolo: 8px;
+  --raggio: 12px;
+  --raggio-grande: 16px;
+  --raggio-pillola: 999px;
+  --bersaglio-min: 44px;
+
+  --ombra-scheda: 0 1px 3px rgba(13, 80, 99, .08);
+  --ombra-sollevata: 0 4px 12px rgba(13, 80, 99, .12);
+  --ombra-livello: 0 8px 24px rgba(13, 80, 99, .16);
+
+  /* ---- guscio ---- */
+  --sidebar-larga: 15rem;            /* 240 px */
+  --sidebar-stretta: 4.5rem;         /* 72 px */
+
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
-  --s-6: 24px; --s-8: 32px;
-  --raggio: 10px; --raggio-piccolo: 4px; --bersaglio-min: 44px;
-  --misura-lettura: 62rem; --misura-testo: 36rem;
-  --transizione: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+  --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px; --s-16: 64px;
+
+  --transizione: background-color 120ms ease-out, border-color 120ms ease-out,
+                 color 120ms ease-out, box-shadow 150ms ease-out, transform 150ms ease-out;
 }
 
 @font-face {
@@ -40,251 +98,410 @@
 
 * { box-sizing: border-box; }
 
-html { font-size: 16px; }          /* base >= 16 px (nessuna riduzione con rem) */
+html { font-size: 16px; }          /* base ≥ 16 px (WCAG) */
 
-body { margin: 0; 
-background: var(--carta); 
-color: var(--testo); 
-font-family: var(--font); 
-font-size: 1rem; 
-line-height: 1.5; 
+body {
+  margin: 0;
+  background: var(--sfondo);
+  color: var(--testo);
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
-/* ===== Tastiera ===== */
+::selection { background: var(--evidenzia); color: var(--testo); }
+
+/* ============================================================ tastiera */
 
 .salta {
   position: absolute;
   left: -9999px;
   top: 0;
-  z-index: 10;
+  z-index: 60;
   padding: 12px 16px;
   background: var(--superficie);
   color: var(--testo);
-  border: 2px solid var(--testo);
+  border: 2px solid var(--bordo-forte);
   border-radius: 0 0 var(--raggio) 0;
   font-weight: 600;
 }
 .salta:focus { left: 0; }
 
-/* Focus: due anelli, visibile su carta e su testata blu. */
-:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px;
-  box-shadow: 0 0 0 6px var(--focus-contorno); }
+/* Focus: due anelli, visibile su celeste, su bianco e sulla sidebar teal. */
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 6px var(--focus-contorno); }
 
-/* ===== Testata ===== */
+/* Focus dei campi: lo sfondo cambia e restano i due anelli; il bordo NON cambia. */
+.campo:focus,
+.campo:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible { background: var(--evidenzia); }
+
+.icona { width: 20px; height: 20px; flex: none; color: currentColor; }
+.icona--piccola { width: 16px; height: 16px; }
+
+.solo-lettore {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ============================================================ top-bar (pagine pubbliche) */
 
 .testata {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-4) var(--s-6);
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  padding: var(--s-4) 24px;
-  background: var(--testata);
-  color: #ffffff;
-  border-bottom: 4px solid var(--testata-bordo);
+  padding: var(--s-4) var(--s-8);
+  background: var(--superficie);
+  color: var(--testo);
+  border-bottom: 3px solid var(--primario);
 }
 
-.marchio { display: flex; align-items: center; gap: var(--s-4); min-width: 0; margin: 0; }
-/* `width`/`height` nell'HTML riservano lo spazio: la testata non si muove. */
-.marchio-logo { height: 44px; width: auto; }
-
+.marchio { display: flex; align-items: center; gap: var(--s-4); min-width: 0; margin: 0; color: var(--primario); }
+/* Il logo è vettoriale con `fill="currentColor"`: il colore arriva da qui, senza immagine. */
+.marchio-logo { height: 34px; width: auto; color: currentColor; }
 .marchio-testo { display: flex; flex-direction: column; min-width: 0; }
-.marchio-nome { font-size: 1.375rem; font-weight: 700; letter-spacing: .12em;
-  line-height: 1.2; }
-.marchio-sotto { font-size: .9375rem; color: rgba(255, 255, 255, .86); }
+.marchio-nome { font-size: 1.375rem; font-weight: 700; letter-spacing: .12em; line-height: 1.2; }
+.marchio-sotto { font-size: .9375rem; color: var(--testo-tenue); }
 
 .casa { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
-.casa-etichetta { font-size: .9375rem; 
-font-weight: 600; 
-color: rgba(255, 255, 255, .86); 
-letter-spacing: .02em; 
-}
-
-#selettore-casa {
-  min-width: 0;
-  min-height: var(--bersaglio-min);
-  max-width: min(22rem, 100%);
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--testo);
-  background: var(--superficie);
-  border: 2px solid var(--testata-bordo);
-  border-radius: var(--raggio);
-}
-.casa-nota { max-width: min(22rem, 100%); 
-margin: 0; 
-font-size: .9375rem; 
-color: var(--attenzione-sfondo); 
-}
+.casa-etichetta { font-size: .875rem; font-weight: 700; color: var(--testo-tenue); letter-spacing: .04em; }
+.casa-nota { max-width: min(22rem, 100%); margin: 0; font-size: .9375rem; color: var(--attenzione-testo); }
 .casa-nota[hidden] { display: none; }
 
 .azioni { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+
+.esito-uscita { flex-basis: 100%; margin: 0; padding: 6px 10px; color: #fff; background: var(--primario); border-radius: var(--raggio-piccolo); }
+.esito-uscita[hidden] { display: none; }
+
+/* ============================================================ il guscio: sidebar + area */
+
+.guscio { display: grid; grid-template-columns: var(--sidebar-larga) minmax(0, 1fr); min-height: 100vh; }
+
+.area { min-width: 0; }
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  padding: var(--s-6) var(--s-4);
+  background: var(--testata);
+  color: #fff;
+  border-right: 3px solid var(--testata-bordo);
+  transition: width 180ms ease-out, padding 180ms ease-out;
+}
+
+.sidebar-testata { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: 34px; }
+.sidebar .marchio { color: #fff; }
+.sidebar .marchio .marchio-logo { height: 26px; }
+.sidebar-logo-solo { display: none; height: 26px; width: 26px; }
+
+.sidebar-comprimi {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  padding: 0;
+  background: transparent;
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, .7);
+  border-radius: var(--raggio-piccolo);
+  cursor: pointer;
+  flex: none;
+}
+.sidebar-comprimi:hover { background: var(--secondario); border-color: var(--secondario); color: var(--su-secondario); }
+
+.nav { display: flex; flex-direction: column; gap: var(--s-1); margin: 0 calc(-1 * var(--s-4)); padding: 0 var(--s-4); }
+.nav-voce {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--bersaglio-min);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--raggio-piccolo);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  position: relative;
+}
+.nav-voce .icona { color: var(--secondario); }
+.nav-voce:hover { background: var(--primario-hover); }
+/* Stato attivo: la barra laterale dice dove si è, non un blocco pieno. */
+.nav-voce[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--s-4));
+  top: var(--s-2);
+  bottom: var(--s-2);
+  width: 4px;
+  background: var(--secondario);
+  border-radius: 0 2px 2px 0;
+}
+
+.sidebar-lato { display: flex; flex-direction: column; gap: var(--s-4); margin-top: auto; }
+
+/* La Casa scelta vive nella sidebar delle pagine di lavoro: campo bianco su teal. */
+.sidebar .casa .casa-etichetta { color: rgba(255, 255, 255, .86); }
+
+.sidebar-piede { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-3); }
+.sidebar .privacy { margin: 0; font-size: .875rem; color: rgba(255, 255, 255, .72); }
+
+/* --- sidebar compressa: solo icone e marchio --- */
+.guscio--stretto { grid-template-columns: var(--sidebar-stretta) minmax(0, 1fr); }
+.guscio--stretto .sidebar { padding-left: var(--s-3); padding-right: var(--s-3); align-items: center; }
+.guscio--stretto .sidebar-testata { flex-direction: column; gap: var(--s-2); }
+.guscio--stretto .marchio, .guscio--stretto .nav-voce span,
+.guscio--stretto .sidebar .casa, .guscio--stretto .sidebar-piede .privacy,
+.guscio--stretto .sidebar-piede .azione span { display: none; }
+.guscio--stretto .sidebar-logo-solo { display: block; }
+.guscio--stretto .nav { align-items: center; width: 100%; }
+.guscio--stretto .nav-voce { width: 48px; justify-content: center; padding: var(--s-2); }
+.guscio--stretto .nav-voce[aria-current="page"]::before { left: calc(-1 * var(--s-3)); }
+.guscio--stretto .sidebar-lato, .guscio--stretto .sidebar-piede { align-items: center; }
+
+/* ============================================================ bottoni */
 
 .azione {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
-  padding: 6px 12px;
+  gap: var(--s-2);
+  min-height: 40px;
+  padding: var(--s-2) var(--s-3);
   font: inherit;
   font-size: .9375rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--primario);
   background: transparent;
-  border: 2px solid #ffffff;
-  border-radius: var(--raggio);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  border: 2px solid transparent;
+  border-radius: var(--raggio-piccolo);
+  text-decoration: none;
   cursor: pointer;
   transition: var(--transizione);
 }
-.azione:hover { background: var(--superficie); color: var(--testata); }
+.azione:hover { background: var(--superficie-incassata); }
+.azione--contorno { background: var(--superficie); border-color: var(--bordo-forte); }
+.azione--contorno:hover { background: var(--superficie-incassata); }
+/* Sulla testata bianca e nella sidebar teal: stesso segno, colore invertito. */
+.sidebar .azione, .testata--scura .azione { color: #fff; }
+.sidebar .azione:hover, .testata--scura .azione:hover { background: var(--primario-hover); }
 
-.esito-uscita { flex-basis: 100%; 
-margin: 0; 
-padding: 6px 10px; 
-color: #ffffff; 
-background: var(--testata-bordo); 
-border-radius: var(--raggio); 
+/* CTA principale: arancio. Porta l'inchiostro scuro, non il bianco (AA). */
+.riquadro-azione {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: var(--bersaglio-min);
+  padding: var(--s-2) var(--s-6);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--su-secondario);
+  background: var(--secondario);
+  border: 2px solid var(--secondario);
+  border-radius: var(--raggio);
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: var(--ombra-scheda);
+  transition: var(--transizione);
 }
-.esito-uscita[hidden] { display: none; }
+.riquadro-azione:hover { background: var(--secondario-hover); border-color: var(--secondario-hover); }
+.riquadro-azione:active { transform: translateY(1px); box-shadow: none; }
 
-/* ===== Corpo ===== */
+.riquadro-azione--secondario { color: #fff; background: var(--primario); border-color: var(--primario); }
+.riquadro-azione--secondario:hover { background: var(--primario-hover); border-color: var(--primario-hover); }
 
-main { max-width: var(--misura-lettura); margin: 0 auto; padding: 24px; }
+.riquadro-azione--quieto { color: var(--primario); background: var(--superficie); border-color: var(--bordo); box-shadow: none; }
+.riquadro-azione--quieto:hover { background: var(--superficie-incassata); border-color: var(--bordo-forte); }
 
-/* ===== La copertina =====
-   Sola tipografia: Commissioner (variabile, locale), misura di lettura stretta, interlinea ampia,
-   molta aria sopra e sotto. Il titolo scala con la finestra ma resta fra 2 e 3,5 rem; il testo di
-   presentazione fra 1,125 e 1,375 rem. Nessun riquadro: la copertina è il respiro prima delle
-   cose che cambiano (la riga «Oggi») e delle destinazioni. */
+.riquadro-azione--solo-icona { width: var(--bersaglio-min); padding: 0; }
+
+/* ============================================================ campi e dropdown */
+
+.etichetta { display: block; margin: 0 0 var(--s-1); font-size: .875rem; font-weight: 700; color: var(--testo); }
+
+input, select, textarea {
+  min-height: var(--bersaglio-min);
+  width: 100%;
+  padding: 0 var(--s-3);
+  font: inherit;
+  font-size: 1rem;
+  color: var(--testo);
+  background: var(--superficie);
+  border: 1.5px solid var(--bordo-forte);
+  border-radius: var(--raggio);
+  transition: background-color 150ms ease-out;
+}
+textarea { padding: var(--s-2) var(--s-3); min-height: calc(var(--bersaglio-min) * 2); resize: vertical; }
+input::placeholder, textarea::placeholder { color: var(--testo-tenue); }
+
+/* --- dropdown custom (prototype): trigger + pannello flottante ---
+   Il `<select>` resta nel documento, nascosto in modo accessibile: il pannello lo
+   rispecchia e scrive in lui, così `casa.js`/`home.js`/`operatore.js` continuano a
+   leggere `value` e `<option>` come sempre. */
+/* Area operatore senza sessione: resta la sola scheda di accesso, senza sidebar. */
+.guscio--pubblico { grid-template-columns: minmax(0, 1fr); }
+.guscio--pubblico .sidebar { display: none; }
+
+.tendina { position: relative; }
+.tendina-grilletto {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-height: var(--bersaglio-min);
+  width: 100%;
+  padding: 0 var(--s-3);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+  color: var(--testo);
+  background: var(--superficie);
+  border: 1.5px solid var(--bordo-forte);
+  border-radius: var(--raggio);
+  cursor: pointer;
+  transition: var(--transizione);
+}
+.tendina-grilletto:hover { background: var(--superficie-incassata); }
+.tendina-grilletto .icona { color: var(--testo-tenue); }
+.tendina[data-aperto="vero"] .tendina-chevron { transform: rotate(180deg); }
+.tendina-chevron { transition: transform 150ms ease-out; }
+
+.tendina-pannello {
+  position: absolute;
+  top: calc(100% + var(--s-1));
+  left: 0;
+  min-width: 100%;
+  max-height: 20rem;
+  overflow-y: auto;
+  padding: var(--s-2);
+  display: flex;
+  flex-direction: column;
+  background: var(--superficie);
+  border: 1.5px solid var(--bordo);
+  border-radius: var(--raggio);
+  box-shadow: var(--ombra-livello);
+  z-index: 40;
+}
+.tendina-pannello[hidden] { display: none; }
+
+.tendina-voce {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  width: 100%;
+  min-height: var(--bersaglio-min);
+  padding: var(--s-2) var(--s-3);
+  font: inherit;
+  font-size: 1rem;
+  text-align: left;
+  color: var(--testo);
+  background: none;
+  border: 0;
+  border-radius: var(--raggio-piccolo);
+  cursor: pointer;
+}
+.tendina-voce:hover { background: var(--superficie-incassata); }
+.tendina-voce .icona { color: var(--secondario); opacity: 0; }
+.tendina-voce[aria-selected="true"] { color: var(--primario); font-weight: 600; }
+.tendina-voce[aria-selected="true"] .icona { opacity: 1; }
+.tendina-voce .tendina-voce-testo { overflow: hidden; text-overflow: ellipsis; }
+
+/* ============================================================ badge */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--raggio-pillola, 999px);
+  font-size: .8125rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+  white-space: nowrap;
+}
+.badge--accento { background: var(--evidenzia); color: var(--primario); }
+.badge--muto { background: var(--superficie); color: var(--testo-tenue); border: 1px solid var(--bordo); }
+.badge--attenzione { background: var(--attenzione-sfondo); color: var(--attenzione-testo); }
+
+/* Scheda di accesso dell'area operatore: centrata, come la vista Login del prototipo. */
+.scheda-accesso {
+  max-width: 26rem;
+  margin: clamp(var(--s-8), 12vh, 6rem) auto 0;
+  padding: var(--s-8);
+  background: var(--superficie);
+  border: 2px solid var(--bordo-forte);
+  border-radius: var(--raggio-grande);
+  box-shadow: var(--ombra-sollevata);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.casa-nome { margin: 0; font-size: 1.0625rem; font-weight: 600; }
+
+ /* ============================================================ area operatore: linguette, moduli, tabelle */
+/* ============================================================ corpo pagina */
+
+main { max-width: var(--misura-lettura); margin: 0 auto; padding: var(--s-8) var(--s-6); }
+
+.titolo { margin: 0 0 var(--s-5); font-size: 1.75rem; font-weight: 700; letter-spacing: -.02em; color: var(--testo); }
+.sottotitolo { margin: calc(-1 * var(--s-3)) 0 var(--s-5); color: var(--testo-tenue); }
+
+/* ============================================================ la copertina */
+
 .copertina {
   max-width: var(--misura-testo);
   margin: clamp(var(--s-8), 6vw, 4.5rem) auto clamp(var(--s-8), 7vw, 5.5rem);
-  padding: 0 var(--s-2);
 }
-.copertina-occhiello {
-  margin: 0 0 var(--s-3);
-  font-size: .9375rem;
-  font-weight: 700;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  color: var(--testo-tenue);
-}
+.copertina-occhiello { margin: 0 0 var(--s-3); font-size: .9375rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--testo-tenue); }
 .copertina-titolo {
   margin: 0 0 clamp(var(--s-6), 3vw, var(--s-8));
   font-size: clamp(2rem, 4.2vw, 3.5rem);
   font-weight: 800;
   line-height: 1.08;
-  letter-spacing: -.015em;
+  letter-spacing: -.02em;
   text-wrap: balance;
-  color: var(--testata);
+  color: var(--primario);
 }
-.copertina-testo {
-  margin: 0 0 var(--s-5);
-  font-size: clamp(1.125rem, 1.5vw, 1.375rem);
-  font-weight: 400;
-  line-height: 1.55;
-  color: var(--testo);
-  text-wrap: pretty;
-}
+.copertina-testo { margin: 0 0 var(--s-5); font-size: clamp(1.125rem, 1.5vw, 1.375rem); line-height: 1.55; color: var(--testo); text-wrap: pretty; }
 .copertina-testo--chiusa { margin-bottom: 0; color: var(--testo-tenue); }
 
-/* Le due sole che cambiano da sole, in testa: si leggono prima di scegliere. */
+/* ============================================================ la fascia «Oggi» */
+
 .fascia { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-6); }
 
 .oggi {
   margin: 0;
   padding: var(--s-3) var(--s-4);
   background: var(--superficie);
-  border: 2px solid var(--bordo-tenue);
-  border-left: 4px solid var(--mare);
+  border: 1.5px solid var(--bordo);
+  border-left: 4px solid var(--primario);
   border-radius: var(--raggio);
+  box-shadow: var(--ombra-scheda);
   font-size: 1.0625rem;
   line-height: 1.5;
 }
-/* «Oggi» non è un titolo: è la parola che dice che cos'è quella riga. */
-.oggi::before { content: "OGGI"; 
-margin-right: var(--s-2); 
-font-size: .9375rem; 
-font-weight: 700; 
-letter-spacing: .06em; 
-color: var(--testo-tenue); 
-}
-.oggi[data-stato="attesa"] { border-left-color: var(--bordo); color: var(--testo-tenue); }
-.oggi[data-stato="non-disponibile"] { border-left-color: #f6af37; }
-.oggi-nota { display: block; 
-margin-top: var(--s-1); 
-font-size: .9375rem; 
-color: var(--testo-tenue); 
-}
-
-/* Il calendario del mese è la stessa scatola della riga «Oggi», continuata: il
-   filetto blu mare prosegue e la riga sopra perde gli angoli in basso. Una scatola
-   separata direbbe che sono due informazioni; è una sola, letta due volte. */
-.oggi[data-eventi="si"] { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-.oggi-eventi {
-  margin: calc(-1 * var(--s-3)) 0 0;
-  padding: 0 var(--s-4) var(--s-3);
-  background: var(--superficie);
-  border: 2px solid var(--bordo-tenue);
-  border-top: 0;
-  border-left: 4px solid var(--mare);
-  border-radius: 0 0 var(--raggio) var(--raggio);
-  font-size: 1rem;
-  line-height: 1.5;
-}
-.oggi-eventi[hidden] { display: none; }
-.oggi-tabella { width: 100%; border-collapse: collapse; }
-.oggi-tabella[hidden] { display: none; }
-.oggi-tabella caption {
-  text-align: left;
-  padding: var(--s-2) 0 var(--s-1);
-  font-size: .9375rem;
-  font-weight: 700;
-  letter-spacing: .04em;
-  color: var(--testo-tenue);
-}
-.oggi-tabella th, .oggi-tabella td {
-  text-align: left;
-  vertical-align: top;
-  padding: var(--s-1) var(--s-3) var(--s-1) 0;
-  border-top: 1px solid var(--bordo-tenue);
-}
-.oggi-tabella thead th { font-size: .875rem; font-weight: 600; color: var(--testo-tenue); border-top: 0; }
-/* Giorno e ora con numeri tabellari e larghezza fissa: si leggono come un calendario,
-   non come una frase, e i titoli si allineano. */
-.oggi-evento-giorno { min-width: 6.5ch; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.oggi-evento-ora { min-width: 11ch; font-variant-numeric: tabular-nums; color: var(--testo-tenue); white-space: nowrap; }
-.oggi-evento-titolo { font-weight: 600; }
-.oggi-evento-dove { color: var(--testo-tenue); }
-/* Oggi: la parola prima del colore. Lo sfondo incassato e il filetto a sinistra
-   rafforzano, ma è «oggi» nella cella Giorno a dirlo (e `aria-current="date"`).
-   Il filetto è blu mare (marca, non porta testo); la parola sta su `--testata`,
-   il blu profondo che regge il testo chiaro (regola dei token: la marca nei filetti). */
-.oggi-evento--oggi > th, .oggi-evento--oggi > td { background: var(--superficie-incassata); }
-.oggi-evento--oggi > th:first-child { box-shadow: inset 4px 0 0 var(--mare); padding-left: var(--s-2); }
-.oggi-evento-oggi {
-  display: inline-block;
-  margin-left: var(--s-2);
-  padding: 0 var(--s-1);
-  font-size: .8125rem;
+.oggi::before {
+  content: "OGGI";
+  margin-right: var(--s-2);
+  font-size: .875rem;
   font-weight: 700;
   letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--carta);
-  background: var(--testata);
-  border-radius: var(--raggio-piccolo);
+  color: var(--testo-tenue);
 }
-.oggi-eventi-vuoto { margin: var(--s-2) 0 0; padding-top: var(--s-2); color: var(--testo-tenue); border-top: 1px solid var(--bordo-tenue); }
-.oggi-eventi-vuoto[hidden] { display: none; }
-@media (max-width: 40rem) {
-  /* Sotto i 640 px le quattro colonne non entrano: la tabella scorre in orizzontale
-     dentro la sua scatola invece di rompere la pagina (reflow 1.4.10). */
-  .oggi-eventi { overflow-x: auto; }
-}
+.oggi[data-stato="attesa"] { border-left-color: var(--bordo); color: var(--testo-tenue); }
+.oggi[data-stato="non-disponibile"] { border-left-color: var(--secondario); }
+.oggi-nota { display: block; margin-top: var(--s-1); font-size: .9375rem; color: var(--testo-tenue); }
 
 .coda {
   display: flex;
@@ -293,66 +510,143 @@ color: var(--testo-tenue);
   gap: var(--s-2) var(--s-4);
   padding: var(--s-3) var(--s-4);
   background: var(--superficie);
-  border: 2px solid var(--bordo-tenue);
-  border-left: 4px solid var(--terra);
+  border: 1.5px solid var(--bordo);
+  border-left: 4px solid var(--coda-filetto);
   border-radius: var(--raggio);
+  box-shadow: var(--ombra-scheda);
   font-size: 1rem;
 }
-/* Coda vuota: filetto spento, testo tenue. Non è uno spazio da riempire. */
-.coda[data-vuota="si"] { border-left-color: var(--bordo-tenue); }
+.coda[data-vuota="si"] { border-left-color: var(--bordo); }
 .coda[data-vuota="si"] .coda-testo { color: var(--testo-tenue); }
 .coda[hidden] { display: none; }
 .coda-testo { margin: 0; }
 .coda-numero { font-weight: 700; color: var(--coda-testo); }
 .coda-quando { color: var(--testo-tenue); }
 .coda-azione { color: var(--azione); font-weight: 600; text-underline-offset: 3px; }
-.coda-azione:hover { color: var(--azione-attiva); }
+.coda-azione:hover { color: var(--azione-hover); }
 
-/* ===== Destinazioni ===== */
+/* ============================================================ eventi del mese: card + cassetto */
 
-.titolo { margin: 0 0 var(--s-5); 
-font-size: 1.375rem; 
-font-weight: 600; 
-color: var(--testo-tenue); 
+.eventi-pezzo { display: flex; flex-direction: column; gap: var(--s-4); margin: var(--s-8) 0; }
+.eventi-titolo { margin: 0; font-size: 1.375rem; font-weight: 700; letter-spacing: -.015em; }
+.eventi-elenco { display: flex; flex-direction: column; gap: var(--s-4); max-width: 45rem; }
+
+.evento-scheda {
+  display: flex;
+  align-items: center;
+  gap: var(--s-5);
+  padding: var(--s-5);
+  background: var(--superficie);
+  border: 1.5px solid var(--bordo);
+  border-radius: var(--raggio);
+  box-shadow: var(--ombra-scheda);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: var(--transizione);
 }
+.evento-scheda:hover { transform: translateY(-2px); box-shadow: var(--ombra-sollevata); border-color: var(--bordo-forte); }
+.evento-scheda:hover .evento-scheda-freccia { transform: translateX(3px); background: var(--evidenzia); color: var(--primario); }
+
+.evento-data { width: 4.75rem; flex: none; display: flex; flex-direction: column; color: var(--primario); }
+.evento-data-giorno { font-size: 1.625rem; font-weight: 800; line-height: 1.05; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.evento-data-settimana { font-size: .8125rem; font-weight: 500; color: var(--testo-tenue); }
+
+.evento-corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.evento-titolo { font-size: 1.125rem; font-weight: 700; letter-spacing: -.01em; }
+.evento-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: .875rem; color: var(--testo-tenue); }
+.evento-meta .icona { width: 15px; height: 15px; }
+.evento-meta-dove { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.evento-scheda-freccia {
+  width: 34px; height: 34px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  color: var(--testo-tenue);
+  transition: var(--transizione);
+}
+.evento-scheda-freccia .icona { width: 18px; height: 18px; }
+
+.eventi-vuoto { margin: 0; color: var(--testo-tenue); }
+.eventi-vuoto[hidden] { display: none; }
+
+/* --- il cassetto dell'evento: un'istanza sola nel documento, fuori dalle sezioni --- */
+.velo {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 63, 78, .35);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 200ms ease-out, visibility 200ms ease-out;
+  z-index: 50;
+}
+.velo.aperto { opacity: 1; visibility: visible; }
+
+.cassetto {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 440px;
+  max-width: 92vw;
+  background: var(--superficie);
+  box-shadow: var(--ombra-livello);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 250ms ease-out;
+  z-index: 51;
+}
+.cassetto.aperto { transform: translateX(0); }
+
+.cassetto-chiudi {
+  position: absolute;
+  top: var(--s-4); right: var(--s-4);
+  width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--superficie-incassata);
+  color: var(--testo);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  z-index: 1;
+}
+.cassetto-chiudi:hover { background: var(--evidenzia); }
+
+.cassetto-corpo { padding: var(--s-8) var(--s-6) var(--s-6); display: flex; flex-direction: column; gap: var(--s-4); }
+.cassetto-titolo { margin: 0; font-size: 1.875rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.cassetto-meta { display: flex; flex-direction: column; gap: var(--s-2); }
+.cassetto-meta-riga { display: flex; align-items: center; gap: var(--s-2); font-size: .9375rem; color: var(--testo-tenue); }
+.cassetto-meta-riga .icona { color: var(--primario); }
+.cassetto-corpo p { margin: 0; line-height: 1.6; }
+
+/* ============================================================ destinazioni */
+
+#destinazioni { display: flex; flex-direction: column; }
 
 .destinazione {
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
   height: 100%;
-  padding: var(--s-5);
+  padding: var(--s-6);
   background: var(--superficie);
   color: var(--testo);
-  border: 2px solid var(--bordo);
-  border-radius: var(--raggio);
+  border: 1.5px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+  box-shadow: var(--ombra-scheda);
   text-decoration: none;
   transition: var(--transizione);
 }
-.destinazione:hover { border-color: var(--bordo-forte);
-  background: var(--azione-sfondo-hover); }
+a.destinazione:hover { transform: translateY(-2px); border-color: var(--bordo-forte); box-shadow: var(--ombra-sollevata); }
 
-/* La gerarchia si legge dalla dimensione, non dal colore. */
-.destinazione.principale { padding: var(--s-8); 
-margin-bottom: var(--s-5); 
-border-color: var(--bordo-forte); 
-}
+.destinazione.principale { padding: var(--s-10); margin-bottom: var(--s-5); border-color: var(--bordo-forte); }
 .principale-testo { font-size: 1.125rem; }
 
-.destinazione-titolo { font-size: 1.25rem; 
-font-weight: 700; 
-letter-spacing: .06em; 
-line-height: 1.2; 
-color: var(--azione); 
-}
-.principale-titolo { font-size: 2.25rem; }
+.destinazione-titolo { font-size: 1.25rem; font-weight: 700; letter-spacing: .06em; line-height: 1.2; color: var(--primario); }
+.principale-titolo { font-size: 2.25rem; letter-spacing: .06em; }
 
-.destinazione-intestazione { display: flex; 
-flex-wrap: wrap; 
-align-items: baseline; 
-justify-content: space-between; 
-gap: var(--s-2); 
-}
+.destinazione-intestazione { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s-2); }
 .destinazione-contatore { font-size: 1rem; font-weight: 600; color: var(--coda-testo); }
 .destinazione-contatore[hidden] { display: none; }
 
@@ -361,93 +655,177 @@ gap: var(--s-2);
 
 .coppia {
   display: grid;
-  /* `minmax(0, 1fr)`, non `1fr`: senza lo zero le colonne non scendono sotto il
-     contenuto e a 320 px (WCAG 1.4.10) la pagina esce dallo schermo. */
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-5);
   margin-bottom: var(--s-5);
 }
 
-/* Sotto i 40 rem le due colonne non ci stanno. */
-@media (max-width: 40rem) {
-  .coppia { grid-template-columns: minmax(0, 1fr); }
-  .destinazione.principale { padding: var(--s-5); }
-  .principale-titolo { font-size: 1.75rem; }
-}
-
-/* REGISTRA/AGGIORNA: spento, non `disabled` (illeggibile, non spiega nulla). */
-.destinazione.spenta { background: var(--superficie-incassata); 
-border-color: var(--bordo-tenue); 
-cursor: default; 
-}
+.destinazione.spenta { background: var(--superficie-incassata); border-color: var(--bordo); box-shadow: none; cursor: default; }
 .destinazione.spenta .destinazione-titolo { color: var(--testo-tenue); }
 
 .etichetta-attenzione {
   align-self: flex-start;
   margin-top: var(--s-2);
-  padding: 2px 8px;
+  padding: 2px 10px;
   color: var(--attenzione-testo);
   background: var(--attenzione-sfondo);
-  border-radius: var(--raggio-piccolo);
-  font-size: .9375rem;
-  font-weight: 600;
+  border-radius: 999px;
+  font-size: .8125rem;
+  font-weight: 700;
+  letter-spacing: .03em;
   line-height: 1.45;
 }
 
-/* ===== Aiuto ===== */
-
-#aiuto { margin: var(--s-6) 0; 
-padding: var(--s-6); 
-background: var(--superficie); 
-border: 2px solid var(--bordo-tenue); 
-border-radius: var(--raggio); 
+@media (max-width: 40rem) {
+  .coppia { grid-template-columns: minmax(0, 1fr); }
+  .destinazione.principale { padding: var(--s-6); }
+  .principale-titolo { font-size: 1.75rem; }
+  .testata { padding: var(--s-3) var(--s-4); }
+  main { padding: var(--s-6) var(--s-4); }
 }
-#aiuto h2 { margin: 0 0 var(--s-3); font-size: 1.375rem; color: var(--azione); }
-#aiuto h3 { margin: var(--s-5) 0 6px; font-size: 1.125rem; color: var(--azione); }
+
+/* ============================================================ area operatore: linguette, moduli, tabelle */
+
+.linguette { display: flex; flex-wrap: wrap; gap: var(--s-1); border-bottom: 1.5px solid var(--bordo); margin-bottom: var(--s-6); }
+.linguetta {
+  padding: var(--s-2) var(--s-4) var(--s-3);
+  font: inherit;
+  font-size: 1rem;
+  color: var(--testo-tenue);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+  cursor: pointer;
+  transition: var(--transizione);
+}
+.linguetta:hover { color: var(--testo); }
+.linguetta[aria-pressed="true"] { color: var(--testo); font-weight: 600; border-bottom-color: var(--secondario); }
+a.linguetta { text-decoration: none; color: var(--testo-tenue); }
+a.linguetta:hover { color: var(--testo); }
+
+.pannello { display: flex; flex-direction: column; gap: var(--s-5); margin-bottom: var(--s-8); }
+.pannello h2 { margin: 0; font-size: 1.375rem; font-weight: 700; letter-spacing: -.015em; }
+
+.modulo { display: flex; flex-direction: column; gap: var(--s-4); max-width: 40rem; }
+.modulo p { margin: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.modulo-in-linea { flex-direction: row; flex-wrap: wrap; align-items: end; gap: var(--s-3); max-width: none; }
+.modulo-in-linea p { flex: 1 1 16rem; }
+
+.messaggio-nota, .messaggio-ok, .messaggio-errore { margin: 0; padding: var(--s-3) var(--s-4); border-radius: var(--raggio-piccolo); }
+.messaggio-nota { color: var(--testo-tenue); background: var(--superficie-incassata); }
+.messaggio-ok { color: var(--primario); background: var(--evidenzia); border-left: 4px solid var(--primario); }
+/* Niente rosso, mai: anche l'esito negativo è attenzione, non allarme. */
+.messaggio-errore { color: var(--attenzione-testo); background: var(--attenzione-sfondo); border-left: 4px solid var(--secondario); }
+.messaggio-ok[hidden], .messaggio-errore[hidden], .messaggio-nota[hidden] { display: none; }
+
+.tabella { width: 100%; border-collapse: collapse; font-size: .9375rem; background: var(--superficie); border: 1.5px solid var(--bordo); border-radius: var(--raggio); overflow: hidden; }
+.tabella th {
+  text-align: left;
+  padding: var(--s-3) var(--s-4);
+  font-size: .8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--testo-tenue);
+  border-bottom: 2px solid var(--bordo);
+}
+.tabella td { text-align: left; vertical-align: top; padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--bordo-tenue); }
+.tabella tbody tr:last-child td { border-bottom: 0; }
+.tabella tbody tr:hover td { background: var(--superficie-incassata); }
+/* La tabella dentro un riquadro con angoli: senza il wrapper, il bordo smussa male. */
+.table-wrap { overflow-x: auto; border: 1.5px solid var(--bordo); border-radius: var(--raggio); background: var(--superficie); }
+.table-wrap .tabella { border: 0; border-radius: 0; }
+
+.elenco-messaggi, .elenco-movimenti { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.elenco-messaggi li, .elenco-movimenti li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-4);
+  padding: var(--s-4);
+  background: var(--superficie);
+  border: 1.5px solid var(--bordo);
+  border-radius: var(--raggio);
+  box-shadow: var(--ombra-scheda);
+}
+.messaggio-non-letto { border-left: 4px solid var(--secondario); }
+
+.aiuto-elenco { margin: 0 0 var(--s-5); display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 1fr); gap: var(--s-2) var(--s-6); }
+.aiuto-elenco dt { font-weight: 700; color: var(--primario); }
+.aiuto-elenco dd { margin: 0; }
+@media (max-width: 40rem) { .aiuto-elenco { grid-template-columns: minmax(0, 1fr); } }
+
+/* ============================================================ aiuto e piede */
+
+#aiuto {
+  margin: var(--s-8) 0;
+  padding: var(--s-8);
+  background: var(--superficie);
+  border: 1.5px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+  box-shadow: var(--ombra-scheda);
+}
+#aiuto h2 { margin: 0 0 var(--s-3); font-size: 1.375rem; font-weight: 700; color: var(--primario); }
+#aiuto h3 { margin: var(--s-5) 0 6px; font-size: 1.125rem; font-weight: 700; color: var(--primario); }
 #aiuto p { margin: 0 0 10px; max-width: var(--misura-testo); line-height: 1.6; }
 
-/* Etichetta di provenienza (in Aiuto). KB/Esterna non è affidata al colore: la
-   portano la parola, il tratto del bordo e la glossa. */
-.esempio { display: flex; 
-flex-wrap: wrap; 
-align-items: baseline; 
-gap: var(--s-2); 
-margin: 0 0 10px; 
-}
+.esempio { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); margin: 0 0 10px; }
 .esempio-etichetta {
   display: inline-flex;
   align-items: baseline;
   gap: var(--s-2);
   padding: 3px 8px;
   font-family: var(--font-mono);
-  font-size: .9375rem;
+  font-size: .875rem;
   line-height: 1.5;
   color: var(--kb-testo);
-  background: var(--azione-sfondo-hover);
-  border: 1px solid var(--azione);
-  border-left: 2px solid var(--azione);
+  background: var(--kb-sfondo);
+  border: 1px solid var(--kb-testo);
+  border-left: 3px solid var(--kb-testo);
   border-radius: var(--raggio-piccolo);
 }
-.esempio-etichetta.esterna { color: var(--esterna-testo); background: #fbf0ea;
-  border-style: dashed; border-left-style: solid; }
+.esempio-etichetta.esterna { color: var(--esterna-testo); background: var(--esterna-sfondo); border-color: var(--esterna-testo); border-style: dashed; border-left-style: solid; }
 .esempio-glossa { font-size: .9375rem; color: var(--testo-tenue); }
 
-.rinvio { margin-top: var(--s-5); 
-padding: 12px 14px; 
-background: var(--attenzione-sfondo); 
-color: var(--attenzione-testo); 
-border-radius: var(--raggio); 
-}
-
-/* ===== Piede ===== */
+.rinvio { margin-top: var(--s-5); padding: 12px 14px; background: var(--attenzione-sfondo); color: var(--attenzione-testo); border-radius: var(--raggio); }
 
 .piede { padding: var(--s-4) 0 var(--s-8); color: var(--testo-tenue); }
 .piede p { margin: 0; }
 
-/* ===== Stampa ===== */
+/* ============================================================ il guscio sotto 48 rem */
+
+.menu-bottone { display: none; }
+
+@media (max-width: 48rem) {
+  .guscio { display: block; }
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s-3);
+    padding: var(--s-3) var(--s-4);
+    border-right: 0;
+    border-bottom: 3px solid var(--testata-bordo);
+  }
+  .sidebar-testata { flex-direction: row; }
+  .nav { flex-direction: row; margin: 0; padding: 0; width: auto; }
+  .nav-voce { min-height: 40px; padding: var(--s-2); }
+  .nav-voce span { display: none; }
+  .nav-voce[aria-current="page"]::before { display: none; }
+  .nav-voce[aria-current="page"] { background: var(--primario-hover); }
+  .sidebar-lato { flex-direction: row; margin: 0 0 0 auto; align-items: center; }
+  .sidebar .casa { min-width: 10rem; }
+  .sidebar-piede { flex-direction: row; margin: 0; }
+  .sidebar .privacy { display: none; }
+  .guscio--stretto .sidebar .casa { display: flex; }
+  .guscio--stretto .sidebar-piede .azione span { display: inline; }
+}
+
+/* ============================================================ stampa */
 
 @media print {
-  .salta, .azioni, .fascia { display: none; }
+  .salta, .azioni, .fascia, .sidebar, .velo, .cassetto { display: none; }
   body { background: #fff; }
-  .destinazione, #aiuto { break-inside: avoid; }
+  .destinazione, #aiuto, .evento-scheda { break-inside: avoid; }
 }

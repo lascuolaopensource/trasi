@@ -160,6 +160,12 @@
   var FORMATO_MESE = (typeof Intl === "object" && Intl.DateTimeFormat)
     ? new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" })
     : null;
+  var FORMATO_SETTIMANA = (typeof Intl === "object" && Intl.DateTimeFormat)
+    ? new Intl.DateTimeFormat("it-IT", { weekday: "long" })
+    : null;
+  var FORMATO_DATA_LUNGA = (typeof Intl === "object" && Intl.DateTimeFormat)
+    ? new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    : null;
 
   /* `AAAA-MM-GG` → Date locale (mezzogiorno, così nessun fuso la sposta di giorno). */
   function dataLocale(iso) {
@@ -186,56 +192,170 @@
     return el;
   }
 
+  /* ------------------------------------------------------------------ card evento
+   * Una card per evento, come nel prototipo: data grande (14.10) senza riquadro, titolo,
+   * orario con l'icona, luogo, freccia che si sposta al passaggio del mouse. La card è un
+   * `<button>`: la stessa informazione che c'era nella tabella, usabile da tastiera.
+   * Il cassetto che si apre è UNO nel documento (in fondo al body, `#cassetto-evento`). */
+  var eventiCorrenti = [];
+
+  function icona(nome) {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "icona icona--piccola");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    var uso = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    uso.setAttribute("href", "assets/icone.svg#" + nome);
+    svg.appendChild(uso);
+    return svg;
+  }
+
+  function testoSettimana(iso) {
+    var d = dataLocale(iso);
+    if (!d) return "";
+    if (!FORMATO_SETTIMANA) return "";
+    var t = FORMATO_SETTIMANA.format(d);
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  function giornoPunto(iso) {
+    var parti = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+    return parti ? Number(parti[3]) + "." + Number(parti[2]) : (iso || "");
+  }
+
+  function testoDataLunga(iso) {
+    var d = dataLocale(iso);
+    if (!d) return iso || "";
+    return FORMATO_DATA_LUNGA ? FORMATO_DATA_LUNGA.format(d) : testoGiorno(iso);
+  }
+
+  function schedaEvento(e, indice, dati) {
+    var oggi = !!(dati.oggi && e.data === dati.oggi);
+    var scheda = document.createElement("button");
+    scheda.type = "button";
+    scheda.className = "evento-scheda";
+    scheda.setAttribute("data-evento", String(indice));
+    if (oggi) scheda.setAttribute("aria-current", "date");
+
+    var data = document.createElement("span");
+    data.className = "evento-data";
+    data.appendChild(cella("span", "evento-data-giorno", giornoPunto(e.data)));
+    var settimana = testoSettimana(e.data);
+    if (settimana) data.appendChild(cella("span", "evento-data-settimana", settimana));
+    scheda.appendChild(data);
+
+    var corpo = document.createElement("span");
+    corpo.className = "evento-corpo";
+    corpo.appendChild(cella("span", "evento-titolo", e.titolo));
+    var meta = document.createElement("span");
+    meta.className = "evento-meta";
+    meta.appendChild(icona("icon-clock"));
+    var quando = e.ora_inizio ? e.ora_inizio + (e.ora_fine ? " \u2013 " + e.ora_fine : "") : (e.orari_nota || "orario non dichiarato");
+    meta.appendChild(cella("span", null, quando));
+    if (oggi) meta.appendChild(cella("span", "badge badge--accento", "oggi"));
+    corpo.appendChild(meta);
+    if (e.dove) {
+      var rigaDove = document.createElement("span");
+      rigaDove.className = "evento-meta";
+      rigaDove.appendChild(icona("icon-map-pin"));
+      rigaDove.appendChild(cella("span", "evento-meta-dove", e.dove));
+      corpo.appendChild(rigaDove);
+    }
+    scheda.appendChild(corpo);
+
+    var freccia = document.createElement("span");
+    freccia.className = "evento-scheda-freccia";
+    freccia.setAttribute("aria-hidden", "true");
+    freccia.appendChild(icona("icon-chevron-right"));
+    scheda.appendChild(freccia);
+
+    scheda.addEventListener("click", function () { apriCassetto(indice); });
+    return scheda;
+  }
+
   function mostraEventi(dati, slug) {
     if (!listaEventi || !righeEventi) return;
-    while (righeEventi.firstChild) righeEventi.removeChild(righeEventi.firstChild);
+    dati_oggi_corrente = dati && dati.oggi ? dati.oggi : null;
     var eventi = dati && Array.isArray(dati.eventi) ? dati.eventi : [];
     var mese = testoMese(dati && dati.dal);
     var nome = nomeCasa((dati && dati.casa) || slug);
     if (titoloEventi) titoloEventi.textContent = "Eventi di " + mese + " a " + nome;
 
     if (!eventi.length) {
+      eventiCorrenti = [];
       if (vuotoEventi) {
         vuotoEventi.textContent = "Nessun evento in programma a " + mese + " per " + nome + ".";
         vuotoEventi.hidden = false;
       }
-      righeEventi.parentNode.hidden = true;
     } else {
       if (vuotoEventi) vuotoEventi.hidden = true;
-      righeEventi.parentNode.hidden = false;
-      for (var i = 0; i < eventi.length; i++) {
-        var e = eventi[i];
-        var riga = document.createElement("tr");
-        riga.className = "oggi-evento";
-        var oggi = !!(dati.oggi && e.data === dati.oggi);
-        if (oggi) {
-          riga.classList.add("oggi-evento--oggi");
-          riga.setAttribute("aria-current", "date");
-        }
-
-        var giorno = cella("th", "oggi-evento-giorno", testoGiorno(e.data));
-        giorno.setAttribute("scope", "row");
-        if (oggi) {
-          giorno.appendChild(document.createTextNode(" "));
-          giorno.appendChild(cella("span", "oggi-evento-oggi", "oggi"));
-        }
-        riga.appendChild(giorno);
-
-        var quando = e.ora_inizio ? e.ora_inizio + (e.ora_fine ? "\u2013" + e.ora_fine : "") : (e.orari_nota || "");
-        riga.appendChild(cella("td", "oggi-evento-ora", quando));
-        riga.appendChild(cella("td", "oggi-evento-titolo", e.titolo));
-        riga.appendChild(cella("td", "oggi-evento-dove", e.dove || ""));
-        righeEventi.appendChild(riga);
-      }
+      eventiCorrenti = eventi;
+      for (var i = 0; i < eventi.length; i++) righeEventi.appendChild(schedaEvento(eventi[i], i, dati));
     }
     listaEventi.hidden = false;
     rigaOggi.setAttribute("data-eventi", "si");
   }
 
+  var dati_oggi_corrente = null;
+
   function nascondiEventi() {
     if (listaEventi) listaEventi.hidden = true;
     rigaOggi.removeAttribute("data-eventi");
   }
+
+  /* ------------------------------------------------------------------ il cassetto evento
+   * UNA istanza nel documento, fuori dalle sezioni (regola del prototipo): overlay scuro dietro,
+   * pannello da destra, chiusura sul velo, sul bottone e con `Esc`. Il focus torna alla card. */
+  var velo = document.getElementById("velo");
+  var cassetto = document.getElementById("cassetto-evento");
+  var cassettoTitolo = document.getElementById("cassetto-evento-titolo");
+  var cassettoQuando = document.getElementById("cassetto-evento-quando");
+  var cassettoDove = document.getElementById("cassetto-evento-dove");
+  var cassettoOggi = document.getElementById("cassetto-evento-oggi");
+  var focusPrimaDelCassetto = null;
+
+  function apriCassetto(indice) {
+    var e = eventiCorrenti[indice];
+    if (!e || !cassetto) return;
+    if (cassettoTitolo) cassettoTitolo.textContent = e.titolo || "";
+    if (cassettoQuando) {
+      var quando = testoDataLunga(e.data);
+      var ora = e.ora_inizio ? " \u00b7 " + e.ora_inizio + (e.ora_fine ? " \u2013 " + e.ora_fine : "") : "";
+      cassettoQuando.textContent = quando + ora;
+    }
+    if (cassettoDove) cassettoDove.textContent = e.dove || "luogo non dichiarato";
+    if (cassettoOggi) cassettoOggi.hidden = !(dati_oggi_corrente && e.data === dati_oggi_corrente);
+
+    cassetto.classList.add("aperto");
+    cassetto.setAttribute("aria-hidden", "false");
+    if (velo) {
+      velo.classList.add("aperto");
+      velo.setAttribute("aria-hidden", "false");
+    }
+    focusPrimaDelCassetto = document.activeElement;
+    var chiudi = document.getElementById("cassetto-evento-chiudi");
+    if (chiudi) chiudi.focus();
+  }
+
+  function chiudiCassetto() {
+    if (!cassetto) return;
+    cassetto.classList.remove("aperto");
+    cassetto.setAttribute("aria-hidden", "true");
+    if (velo) {
+      velo.classList.remove("aperto");
+      velo.setAttribute("aria-hidden", "true");
+    }
+    if (focusPrimaDelCassetto && typeof focusPrimaDelCassetto.focus === "function") {
+      focusPrimaDelCassetto.focus();
+    }
+  }
+
+  var bottoneChiudiCassetto = document.getElementById("cassetto-evento-chiudi");
+  if (bottoneChiudiCassetto) bottoneChiudiCassetto.addEventListener("click", chiudiCassetto);
+  if (velo) velo.addEventListener("click", chiudiCassetto);
+  document.addEventListener("keydown", function (evento) {
+    if (evento.key === "Escape" && cassetto && cassetto.classList.contains("aperto")) chiudiCassetto();
+  });
 
   /* Una lettura per volta: se il selettore cambia due volte di fila, la risposta
      della Casa precedente non deve sovrascrivere quella nuova. */
@@ -327,6 +447,8 @@
   /* Il selettore è l'unica fonte della Casa scelta: gli `href` nell'HTML sono la
      destinazione predefinita senza JS. */
   selettore.value = ricorda(selettore.value) || selettore.value || CASA_PREDEFINITA;
+  /* dropdown.js ha montato il grilletto sopra il select: riallinea l'etichetta al valore. */
+  if (window.TrasiTendina) window.TrasiTendina.aggiorna(selettore);
 
   function applica(slug) {
     aggiornaDestinazioni(slug);
@@ -386,6 +508,7 @@
     var slug = casaValida(evento.newValue);
     if (!slug || slug === selettore.value) return;
     selettore.value = slug;
+    if (window.TrasiTendina) window.TrasiTendina.aggiorna(selettore);
     applica(slug);
   });
 

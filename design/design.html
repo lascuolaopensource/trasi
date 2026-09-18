@@ -1,0 +1,1858 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trasi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Commissioner:wght@400;500;600;700;900&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+/* =========================================================
+   Trasi — Design tokens & components
+   Sorgente: Figma "Trasi" (agWqnPiccpoeEftNn4GotA)
+   Font: Commissioner (Black=logo, Bold=titoli, Regular=testo)
+   Spacing: scala a multipli di 8 (8, 16, 24, 32, 40, 48, 56, 64)
+   ========================================================= */
+
+:root {
+  --color-background: #FFFDF5;
+  --color-foreground: #000000;
+  --color-card: #FFFDF5;
+
+  --color-primary: #000000;
+  --color-primary-hover: #000000;
+  --color-primary-foreground: #FFFDF5;
+
+  --color-secondary: #FFD23F;
+  --color-secondary-hover: #FFA552;
+  --color-secondary-foreground: #000000;
+
+  --color-muted: #74B9FF;
+  --color-muted-foreground: #000000;
+
+  --color-accent: #B8A9FA;
+  --color-accent-foreground: #000000;
+
+  --color-destructive: #FF6B6B;
+  --color-destructive-foreground: #000000;
+
+  --color-border: #000000;
+  --color-focus-bg: #B8A9FA;
+
+  --radius-sm: 0px;
+  --radius-md: 2px;
+  --radius-lg: 4px;
+  --radius-full: 999px;
+
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+  --space-7: 56px;
+  --space-8: 64px;
+
+  --font-display: 'Syne', system-ui, sans-serif;
+  --font-heading: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-label: 'Space Mono', monospace;
+  --font-sans: var(--font-body);
+
+  --sidebar-width-expanded: 240px;
+  --sidebar-width-collapsed: 72px;
+  --drawer-width: calc(var(--sidebar-width-expanded) * 1.5);
+
+  --shadow-xs: 3px 3px 0 #000000;
+  --shadow-sm: 5px 5px 0 #000000;
+  --shadow-md: 6px 6px 0 #000000;
+  --shadow-lg: 8px 8px 0 #000000;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+button { font-family: inherit; cursor: pointer; }
+
+::selection { background: var(--color-secondary); color: #000; }
+
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+h1, h2, h3, .page-title, .event-title, .event-drawer-title { font-family: var(--font-heading); }
+.badge, .label-row, .stat-label, .section-title, th { font-family: var(--font-label); }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* ---------- Inputs / Select ---------- */
+.field { display: flex; flex-direction: column; gap: var(--space-1); }
+.field label { font-family: var(--font-label); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.input, .select-trigger {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 var(--space-2);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+  font-size: 14px;
+  color: var(--color-foreground);
+  width: 100%;
+  transition: background-color .15s ease;
+}
+.input::placeholder { color: var(--color-muted-foreground); }
+.input:focus, .input:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 0;
+  border-color: var(--color-border);
+  background: var(--color-focus-bg);
+}
+.select-trigger {
+  justify-content: space-between;
+  cursor: pointer;
+  height: 48px;
+  color: var(--color-foreground);
+  font-weight: 700;
+}
+.select-trigger .icon { width: 18px; height: 18px; color: var(--color-muted-foreground); transition: transform .15s ease; }
+.select-trigger:hover { background: var(--color-muted); }
+.select-trigger:focus, .select-trigger:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 0;
+  border-color: var(--color-border);
+  background: var(--color-focus-bg);
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  stroke: currentColor;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 40px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border: 2px solid var(--color-border);
+  white-space: nowrap;
+  text-decoration: none;
+  box-shadow: var(--shadow-xs);
+  transition: background-color .15s ease, transform .1s ease, box-shadow .15s ease;
+}
+.btn:active { transform: translate(3px, 3px); box-shadow: none; }
+.btn-sm { min-height: 32px; padding: var(--space-1) var(--space-2); font-size: 11px; }
+.btn-primary { background: var(--color-secondary); color: var(--color-secondary-foreground); }
+.btn-primary:hover { background: var(--color-secondary-hover); }
+.btn-secondary { background: var(--color-primary); color: var(--color-primary-foreground); }
+.btn-secondary:hover { background: var(--color-accent); color: #000; }
+.btn-outline { background: var(--color-card); color: var(--color-foreground); }
+.btn-outline:hover { background: var(--color-muted); }
+.btn-ghost { background: transparent; color: var(--color-primary); box-shadow: none; }
+.btn-ghost:hover { background: var(--color-muted); }
+.btn-block { width: 100%; }
+.btn-icon { width: 40px; height: 40px; padding: 0; flex-shrink: 0; }
+.btn:focus-visible { outline-offset: 3px; }
+
+
+/* ---------- Dropdown (custom select) ---------- */
+.dropdown { position: relative; }
+.dropdown-panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  min-width: 100%;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  z-index: 40;
+}
+.dropdown-panel.hidden { display: none; }
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-foreground);
+  text-align: left;
+  white-space: nowrap;
+}
+.dropdown-item:hover { background: var(--color-muted); }
+.dropdown-item .icon { width: 16px; height: 16px; color: var(--color-secondary); opacity: 0; }
+.dropdown-item[aria-selected="true"] .icon { opacity: 1; }
+.dropdown-item[aria-selected="true"] { color: var(--color-primary); font-weight: 600; }
+.dropdown[data-open="true"] .select-trigger .icon-chevron { transform: rotate(180deg); }
+
+.input-icon-wrap { position: relative; }
+.input-icon-wrap .input { padding-left: var(--space-5); }
+.input-icon-wrap .icon {
+  position: absolute; left: var(--space-2); top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px;
+  color: var(--color-muted-foreground); pointer-events: none;
+}
+
+/* ---------- Badge ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  white-space: nowrap;
+}
+.badge-accent { background: var(--color-accent); color: var(--color-accent-foreground); }
+.badge-muted { background: var(--color-card); color: var(--color-muted-foreground); border: 1px solid var(--color-border); }
+
+/* ---------- Avatar ---------- */
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px var(--color-card);
+}
+.avatar-sm { width: 32px; height: 32px; font-size: 13px; }
+
+/* ---------- Card ---------- */
+.card {
+  background: var(--color-card);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-sm);
+}
+/* ---------- Event list / card ---------- */
+.event-list { display: flex; flex-direction: column; gap: var(--space-2); max-width: 720px; }
+.event-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-card);
+  border: 2px solid var(--color-border);
+  text-decoration: none;
+  color: inherit;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow .15s ease, transform .15s ease, background-color .15s ease;
+}
+.event-card:hover { box-shadow: var(--shadow-sm); transform: translate(-2px, -2px); background: var(--color-accent); }
+.event-card:hover .event-title { color: var(--color-primary); }
+.event-card:hover .event-cta { transform: translateX(3px); background: var(--color-secondary); color: var(--color-primary); }
+.event-date {
+  width: 76px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+.event-date .day-month { font-size: 26px; font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; }
+.event-date .weekday { font-size: 12px; font-weight: 500; color: var(--color-muted-foreground); text-transform: capitalize; }
+.event-content { flex: 1; display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.event-title { font-weight: 700; font-size: 18px; transition: color .15s ease; }
+.event-meta { display: flex; align-items: center; gap: var(--space-1); font-size: 13px; color: var(--color-muted-foreground); flex-wrap: wrap; }
+.event-meta .icon { width: 15px; height: 15px; }
+.event-cta {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted-foreground);
+  flex-shrink: 0;
+  transition: transform .15s ease, background-color .15s ease, color .15s ease;
+}
+.event-cta .icon { width: 18px; height: 18px; }
+/* ---------- App shell / Sidebar ---------- */
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar {
+  width: var(--sidebar-width-expanded);
+  flex-shrink: 0;
+  background: var(--color-primary);
+  border-right: 3px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-2);
+  transition: width .18s ease, padding .18s ease;
+}
+.sidebar.collapsed { width: var(--sidebar-width-collapsed); align-items: center; }
+.sidebar-top { display: flex; flex-direction: column; gap: var(--space-4); }
+.sidebar.collapsed .sidebar-top { align-items: center; }
+.sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-1); }
+.sidebar.collapsed .sidebar-head { flex-direction: column; gap: var(--space-2); }
+.sidebar-logo { color: #fff; font-family: var(--font-display); font-weight: 800; font-size: 21px; text-decoration: none; display: flex; align-items: center; }
+.sidebar-logo .mark { width: 26px; height: 26px; color: var(--color-secondary); stroke: none; display: none; }
+.sidebar-logo .full { display: inline; }
+.sidebar.collapsed .sidebar-logo .full { display: none; }
+.sidebar.collapsed .sidebar-logo .mark { display: inline-flex; }
+.sidebar-toggle {
+  width: 32px; height: 32px; border-radius: var(--radius-sm); background: transparent; border: 2px solid #fff;
+  color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.sidebar-toggle:hover { background: var(--color-secondary); color: #000; }
+.sidebar-toggle .icon { width: 18px; height: 18px; }
+.nav-block { display: flex; flex-direction: column; gap: var(--space-1); }
+.nav-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; position: relative; }
+.nav-item .icon { color: var(--color-secondary); }
+.nav-item:hover { background: var(--color-accent); color: #000; }
+.nav-item:hover .icon { color: #000; }
+.nav-item.active { background: var(--color-secondary); color: #000; }
+.nav-item.active .icon { color: #000; }
+.nav-item.active::before { content: ''; position: absolute; left: calc(var(--space-2) * -1); top: var(--space-1); bottom: var(--space-1); width: 4px; background: var(--color-secondary); }
+.sidebar.collapsed .nav-item.active::before { left: -8px; }
+.sidebar.collapsed .nav-item { justify-content: center; padding: var(--space-1); width: 48px; }
+.sidebar.collapsed .nav-item span { display: none; }
+.user-btn { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1); border-radius: var(--radius-sm); color: #fff; text-decoration: none; background: transparent; border: 2px solid transparent; }
+.user-btn:hover, .user-btn.active { background: var(--color-accent); color: #000; border-color: #000; }
+.sidebar.collapsed .user-btn span { display: none; }
+.sidebar.collapsed .user-btn { padding: var(--space-1) 0; }
+/* ---------- Top bar (pre-login) ---------- */
+.top-bar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-6); background: var(--color-card); border-bottom: 3px solid var(--color-border); }
+.top-bar .logo { display: flex; align-items: center; color: var(--color-primary); text-decoration: none; }
+.logo-full-icon { height: 32px; width: auto; display: block; color: currentColor; stroke: none; }
+.btn-accedi { background: var(--color-secondary); color: var(--color-secondary-foreground); text-decoration: none; }
+.btn-accedi:hover { background: var(--color-secondary-hover); }
+/* ---------- Login page ---------- */
+.center-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--space-3); background: var(--color-background); }
+.login-card { width: min(420px, 100%); background: var(--color-card); border: 3px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); box-shadow: var(--shadow-md); }
+.login-card .header { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); text-align: center; }
+.login-card .logo { font-family: var(--font-display); font-weight: 800; font-size: 32px; color: var(--color-primary); }
+.login-card .subtitle { font-size: 14px; color: var(--color-muted-foreground); }
+.forgot-link { align-self: flex-end; font-family: var(--font-label); font-size: 11px; font-weight: 700; color: var(--color-primary); text-decoration: underline; }
+.foot-note { text-align: center; font-size: 12px; color: var(--color-muted-foreground); }
+
+
+
+
+/* ---------- Main content ---------- */
+.main {
+  flex: 1;
+  padding: var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.page-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.page-title { font-size: 32px; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+.page-subtitle { font-size: 15px; color: var(--color-muted-foreground); margin: var(--space-1) 0 0; }
+
+/* ---------- Tabs ---------- */
+.tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--color-border); }
+.tab {
+  background: none;
+  border: none;
+  padding: 0 var(--space-1) var(--space-2);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab:hover { color: var(--color-foreground); }
+.tab.active { color: var(--color-foreground); font-weight: 600; border-bottom-color: var(--color-secondary); }
+
+/* ---------- Stat tiles ---------- */
+.stats-row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.stat-tile {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 192px;
+  box-shadow: var(--shadow-sm);
+}
+.stat-tile .icon-wrap {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.stat-tile .icon { color: var(--color-primary); width: 18px; height: 18px; }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--color-primary); letter-spacing: -0.02em; }
+.stat-label { font-size: 13px; font-weight: 500; color: var(--color-muted-foreground); }
+
+.info-card { display: flex; gap: var(--space-5); flex-wrap: wrap; max-width: 900px; }
+.info-item { display: flex; flex-direction: column; gap: var(--space-1); }
+.info-item .label-row { display: flex; align-items: center; gap: var(--space-1); color: var(--color-muted-foreground); font-size: 12px; font-weight: 500; }
+.info-item .label-row .icon { width: 16px; height: 16px; }
+.info-item .value { font-weight: 600; font-size: 15px; }
+
+
+/* ---------- Loading page ---------- */
+.loading-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  background: var(--color-primary);
+  transition: opacity .5s ease;
+}
+.loading-page .logo { color: #fff; font-weight: 900; font-size: 96px; }
+.loading-page .hint { color: rgba(255,255,255,.6); font-size: 13px; }
+
+/* ---------- Calendario pre-login ---------- */
+.house-select-wrap { max-width: 720px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-7) var(--space-3) var(--space-8); }
+.house-select { max-width: 320px; }
+.house-select .icon-chevron { color: var(--color-muted-foreground); }
+
+/* ---------- Event drawer (calendario / home) ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 40, 48, .35);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .2s ease;
+  z-index: 50;
+}
+.overlay.visible { opacity: 1; visibility: visible; }
+
+.event-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 440px;
+  max-width: 92vw;
+  background: var(--color-card);
+  box-shadow: var(--shadow-lg);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 51;
+  transform: translateX(100%);
+  transition: transform .25s ease;
+  overflow-y: auto;
+}
+.event-drawer.open { transform: translateX(0); }
+.event-drawer-image { width: 100%; height: 200px; object-fit: cover; background: var(--color-muted); flex-shrink: 0; }
+.event-drawer-image-placeholder {
+  width: 100%; height: 200px; background: var(--color-accent); color: var(--color-primary);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.event-drawer-image-placeholder .icon { width: 40px; height: 40px; opacity: .5; }
+[data-event-image-wrap]:empty { display: none; }
+.event-drawer-body { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.event-drawer-close {
+  position: absolute; top: var(--space-2); right: var(--space-2);
+  width: 36px; height: 36px; border-radius: var(--radius-full);
+  background: rgba(255,255,255,.9); border: none; color: var(--color-foreground);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-sm);
+  z-index: 1;
+}
+.event-drawer-close:hover { background: #fff; }
+.event-drawer-badge { align-self: flex-start; }
+.event-drawer-title { font-size: 30px; font-weight: 700; margin: 0; letter-spacing: -0.02em; line-height: 1.1; }
+.event-drawer-meta { display: flex; flex-direction: column; gap: var(--space-1); }
+.event-drawer-meta .row { display: flex; align-items: center; gap: var(--space-1); font-size: 14px; color: var(--color-muted-foreground); }
+.event-drawer-meta .row .icon { color: var(--color-primary); }
+.event-drawer-desc { font-size: 14.5px; line-height: 1.6; color: var(--color-foreground); }
+.event-drawer-cta { margin-top: var(--space-1); }
+
+.is-hidden { display: none !important; }
+.loading-page.fade-out { opacity: 0; }
+.status-message {
+  display: none;
+  padding: var(--space-1) var(--space-2);
+  border: 2px solid var(--color-border);
+  background: var(--color-accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+.status-message.visible { display: block; }
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+  background: rgba(0, 0, 0, .72);
+}
+.modal-backdrop.open { display: flex; }
+.modal-card {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--color-card);
+  border: 3px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+}
+.modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }
+.modal-header h2 { margin: 0; font-size: 26px; }
+.modal-close { width: 40px; height: 40px; border: 2px solid var(--color-border); background: var(--color-secondary); display: inline-flex; align-items: center; justify-content: center; }
+.modal-form { display: flex; flex-direction: column; gap: var(--space-2); }
+.modal-form textarea { min-height: 112px; resize: vertical; }
+.form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-1); }
+.toast {
+  position: fixed;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 80;
+  max-width: min(360px, calc(100vw - 48px));
+  padding: var(--space-2);
+  background: var(--color-secondary);
+  border: 2px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  font-weight: 700;
+  transform: translateY(calc(100% + var(--space-4)));
+  transition: transform .2s ease;
+}
+.toast.visible { transform: translateY(0); }
+.table-wrap { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.data-table th { text-align: left; padding: var(--space-1) 0; border-bottom: 2px solid var(--color-border); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.data-table td { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
+.data-table tr:last-child td { border-bottom: 0; }
+/* ---------- Mappa ---------- */
+.map-page-shell { display: flex; height: 100vh; overflow: hidden; }
+.map-area { position: relative; flex: 1; min-width: 0; }
+#leaflet-map { position: absolute; inset: 0; z-index: 0; }
+.map-tint .leaflet-tile-pane {
+  filter: sepia(.45) hue-rotate(158deg) saturate(2.6) brightness(1.04) contrast(.96);
+}
+.map-tint .leaflet-control-attribution { font-size: 10.5px; }
+
+.map-marker {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+  border: 2.5px solid #fff;
+  cursor: pointer;
+  transition: transform .15s ease, background-color .15s ease;
+}
+.map-marker .icon { width: 17px; height: 17px; }
+.map-marker:hover { transform: scale(1.1); }
+.map-marker.selected { background: var(--color-secondary); transform: scale(1.2); }
+.map-marker.selected:hover { transform: scale(1.2); }
+
+.map-reopen-btn {
+  position: absolute;
+  bottom: var(--space-3); right: var(--space-3);
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  height: 48px; padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  font-family: inherit; font-weight: 600; font-size: 14px;
+  box-shadow: var(--shadow-md);
+  z-index: 30;
+}
+.map-reopen-btn:hover { background: var(--color-primary-hover); }
+.map-reopen-btn.hidden { display: none; }
+
+.map-drawer {
+  position: absolute;
+  top: var(--space-3); right: var(--space-3); bottom: var(--space-3);
+  width: var(--drawer-width);
+  max-width: calc(100% - 48px);
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 25;
+}
+.map-drawer.hidden { display: none; }
+
+.map-drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  gap: var(--space-2);
+}
+.map-drawer-header h2 { font-size: 18px; font-weight: 700; margin: 0; }
+.map-drawer-header p { margin: 0; font-size: 13px; color: var(--color-muted-foreground); }
+.map-drawer-close, .map-drawer-back {
+  width: 32px; height: 32px; border-radius: var(--radius-full);
+  background: var(--color-muted); border: none; color: var(--color-foreground);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.map-drawer-close:hover, .map-drawer-back:hover { background: var(--color-border); }
+.map-drawer-body { flex: 1; overflow-y: auto; padding: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1); }
+
+.house-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+.house-list-item:hover { background: var(--color-muted); }
+.house-list-item .icon-wrap {
+  width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent); color: var(--color-primary);
+  display: flex; align-items: center; justify-content: center;
+}
+.house-list-item .icon-wrap .icon { width: 20px; height: 20px; }
+.house-list-item .text { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.house-list-item .name { font-weight: 600; font-size: 14.5px; }
+.house-list-item .address { font-size: 12.5px; color: var(--color-muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.house-list-item .icon-chevron { margin-left: auto; color: var(--color-muted-foreground); flex-shrink: 0; }
+
+.detail-section { padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
+.detail-section:last-child { border-bottom: none; }
+.section-title { display: flex; align-items: center; gap: var(--space-1); font-size: 14px; font-weight: 600; margin: 0 0 var(--space-2); color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: .03em; }
+.section-title .icon { width: 16px; height: 16px; color: var(--color-primary); }
+.avatar-row { display: flex; gap: var(--space-1); }
+.mini-events { display: flex; flex-direction: column; gap: var(--space-1); }
+.mini-event { background: var(--color-muted); border-radius: var(--radius-sm); padding: var(--space-1) var(--space-2); display: flex; flex-direction: column; gap: 0; }
+.mini-event .date { font-size: 12px; color: var(--color-muted-foreground); font-weight: 600; }
+.mini-event .title { font-size: 14px; font-weight: 500; }
+.equip-list { display: flex; flex-direction: column; gap: var(--space-1); list-style: none; margin: 0; padding: 0; }
+.equip-list li { display: flex; align-items: center; gap: var(--space-1); font-size: 14px; }
+.equip-list .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--color-secondary); flex-shrink: 0; }
+.hours-list { display: flex; flex-direction: column; gap: var(--space-1); font-size: 14px; }
+.hours-list .row { display: flex; justify-content: space-between; gap: var(--space-2); }
+.hours-list .row span:first-child { color: var(--color-muted-foreground); }
+
+.operator-form, .operator-message { display: flex; flex-direction: column; gap: var(--space-2); max-width: 640px; }
+.operator-equipment { max-width: 900px; }
+.operator-house { display: inline-flex; margin-top: var(--space-1); }
+.equipment-search { max-width: 320px; }
+.form-note { margin: 0; font-size: 12px; color: var(--color-muted-foreground); }
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .main { padding: var(--space-4); }
+  .event-drawer { width: 100%; }
+  .info-card { gap: var(--space-3); }
+  .map-drawer { top: 0; right: 0; bottom: 0; width: 100%; max-width: 100%; border-radius: 0; }
+}
+@media (max-width: 720px) {
+  .top-bar { padding: var(--space-2) var(--space-3); }
+  .top-bar .logo-full-icon { max-width: 120px; }
+  .app-shell { display: block; }
+  .sidebar { width: 100%; min-height: 72px; flex-direction: row; align-items: center; padding: var(--space-2) var(--space-3); border-right: 0; border-bottom: 3px solid var(--color-border); }
+  .sidebar.collapsed { width: 100%; align-items: center; }
+  .sidebar-top { width: 100%; flex-direction: row; align-items: center; gap: var(--space-2); }
+  .sidebar-head { flex-shrink: 0; }
+  .sidebar.collapsed .sidebar-head { flex-direction: row; gap: var(--space-1); }
+  .nav-block { flex-direction: row; margin-left: auto; }
+  .nav-item { padding: var(--space-1); }
+  .nav-item span, .sidebar.collapsed .nav-item span { display: none; }
+  .sidebar.collapsed .nav-item { width: 40px; }
+  .user-btn { margin-left: var(--space-2); }
+  .main { padding: var(--space-3); }
+  .page-header { align-items: flex-start; flex-direction: column; }
+  .page-title { font-size: 28px; }
+  .event-card { align-items: flex-start; gap: var(--space-2); padding: var(--space-2); }
+  .event-date { width: 60px; }
+  .event-date .day-month { font-size: 21px; }
+  .event-title { font-size: 16px; }
+  .house-select-wrap { padding: var(--space-4) var(--space-2); }
+  .login-card { padding: var(--space-3); }
+  .form-actions { flex-direction: column-reverse; }
+  .form-actions .btn { width: 100%; }
+  .map-page-shell { display: block; }
+  .map-page-shell .sidebar { height: 72px; }
+  .map-area { height: calc(100vh - 72px); }
+}
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="icon-life-buoy" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="4.93" y1="4.93" x2="9.17" y2="9.17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="14.83" y1="14.83" x2="19.07" y2="19.07" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="14.83" y1="9.17" x2="19.07" y2="4.93" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="14.83" y1="9.17" x2="19.07" y2="4.93" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="4.93" y1="19.07" x2="9.17" y2="14.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-heart" viewBox="0 0 24 24" fill="none">
+    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-chevron-right" viewBox="0 0 24 24" fill="none">
+    <path d="m9 18 6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-chevron-left" viewBox="0 0 24 24" fill="none">
+    <path d="m15 18-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none">
+    <path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-check" viewBox="0 0 24 24" fill="none">
+    <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-phone" viewBox="0 0 24 24" fill="none">
+    <path d="M13.83 16.57a1 1 0 0 0 1.15-.19l1.09-1.35a2 2 0 0 1 2.6-.29c.35.24.71.45 1.09.63a2 2 0 0 1 1.14 2.05l-.44 2.86a2 2 0 0 1-2.1 1.7C10.85 21.4 2.6 13.15 2.02 4.74a2 2 0 0 1 1.7-2.1l2.86-.44a2 2 0 0 1 2.05 1.14c.18.38.39.74.63 1.09a2 2 0 0 1-.29 2.6L7.62 8.02a1 1 0 0 0-.19 1.15 12.3 12.3 0 0 0 6.4 6.4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-map-pin" viewBox="0 0 24 24" fill="none">
+    <path d="M20 10c0 4.99-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-camera" viewBox="0 0 24 24" fill="none">
+    <path d="M14.5 4h-5L7.17 6.5H4a2 2 0 0 0-2 2V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8.5a2 2 0 0 0-2-2h-3.17Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-clock" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="12 6 12 12 16 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-calendar" viewBox="0 0 24 24" fill="none">
+    <path d="M8 2v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M16 2v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect width="18" height="18" x="3" y="4" rx="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M3 10h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-mail" viewBox="0 0 24 24" fill="none">
+    <rect width="20" height="16" x="2" y="4" rx="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-users" viewBox="0 0 24 24" fill="none">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-panel-left" viewBox="0 0 24 24" fill="none">
+    <rect width="18" height="18" x="3" y="3" rx="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M9 3v18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-log-out" viewBox="0 0 24 24" fill="none">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="16 17 21 12 16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="21" x2="9" y1="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-plus" viewBox="0 0 24 24" fill="none">
+    <path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-wrench" viewBox="0 0 24 24" fill="none">
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-message-circle" viewBox="0 0 24 24" fill="none">
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-clipboard-list" viewBox="0 0 24 24" fill="none">
+    <rect width="8" height="4" x="8" y="2" rx="1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 11h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M12 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M8 11h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M8 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-bar-chart" viewBox="0 0 24 24" fill="none">
+    <path d="M3 3v18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M18 17V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M13 17V5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8 17v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-home" viewBox="0 0 24 24" fill="none">
+    <path d="M3 9a2 2 0 0 1 .78-1.59l7-5.05a2 2 0 0 1 2.44 0l7 5.05A2 2 0 0 1 21 9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M9 22V12h6v10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-user" viewBox="0 0 24 24" fill="none">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-x" viewBox="0 0 24 24" fill="none">
+    <path d="M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m6 6 12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-external-link" viewBox="0 0 24 24" fill="none">
+    <path d="M15 3h6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M10 14 21 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-map" viewBox="0 0 24 24" fill="none">
+    <path d="M14.1 5.7 20 4v14.8l-5.9 1.9-6.2-1.9L2 20.6V5.8l6-1.9z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="8" y1="4" x2="8" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="14.1" y1="5.7" x2="14.1" y2="19.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-search" viewBox="0 0 24 24" fill="none">
+    <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m21 21-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-box" viewBox="0 0 24 24" fill="none">
+    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M3.3 7 12 12l8.7-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 22V12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-info" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 16v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-key" viewBox="0 0 24 24" fill="none">
+    <path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l1.8-1.8a1 1 0 0 0 0-1.4L18.9 4.5a5.5 5.5 0 1 0-3.9 3.9Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m14.5 8.5-9 9a2.1 2.1 0 1 0 3 3l9-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-image" viewBox="0 0 24 24" fill="none">
+    <rect width="18" height="18" x="3" y="3" rx="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-arrow-left" viewBox="0 0 24 24" fill="none">
+    <path d="m12 19-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M19 12H5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-building" viewBox="0 0 24 24" fill="none">
+    <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M10 6h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M10 10h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M10 14h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M10 18h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="logo-mark" viewBox="0 0 399 398" fill="none">
+    <path d="M355.258 0.0982319C377.975 -1.49401 397.296 16.473 397.362 39.2437L398.092 276.665C360.883 306.535 251.687 328.96 152.934 327.142C125.904 362.957 100.719 377.236 58.7733 397.724L63.4178 317.27C47.6402 313.634 33.1625 308.95 20.5828 303.085L0.147303 65.106C-1.7369 43.2112 14.678 24.0233 36.5995 22.484L355.258 0.0982319ZM136.68 266.725C136.68 266.725 150.241 286.497 184.105 295.905L182.154 317.468C182.154 317.468 193.129 317.587 198.994 317.587C204.859 317.587 215.82 317.468 215.82 317.468L213.883 295.905C247.747 286.497 261.308 266.725 261.308 266.725H232.274C232.142 266.884 232.155 266.898 231.889 267.203C230.921 268.344 228.041 271.264 222.136 273.732C220.198 274.541 217.943 275.297 215.329 275.934C211.043 276.956 205.376 278.004 198.98 278.004C192.598 278.004 186.919 276.956 182.633 275.934C180.019 275.297 177.762 274.541 175.825 273.732C169.933 271.264 167.04 268.344 166.085 267.203C165.82 266.898 165.833 266.884 165.7 266.725H136.68ZM188.975 99.6598H206.185L206.318 99.5406C206.318 99.5406 240.408 186.537 242.863 194.339C246.273 205.167 243.593 215.478 233.986 218.769C223.848 222.232 213.763 211.789 202.033 211.789C192.306 211.789 184.424 218.583 184.424 226.996C184.424 235.395 192.306 242.203 202.033 242.203C210.446 242.203 217.492 237.094 219.217 230.26C247.587 245.826 265.143 225.112 258.389 198.785C252.284 174.979 212.807 92.6139 212.807 92.6139V66.3531H188.975V99.6598ZM108.11 44.4058C108.11 44.5469 108.242 58.3808 107.34 65.5045C106.583 71.3431 104.195 82.3304 96.618 90.2789C89.2135 98.0549 74.8025 108.18 74.6698 108.286L73.0379 109.427L73.1971 111.404C74.0066 121.754 77.696 141.593 93.2215 158.14C100.082 165.465 112.635 172.379 113.166 172.67L114.838 173.587L116.496 172.67C117.027 172.392 129.594 165.465 136.454 158.14C151.953 141.606 155.655 121.754 156.477 111.404L156.638 109.427L155.018 108.286C154.872 108.18 140.461 98.0549 133.056 90.2789C125.48 82.3304 123.092 71.3431 122.348 65.5045C121.433 58.3808 121.579 44.5468 121.579 44.4058L121.605 40.8892H108.07L108.11 44.4058ZM313.79 43.0387C313.79 43.1714 313.923 56.8791 313.02 63.9254C312.264 69.711 309.876 80.5926 302.299 88.4615C294.9 96.1522 280.504 106.174 280.35 106.282L278.719 107.41L278.877 109.375C279.686 119.619 283.376 139.257 298.901 155.645C305.762 162.89 318.314 169.738 318.846 170.03L320.517 170.932L322.177 170.03C322.711 169.749 335.274 162.889 342.134 155.645C357.632 139.271 361.335 119.619 362.158 109.375L362.317 107.41L360.698 106.282C360.535 106.164 346.137 96.1532 338.737 88.4615C331.16 80.5926 328.771 69.711 328.028 63.9254C327.113 56.8791 327.259 43.1714 327.259 43.0387L327.285 39.5621H313.75L313.79 43.0387Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="logo-full" viewBox="0 0 1185 398" fill="none">
+    <path d="M355.258 0.0982319C377.975 -1.49401 397.296 16.473 397.362 39.2437L398.092 276.665C360.883 306.535 251.687 328.96 152.934 327.142C125.904 362.957 100.719 377.236 58.7733 397.724L63.4178 317.27C47.6402 313.634 33.1625 308.95 20.5828 303.085L0.147303 65.106C-1.7369 43.2112 14.678 24.0233 36.5995 22.484L355.258 0.0982319ZM136.68 266.725C136.68 266.725 150.241 286.497 184.105 295.905L182.154 317.468C182.154 317.468 193.129 317.587 198.994 317.587C204.859 317.587 215.82 317.468 215.82 317.468L213.883 295.905C247.747 286.497 261.308 266.725 261.308 266.725H232.274C232.142 266.884 232.155 266.898 231.889 267.203C230.921 268.344 228.041 271.264 222.136 273.732C220.198 274.541 217.943 275.297 215.329 275.934C211.043 276.956 205.376 278.004 198.98 278.004C192.598 278.004 186.919 276.956 182.633 275.934C180.019 275.297 177.762 274.541 175.825 273.732C169.933 271.264 167.04 268.344 166.085 267.203C165.82 266.898 165.833 266.884 165.7 266.725H136.68ZM188.975 99.6598H206.185L206.318 99.5406C206.318 99.5406 240.408 186.537 242.863 194.339C246.273 205.167 243.593 215.478 233.986 218.769C223.848 222.232 213.763 211.789 202.033 211.789C192.306 211.789 184.424 218.583 184.424 226.996C184.424 235.395 192.306 242.203 202.033 242.203C210.446 242.203 217.492 237.094 219.217 230.26C247.587 245.826 265.143 225.112 258.389 198.785C252.284 174.979 212.807 92.6139 212.807 92.6139V66.3531H188.975V99.6598ZM108.11 44.4058C108.11 44.5469 108.242 58.3808 107.34 65.5045C106.583 71.3431 104.195 82.3304 96.618 90.2789C89.2135 98.0549 74.8025 108.18 74.6698 108.286L73.0379 109.427L73.1971 111.404C74.0066 121.754 77.696 141.593 93.2215 158.14C100.082 165.465 112.635 172.379 113.166 172.67L114.838 173.587L116.496 172.67C117.027 172.392 129.594 165.465 136.454 158.14C151.953 141.606 155.655 121.754 156.477 111.404L156.638 109.427L155.018 108.286C154.872 108.18 140.461 98.0549 133.056 90.2789C125.48 82.3304 123.092 71.3431 122.348 65.5045C121.433 58.3808 121.579 44.5468 121.579 44.4058L121.605 40.8892H108.07L108.11 44.4058ZM313.79 43.0387C313.79 43.1714 313.923 56.8791 313.02 63.9254C312.264 69.711 309.876 80.5926 302.299 88.4615C294.9 96.1522 280.504 106.174 280.35 106.282L278.719 107.41L278.877 109.375C279.686 119.619 283.376 139.257 298.901 155.645C305.762 162.89 318.314 169.738 318.846 170.03L320.517 170.932L322.177 170.03C322.711 169.749 335.274 162.889 342.134 155.645C357.632 139.271 361.335 119.619 362.158 109.375L362.317 107.41L360.698 106.282C360.535 106.164 346.137 96.1532 338.737 88.4615C331.16 80.5926 328.771 69.711 328.028 63.9254C327.113 56.8791 327.259 43.1714 327.259 43.0387L327.285 39.5621H313.75L313.79 43.0387Z" fill="currentColor"/>
+    <path d="M454.534 125.532H512.941V285.407H591.134V125.532H649.539V57.8809H454.534V125.532Z" fill="currentColor"/>
+    <path d="M760.923 120.107C752.41 120.107 744.99 122.369 738.662 126.888C732.331 131.41 726.666 138.404 721.666 147.87H716.241L713.049 122.022L654.324 125.213V285.407H725.177V200.204C727.304 197.12 730.176 194.859 733.794 193.423C737.409 191.987 741.666 191.269 746.561 191.269H770.817L776.88 123.299C774.646 122.237 772.065 121.438 769.141 120.905C766.214 120.374 763.475 120.107 760.923 120.107Z" fill="currentColor"/>
+    <path d="M869.753 228.286C867.731 231.053 865.605 233.128 863.37 234.508C861.136 235.892 859.007 236.583 856.987 236.583C854.326 236.583 852.065 235.626 850.205 233.711C848.343 231.796 847.413 229.243 847.413 226.052C847.413 222.968 848.262 220.388 849.966 218.314C851.666 216.239 854.22 214.564 857.626 213.288C860.71 212.011 863.131 210.842 864.887 209.778C866.642 208.716 868.262 207.332 869.753 205.629V228.286ZM903.903 126.49C893.902 122.237 881.455 120.107 866.561 120.107C859.86 120.107 853.317 120.374 846.934 120.906C840.55 121.438 834.033 122.237 827.385 123.299C820.735 124.363 814.22 125.72 807.836 127.367C801.454 129.018 795.282 130.745 789.326 132.553L792.198 190.631C800.497 186.378 809.457 183.079 819.087 180.738C828.713 178.4 837.623 177.228 845.817 177.228C854.539 177.228 861.081 178.133 865.445 179.941C869.806 181.75 871.881 184.144 871.669 187.121L830.816 194.779C814.539 197.866 802.332 203.689 794.193 212.251C786.054 220.814 781.985 231.796 781.985 245.199C781.985 253.922 783.661 261.688 787.012 268.494C790.363 275.302 795.15 280.568 801.374 284.29C807.598 288.012 815.07 289.874 823.794 289.874C833.155 289.874 841.641 287.534 849.248 282.854C856.853 278.174 863.051 271.261 867.839 262.112H872.306L877.094 285.407H934.223V179.143C934.223 165.847 931.67 154.811 926.564 146.035C921.457 137.26 913.901 130.745 903.903 126.49Z" fill="currentColor"/>
+    <path d="M1080.39 208.66C1072.52 202.385 1059.97 197.12 1042.73 192.864C1036.78 191.483 1032.31 189.887 1029.33 188.078C1026.35 186.27 1024.86 183.717 1024.86 180.419C1024.86 178.292 1025.74 176.644 1027.5 175.472C1029.25 174.304 1031.67 173.718 1034.76 173.718C1040.07 173.718 1047.04 174.942 1055.66 177.387C1064.28 179.835 1071.99 183.291 1078.8 187.759L1082.95 130.957C1078.69 129.468 1073.88 128.06 1068.51 126.728C1063.13 125.399 1057.55 124.256 1051.75 123.298C1045.95 122.341 1040.18 121.622 1034.44 121.144C1028.69 120.666 1022.84 120.426 1016.88 120.426C1003.16 120.426 991.454 122.527 981.775 126.728C972.094 130.932 964.726 137.02 959.674 144.998C954.62 152.976 952.094 162.548 952.094 173.718C952.094 186.908 955.657 197.12 962.786 204.352C969.912 211.587 980.818 217.012 995.5 220.627C1006.03 223.075 1012.81 225.014 1015.85 226.451C1018.88 227.887 1020.39 229.988 1020.39 232.753C1020.39 235.202 1019.33 237.089 1017.2 238.418C1015.07 239.749 1011.88 240.412 1007.63 240.412C999.86 240.412 991.191 238.951 981.616 236.024C972.041 233.1 963.795 229.243 956.882 224.456L953.052 280.301C956.774 281.896 960.923 283.332 965.499 284.608C970.072 285.886 975.019 286.975 980.339 287.879C985.658 288.782 991.27 289.447 997.175 289.874C1003.08 290.298 1009.33 290.512 1015.93 290.512C1032.84 290.512 1046.96 288.438 1058.29 284.29C1069.62 280.141 1078.11 274.078 1083.75 266.1C1089.38 258.123 1092.2 248.39 1092.2 236.902C1092.2 224.351 1088.27 214.938 1080.39 208.66Z" fill="currentColor"/>
+    <path d="M1122.52 109.975C1128.37 112.476 1135.66 113.725 1144.39 113.725C1153.21 113.725 1160.58 112.476 1166.49 109.975C1172.39 107.477 1176.83 103.648 1179.81 98.4873C1182.79 93.3293 1184.28 86.8144 1184.28 78.942C1184.28 72.1353 1182.68 66.1775 1179.49 61.0718C1176.3 55.966 1171.73 52.0313 1165.77 49.2647C1159.81 46.4995 1152.79 45.1162 1144.7 45.1162C1132.04 45.1162 1122.23 48.1224 1115.26 54.1309C1108.29 60.1417 1104.81 68.4113 1104.81 78.942C1104.81 86.8144 1106.3 93.3293 1109.28 98.4873C1112.25 103.648 1116.67 107.477 1122.52 109.975Z" fill="currentColor"/>
+    <path d="M1109.12 125.213V285.407H1179.97V123.299L1109.12 125.213Z" fill="currentColor"/>
+  </symbol>
+</svg>
+<section class="view" id="view-loading">
+  <div class="loading-page" data-loading-page>
+    <div class="logo">Trasi</div>
+  </div>
+</section>
+
+<section class="view" id="view-calendario" hidden>
+  <header class="top-bar">
+    <a href="#" data-nav="calendario" class="logo" aria-label="Trasi">
+      <svg class="logo-full-icon"><use href="#logo-full"/></svg>
+    </a>
+    <a href="#" data-nav="login" class="btn btn-accedi">Accedi</a>
+  </header>
+
+  <main class="house-select-wrap">
+    <div class="dropdown house-select" data-dropdown data-open="false">
+      <button type="button" class="select-trigger" data-dropdown-trigger>
+        <span data-dropdown-label>Casa di Quartiere San Bao</span>
+        <svg class="icon icon-chevron"><use href="#icon-chevron-down"/></svg>
+      </button>
+      <div class="dropdown-panel hidden" data-dropdown-panel>
+        <button type="button" class="dropdown-item" data-dropdown-item data-value="san-bao" aria-selected="true">Casa di Quartiere San Bao<svg class="icon"><use href="#icon-check"/></svg></button>
+        <button type="button" class="dropdown-item" data-dropdown-item data-value="bozzano" aria-selected="false">Casa di Quartiere Bozzano<svg class="icon"><use href="#icon-check"/></svg></button>
+        <button type="button" class="dropdown-item" data-dropdown-item data-value="centro" aria-selected="false">Centro di Aggregazione<svg class="icon"><use href="#icon-check"/></svg></button>
+        <button type="button" class="dropdown-item" data-dropdown-item data-value="paradiso" aria-selected="false">Casa di Quartiere Paradiso<svg class="icon"><use href="#icon-check"/></svg></button>
+      </div>
+    </div>
+
+    <div>
+      <h1 class="page-title">Calendario eventi</h1>
+      <p class="page-subtitle">Eventi in programma alla Casa di Quartiere San Bao</p>
+    </div>
+
+    <div class="event-list">
+      <button type="button" class="event-card" data-event-trigger
+        data-title="Laboratorio di cucito condiviso"
+        data-date="14 ottobre 2026 · 18:00 – 20:00"
+        data-location="Casa di Quartiere San Bao — Via Provinciale San Vito, 12"
+        data-category="Sociale"
+        data-desc="Un pomeriggio per imparare le basi del cucito e della piccola sartoria, condividendo tecniche e materiali con altri abitanti del quartiere. Portate i vostri capi da riparare: aghi, filo e macchine da cucire saranno a disposizione."
+        data-cta-label="Iscriviti all'evento"
+        data-cta-url="#">
+        <div class="event-date"><span class="day-month">14.10</span><span class="weekday">Mercoledì</span></div>
+        <div class="event-content">
+          <div class="event-title">Laboratorio di cucito condiviso</div>
+          <div class="event-meta">
+            <svg class="icon"><use href="#icon-clock"/></svg>
+            <span>18:00 – 20:00</span> · <span class="badge badge-accent">Sociale</span>
+          </div>
+        </div>
+        <span class="event-cta"><svg class="icon"><use href="#icon-chevron-right"/></svg></span>
+      </button>
+
+      <button type="button" class="event-card" data-event-trigger
+        data-title="Sportello orientamento lavoro"
+        data-date="16 ottobre 2026 · 10:00 – 13:00"
+        data-location="Casa di Quartiere San Bao — Via Provinciale San Vito, 12"
+        data-category="Lavoro"
+        data-desc="Consulenza individuale gratuita su curriculum, ricerca attiva del lavoro e opportunità di formazione professionale sul territorio, a cura degli operatori dello sportello lavoro."
+        data-cta-label="Prenota un colloquio"
+        data-cta-url="#">
+        <div class="event-date"><span class="day-month">16.10</span><span class="weekday">Venerdì</span></div>
+        <div class="event-content">
+          <div class="event-title">Sportello orientamento lavoro</div>
+          <div class="event-meta">
+            <svg class="icon"><use href="#icon-clock"/></svg>
+            <span>10:00 – 13:00</span> · <span class="badge badge-accent">Lavoro</span>
+          </div>
+        </div>
+        <span class="event-cta"><svg class="icon"><use href="#icon-chevron-right"/></svg></span>
+      </button>
+
+      <button type="button" class="event-card" data-event-trigger
+        data-title="Cineforum di quartiere"
+        data-date="19 ottobre 2026 · 20:30 – 22:30"
+        data-location="Casa di Quartiere San Bao — Via Provinciale San Vito, 12"
+        data-category="Cultura"
+        data-desc="Proiezione a ingresso libero seguita da un momento di confronto guidato. Questo mese il tema è la memoria collettiva dei quartieri popolari italiani."
+        data-cta-label="Aggiungi al calendario"
+        data-cta-url="#">
+        <div class="event-date"><span class="day-month">19.10</span><span class="weekday">Lunedì</span></div>
+        <div class="event-content">
+          <div class="event-title">Cineforum di quartiere</div>
+          <div class="event-meta">
+            <svg class="icon"><use href="#icon-clock"/></svg>
+            <span>20:30 – 22:30</span> · <span class="badge badge-accent">Cultura</span>
+          </div>
+        </div>
+        <span class="event-cta"><svg class="icon"><use href="#icon-chevron-right"/></svg></span>
+      </button>
+
+      <button type="button" class="event-card" data-event-trigger
+        data-title="Merenda intergenerazionale"
+        data-date="22 ottobre 2026 · 17:00 – 18:30"
+        data-location="Casa di Quartiere San Bao — Via Provinciale San Vito, 12"
+        data-category="Sociale"
+        data-desc="Un momento di incontro tra generazioni diverse, con merenda condivisa, giochi da tavolo e racconti. Aperto a bambini, adulti e anziani del quartiere."
+        data-cta-label=""
+        data-cta-url="">
+        <div class="event-date"><span class="day-month">22.10</span><span class="weekday">Giovedì</span></div>
+        <div class="event-content">
+          <div class="event-title">Merenda intergenerazionale</div>
+          <div class="event-meta">
+            <svg class="icon"><use href="#icon-clock"/></svg>
+            <span>17:00 – 18:30</span> · <span class="badge badge-accent">Sociale</span>
+          </div>
+        </div>
+        <span class="event-cta"><svg class="icon"><use href="#icon-chevron-right"/></svg></span>
+      </button>
+    </div>
+  </main>
+</section>
+
+<section class="view" id="view-login" hidden>
+  <div class="center-page">
+    <form class="login-card" data-login-form novalidate>
+      <div class="header">
+        <div class="logo">Trasi</div>
+        <div class="subtitle">Accedi alla tua area riservata</div>
+      </div>
+
+      <div class="field">
+        <label for="email">Email</label>
+        <input class="input" type="email" id="email" name="email" autocomplete="email" placeholder="nome@esempio.it" required>
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input class="input" type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••••" required>
+      </div>
+
+      <a href="#" class="forgot-link" data-forgot-password>Password dimenticata?</a>
+
+      <button type="submit" class="btn btn-primary btn-block">Accedi</button>
+
+      <div class="foot-note">Non hai un account? Contatta la tua casa di quartiere.</div>
+    </form>
+  </div>
+</section>
+
+<section class="view" id="view-home" hidden>
+  <div class="app-shell">
+    <aside class="sidebar" data-sidebar>
+      <div class="sidebar-top">
+        <div class="sidebar-head">
+          <a href="#" data-nav="home" class="sidebar-logo">
+            <span class="full">Trasi</span>
+            <svg class="icon mark"><use href="#logo-mark"/></svg>
+          </a>
+          <button class="sidebar-toggle" data-sidebar-toggle aria-label="Comprimi/espandi menu">
+            <svg class="icon"><use href="#icon-panel-left"/></svg>
+          </button>
+        </div>
+        <nav class="nav-block">
+          <a href="#" data-nav="area-operatore" data-nav-tab="messaggi" class="nav-item" title="Chiedi">
+            <svg class="icon"><use href="#icon-message-circle"/></svg><span>Chiedi</span>
+          </a>
+          <a href="#" data-nav="mappa" class="nav-item" title="Mappa">
+            <svg class="icon"><use href="#icon-map"/></svg><span>Mappa</span>
+          </a>
+          <a href="#" data-nav="area-operatore" class="nav-item" title="Area Operatore">
+            <svg class="icon"><use href="#icon-wrench"/></svg><span>Area Operatore</span>
+          </a>
+        </nav>
+      </div>
+      <a href="#" data-nav="utente" class="user-btn" title="Matteo F.">
+        <span class="avatar avatar-sm">MF</span>
+        <span>Matteo F.</span>
+      </a>
+    </aside>
+
+    <main class="main">
+      <div class="page-header">
+        <h1 class="page-title">Casa di Quartiere San Bao</h1>
+        <button class="btn btn-primary">
+          <svg class="icon" style="width:16px;height:16px;"><use href="#icon-plus"/></svg>
+          Proponi evento
+        </button>
+      </div>
+
+      <div class="event-list">
+        <button type="button" class="event-card" data-event-trigger
+          data-title="Laboratorio di cucito condiviso"
+          data-date="14 ottobre 2026 · 18:00 – 20:00"
+          data-location="Casa di Quartiere San Bao"
+          data-category="Sociale"
+          data-desc="Un pomeriggio per imparare le basi del cucito e della piccola sartoria, condividendo tecniche e materiali con altri abitanti del quartiere. Portate i vostri capi da riparare: aghi, filo e macchine da cucire saranno a disposizione."
+          data-cta-label="Iscriviti all'evento"
+          data-cta-url="#">
+          <div class="event-date"><span class="day-month">14.10</span><span class="weekday">Mercoledì</span></div>
+          <div class="event-content">
+            <div class="event-title">Laboratorio di cucito condiviso</div>
+            <div class="event-meta">
+              <svg class="icon"><use href="#icon-clock"/></svg>
+              <span>18:00 – 20:00</span> · <span class="badge badge-accent">Sociale</span>
+            </div>
+          </div>
+          <span class="event-cta"><svg class="icon"><use href="#icon-chevron-right"/></svg></span>
+        </button>
+
+        <button type="button" class="event-card" data-event-trigger
+          data-title="Sportello orientamento lavoro"
+          data-date="16 ottobre 2026 · 10:00 – 13:00"
+          data-location="Casa di Quartiere San Bao"
+          data-category="Lavoro"
+          data-desc="Consulenza individuale gratuita su curriculum, ricerca attiva del lavoro e opportunità di formazione professionale sul territorio, a cura degli operatori dello sportello lavoro."
+          data-cta-label="Prenota un colloquio"
+          data-cta-url="#">
+          <div class="event-date"><span class="day-month">16.10</span><span class="weekday">Venerdì</span></div>
+          <div class="event-content">
+            <div class="event-title">Sportello orientamento lavoro</div>
+            <div class="event-meta">
+              <svg class="icon"><use href="#icon-clock"/></svg>
+              <span>10:00 – 13:00</span> · <span class="badge badge-accent">Lavoro</span>
+            </div>
+          </div>
+          <span class="event-cta"><svg class="icon"><use href="#icon-chevron-right"/></svg></span>
+        </button>
+
+        <button type="button" class="event-card" data-event-trigger
+          data-title="Cineforum di quartiere"
+          data-date="19 ottobre 2026 · 20:30 – 22:30"
+          data-location="Casa di Quartiere San Bao"
+          data-category="Cultura"
+          data-desc="Proiezione a ingresso libero seguita da un momento di confronto guidato. Questo mese il tema è la memoria collettiva dei quartieri popolari italiani."
+          data-cta-label="Aggiungi al calendario"
+          data-cta-url="#">
+          <div class="event-date"><span class="day-month">19.10</span><span class="weekday">Lunedì</span></div>
+          <div class="event-content">
+            <div class="event-title">Cineforum di quartiere</div>
+            <div class="event-meta">
+              <svg class="icon"><use href="#icon-clock"/></svg>
+              <span>20:30 – 22:30</span> · <span class="badge badge-accent">Cultura</span>
+            </div>
+          </div>
+          <span class="event-cta"><svg class="icon"><use href="#icon-chevron-right"/></svg></span>
+        </button>
+
+        <button type="button" class="event-card" data-event-trigger
+          data-title="Merenda intergenerazionale"
+          data-date="22 ottobre 2026 · 17:00 – 18:30"
+          data-location="Casa di Quartiere San Bao"
+          data-category="Sociale"
+          data-desc="Un momento di incontro tra generazioni diverse, con merenda condivisa, giochi da tavolo e racconti. Aperto a bambini, adulti e anziani del quartiere."
+          data-cta-label=""
+          data-cta-url="">
+          <div class="event-date"><span class="day-month">22.10</span><span class="weekday">Giovedì</span></div>
+          <div class="event-content">
+            <div class="event-title">Merenda intergenerazionale</div>
+            <div class="event-meta">
+              <svg class="icon"><use href="#icon-clock"/></svg>
+              <span>17:00 – 18:30</span> · <span class="badge badge-accent">Sociale</span>
+            </div>
+          </div>
+          <span class="event-cta"><svg class="icon"><use href="#icon-chevron-right"/></svg></span>
+        </button>
+      </div>
+    </main>
+  </div>
+</section>
+
+<section class="view" id="view-utente" hidden>
+  <div class="app-shell">
+    <aside class="sidebar" data-sidebar>
+      <div class="sidebar-top">
+        <div class="sidebar-head">
+          <a href="#" data-nav="home" class="sidebar-logo">
+            <span class="full">Trasi</span>
+            <svg class="icon mark"><use href="#logo-mark"/></svg>
+          </a>
+          <button class="sidebar-toggle" data-sidebar-toggle aria-label="Comprimi/espandi menu">
+            <svg class="icon"><use href="#icon-panel-left"/></svg>
+          </button>
+        </div>
+        <nav class="nav-block">
+          <a href="#" data-nav="area-operatore" data-nav-tab="messaggi" class="nav-item" title="Chiedi">
+            <svg class="icon"><use href="#icon-message-circle"/></svg><span>Chiedi</span>
+          </a>
+          <a href="#" data-nav="mappa" class="nav-item" title="Mappa">
+            <svg class="icon"><use href="#icon-map"/></svg><span>Mappa</span>
+          </a>
+          <a href="#" data-nav="area-operatore" class="nav-item" title="Area Operatore">
+            <svg class="icon"><use href="#icon-wrench"/></svg><span>Area Operatore</span>
+          </a>
+        </nav>
+      </div>
+      <a href="#" data-nav="utente" class="user-btn active" title="Matteo F.">
+        <span class="avatar avatar-sm">MF</span>
+        <span>Matteo F.</span>
+      </a>
+    </aside>
+
+    <main class="main">
+      <div>
+        <h1 class="page-title">La tua casa</h1>
+        <p class="page-subtitle">Panoramica e report mensile — Casa di Quartiere San Bao</p>
+      </div>
+
+      <div class="card info-card">
+        <div class="info-item">
+          <span class="label-row"><svg class="icon"><use href="#icon-map-pin"/></svg>Indirizzo</span>
+          <span class="value">Via Provinciale San Vito, 12</span>
+        </div>
+        <div class="info-item">
+          <span class="label-row"><svg class="icon"><use href="#icon-phone"/></svg>Telefono</span>
+          <span class="value">0831 123 456</span>
+        </div>
+        <div class="info-item">
+          <span class="label-row"><svg class="icon"><use href="#icon-users"/></svg>Operatori attivi</span>
+          <span class="value">3</span>
+        </div>
+      </div>
+
+      <h2 style="font-size:18px; font-weight:600; margin:0;">Report mensile — Ottobre</h2>
+
+      <div class="stats-row">
+        <div class="stat-tile">
+          <span class="icon-wrap"><svg class="icon"><use href="#icon-bar-chart"/></svg></span>
+          <span class="stat-value">128</span>
+          <span class="stat-label">Richieste registrate</span>
+        </div>
+        <div class="stat-tile">
+          <span class="icon-wrap"><svg class="icon"><use href="#icon-clipboard-list"/></svg></span>
+          <span class="stat-value">6</span>
+          <span class="stat-label">Eventi organizzati</span>
+        </div>
+        <div class="stat-tile">
+          <span class="icon-wrap"><svg class="icon"><use href="#icon-users"/></svg></span>
+          <span class="stat-value">340</span>
+          <span class="stat-label">Persone coinvolte</span>
+        </div>
+        <div class="stat-tile">
+          <span class="icon-wrap"><svg class="icon"><use href="#icon-box"/></svg></span>
+          <span class="stat-value">12</span>
+          <span class="stat-label">Oggetti in prestito</span>
+        </div>
+      </div>
+    </main>
+  </div></section>
+
+<section class="view" id="view-area-operatore" hidden>
+  <div class="app-shell">
+    <aside class="sidebar" data-sidebar>
+      <div class="sidebar-top">
+        <div class="sidebar-head">
+          <a href="#" data-nav="home" class="sidebar-logo">
+            <span class="full">Trasi</span>
+            <svg class="icon mark"><use href="#logo-mark"/></svg>
+          </a>
+          <button class="sidebar-toggle" data-sidebar-toggle aria-label="Comprimi/espandi menu">
+            <svg class="icon"><use href="#icon-panel-left"/></svg>
+          </button>
+        </div>
+        <nav class="nav-block">
+          <a href="#" data-nav="area-operatore" data-nav-tab="messaggi" class="nav-item" title="Chiedi">
+            <svg class="icon"><use href="#icon-message-circle"/></svg><span>Chiedi</span>
+          </a>
+          <a href="#" data-nav="mappa" class="nav-item" title="Mappa">
+            <svg class="icon"><use href="#icon-map"/></svg><span>Mappa</span>
+          </a>
+          <a href="#" data-nav="area-operatore" class="nav-item active" title="Area Operatore">
+            <svg class="icon"><use href="#icon-wrench"/></svg><span>Area Operatore</span>
+          </a>
+        </nav>
+      </div>
+      <a href="#" data-nav="utente" class="user-btn" title="Matteo F.">
+        <span class="avatar avatar-sm">MF</span>
+        <span>Matteo F.</span>
+      </a>
+    </aside>
+
+    <main class="main">
+      <div>
+        <h1 class="page-title">Area Operatore</h1>
+        <span class="badge badge-accent operator-house">Casa di Quartiere San Bao</span>
+      </div>
+
+      <div class="tabs" data-tabs role="tablist" aria-label="Strumenti operatore">
+        <button type="button" class="tab active" role="tab" aria-selected="true" data-tab-target="registra">Registra richiesta</button>
+        <button type="button" class="tab" role="tab" aria-selected="false" data-tab-target="attrezzoteca">Attrezzoteca</button>
+        <button type="button" class="tab" role="tab" aria-selected="false" data-tab-target="messaggi">Messaggi interni</button>
+      </div>
+
+      <form class="card operator-form" data-request-form data-tab-panel="registra" role="tabpanel">
+        <div class="dropdown field" data-dropdown data-open="false">
+          <label id="request-category-label">Categoria richiesta</label>
+          <button type="button" class="select-trigger" data-dropdown-trigger aria-labelledby="request-category-label" aria-haspopup="listbox" aria-expanded="false">
+            <span data-dropdown-label>Orientamento</span>
+            <svg class="icon icon-chevron"><use href="#icon-chevron-down"/></svg>
+          </button>
+          <div class="dropdown-panel hidden" data-dropdown-panel role="listbox">
+            <button type="button" class="dropdown-item" data-dropdown-item data-value="orientamento" aria-selected="true" role="option">Orientamento<svg class="icon"><use href="#icon-check"/></svg></button>
+            <button type="button" class="dropdown-item" data-dropdown-item data-value="ascolto" aria-selected="false" role="option">Ascolto e supporto<svg class="icon"><use href="#icon-check"/></svg></button>
+            <button type="button" class="dropdown-item" data-dropdown-item data-value="servizi-sociali" aria-selected="false" role="option">Servizi sociali<svg class="icon"><use href="#icon-check"/></svg></button>
+            <button type="button" class="dropdown-item" data-dropdown-item data-value="attrezzatura" aria-selected="false" role="option">Prestito attrezzatura<svg class="icon"><use href="#icon-check"/></svg></button>
+          </div>
+        </div>
+        <div class="dropdown field" data-dropdown data-open="false">
+          <label id="request-outcome-label">Esito</label>
+          <button type="button" class="select-trigger" data-dropdown-trigger aria-labelledby="request-outcome-label" aria-haspopup="listbox" aria-expanded="false">
+            <span data-dropdown-label>Risolta</span>
+            <svg class="icon icon-chevron"><use href="#icon-chevron-down"/></svg>
+          </button>
+          <div class="dropdown-panel hidden" data-dropdown-panel role="listbox">
+            <button type="button" class="dropdown-item" data-dropdown-item data-value="risolta" aria-selected="true" role="option">Risolta<svg class="icon"><use href="#icon-check"/></svg></button>
+            <button type="button" class="dropdown-item" data-dropdown-item data-value="in-corso" aria-selected="false" role="option">In corso<svg class="icon"><use href="#icon-check"/></svg></button>
+            <button type="button" class="dropdown-item" data-dropdown-item data-value="inviata" aria-selected="false" role="option">Inviata altrove<svg class="icon"><use href="#icon-check"/></svg></button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="request-destination">Destinazione (se inviata altrove)</label>
+          <input class="input" id="request-destination" name="destination" type="text" placeholder="Es. Servizi Sociali Comune di Brindisi">
+        </div>
+        <p class="form-note">Nota: il modulo non conserva dati personali dell'utente.</p>
+        <button type="submit" class="btn btn-primary">Registra</button>
+        <div class="status-message" data-request-status role="status"></div>
+      </form>
+
+      <div class="card operator-equipment" data-tab-panel="attrezzoteca" role="tabpanel" hidden>
+        <div class="field input-icon-wrap equipment-search">
+          <label class="sr-only" for="equipment-search">Cerca oggetto</label>
+          <svg class="icon"><use href="#icon-search"/></svg>
+          <input class="input" id="equipment-search" type="search" placeholder="Cerca oggetto…" data-equipment-search>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Oggetto</th><th>Casa</th><th>Disponibilità</th><th>Condizione</th></tr></thead>
+            <tbody data-equipment-rows>
+              <tr><td>Proiettore portatile</td><td>San Bao</td><td><span class="badge badge-accent">Disponibile</span></td><td>Buona</td></tr>
+              <tr><td>Casse audio</td><td>Bozzano</td><td><span class="badge badge-muted">In prestito</span></td><td>Ottima</td></tr>
+              <tr><td>20 sedie pieghevoli</td><td>San Bao</td><td><span class="badge badge-accent">Disponibile</span></td><td>Buona</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="status-message" data-equipment-empty role="status">Nessun oggetto corrisponde alla ricerca.</p>
+      </div>
+
+      <form class="card operator-message" data-message-form data-tab-panel="messaggi" role="tabpanel" hidden>
+        <div class="dropdown field" data-dropdown data-open="false">
+          <label id="message-recipient-label">Destinatario</label>
+          <button type="button" class="select-trigger" data-dropdown-trigger aria-labelledby="message-recipient-label" aria-haspopup="listbox" aria-expanded="false">
+            <span data-dropdown-label>Comune di Brindisi</span>
+            <svg class="icon icon-chevron"><use href="#icon-chevron-down"/></svg>
+          </button>
+          <div class="dropdown-panel hidden" data-dropdown-panel role="listbox">
+            <button type="button" class="dropdown-item" data-dropdown-item data-value="comune" aria-selected="true" role="option">Comune di Brindisi<svg class="icon"><use href="#icon-check"/></svg></button>
+            <button type="button" class="dropdown-item" data-dropdown-item data-value="bozzano" aria-selected="false" role="option">Casa di Quartiere Bozzano<svg class="icon"><use href="#icon-check"/></svg></button>
+            <button type="button" class="dropdown-item" data-dropdown-item data-value="centro" aria-selected="false" role="option">Centro di Aggregazione<svg class="icon"><use href="#icon-check"/></svg></button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="internal-message">Messaggio</label>
+          <textarea class="input" id="internal-message" name="message" required placeholder="Scrivi un messaggio…"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Invia messaggio</button>
+        <div class="status-message" data-message-status role="status"></div>
+      </form>
+    </main>
+  </div>
+</section>
+
+<section class="view" id="view-mappa" hidden>
+  <div class="map-page-shell">
+    <aside class="sidebar" data-sidebar>
+      <div class="sidebar-top">
+        <div class="sidebar-head">
+          <a href="#" data-nav="home" class="sidebar-logo">
+            <span class="full">Trasi</span>
+            <svg class="icon mark"><use href="#logo-mark"/></svg>
+          </a>
+          <button class="sidebar-toggle" data-sidebar-toggle aria-label="Comprimi/espandi menu">
+            <svg class="icon"><use href="#icon-panel-left"/></svg>
+          </button>
+        </div>
+        <nav class="nav-block">
+          <a href="#" data-nav="area-operatore" data-nav-tab="messaggi" class="nav-item" title="Chiedi">
+            <svg class="icon"><use href="#icon-message-circle"/></svg><span>Chiedi</span>
+          </a>
+          <a href="#" data-nav="mappa" class="nav-item active" title="Mappa">
+            <svg class="icon"><use href="#icon-map"/></svg><span>Mappa</span>
+          </a>
+          <a href="#" data-nav="area-operatore" class="nav-item" title="Area Operatore">
+            <svg class="icon"><use href="#icon-wrench"/></svg><span>Area Operatore</span>
+          </a>
+        </nav>
+      </div>
+      <a href="#" data-nav="utente" class="user-btn" title="Matteo F.">
+        <span class="avatar avatar-sm">MF</span>
+        <span>Matteo F.</span>
+      </a>
+    </aside>
+
+    <div class="map-area">
+      <div id="leaflet-map" class="map-tint"></div>
+
+      <div class="map-drawer" data-list-drawer>
+        <div class="map-drawer-header">
+          <div>
+            <h2>Case di quartiere</h2>
+            <p>6 sedi disponibili a Brindisi</p>
+          </div>
+          <button class="map-drawer-close" data-list-drawer-close aria-label="Chiudi elenco">
+            <svg class="icon"><use href="#icon-x"/></svg>
+          </button>
+        </div>
+        <div class="map-drawer-body" data-house-list></div>
+      </div>
+
+      <div class="map-drawer hidden" data-detail-drawer>
+        <div class="map-drawer-header">
+          <div>
+            <h2 data-detail-name></h2>
+            <p data-detail-address></p>
+          </div>
+          <button class="map-drawer-back" data-detail-back aria-label="Torna all'elenco">
+            <svg class="icon"><use href="#icon-arrow-left"/></svg>
+          </button>
+        </div>
+        <div class="map-drawer-body">
+          <div class="detail-section">
+            <h3 class="section-title"><svg class="icon"><use href="#icon-clock"/></svg>Orari</h3>
+            <div class="hours-list" data-detail-hours></div>
+          </div>
+          <div class="detail-section">
+            <h3 class="section-title"><svg class="icon"><use href="#icon-box"/></svg>Servizi offerti</h3>
+            <ul class="equip-list" data-detail-services></ul>
+          </div>
+          <div class="detail-section">
+            <h3 class="section-title"><svg class="icon"><use href="#icon-users"/></svg>Operatori</h3>
+            <div class="avatar-row" data-detail-operators></div>
+          </div>
+          <div class="detail-section">
+            <h3 class="section-title"><svg class="icon"><use href="#icon-calendar"/></svg>Prossimi eventi</h3>
+            <div class="mini-events" data-detail-events></div>
+          </div>
+        </div>
+      </div>
+
+      <button class="map-reopen-btn hidden" data-reopen-list>
+        <svg class="icon" style="width:18px;height:18px;"><use href="#icon-building"/></svg>
+        Case di quartiere
+      </button>
+    </div>
+  </div>
+</section>
+
+  <div class="overlay" data-overlay aria-hidden="true"></div>
+  <aside class="event-drawer" data-event-drawer role="dialog" aria-modal="true" aria-labelledby="event-drawer-title" aria-hidden="true">
+    <button class="event-drawer-close" data-event-drawer-close aria-label="Chiudi">
+      <svg class="icon"><use href="#icon-x"/></svg>
+    </button>
+    <div data-event-image-wrap></div>
+    <div class="event-drawer-body">
+      <span class="badge badge-accent event-drawer-badge" data-event-category></span>
+      <h2 class="event-drawer-title" id="event-drawer-title" data-event-title></h2>
+      <div class="event-drawer-meta">
+        <div class="row"><svg class="icon"><use href="#icon-calendar"/></svg><span data-event-date></span></div>
+        <div class="row"><svg class="icon"><use href="#icon-map-pin"/></svg><span data-event-location></span></div>
+      </div>
+      <p class="event-drawer-desc" data-event-desc></p>
+      <a href="#" class="btn btn-primary event-drawer-cta" data-event-cta target="_blank" rel="noopener">
+        <span data-event-cta-label></span>
+        <svg class="icon" style="width:16px;height:16px;"><use href="#icon-external-link"/></svg>
+      </a>
+    </div>
+  </aside>
+  <div class="modal-backdrop" data-propose-modal role="dialog" aria-modal="true" aria-labelledby="propose-title" hidden>
+    <form class="modal-card modal-form" data-propose-form>
+      <div class="modal-header">
+        <div>
+          <h2 id="propose-title">Proponi un evento</h2>
+          <p class="page-subtitle">Condividi un'attività con la tua casa di quartiere.</p>
+        </div>
+        <button type="button" class="modal-close" data-modal-close aria-label="Chiudi finestra">
+          <svg class="icon"><use href="#icon-x"/></svg>
+        </button>
+      </div>
+      <div class="field">
+        <label for="event-name">Titolo</label>
+        <input class="input" id="event-name" name="title" required placeholder="Es. Laboratorio di quartiere">
+      </div>
+      <div class="field">
+        <label for="event-date">Data e ora</label>
+        <input class="input" id="event-date" name="date" type="datetime-local" required>
+      </div>
+      <div class="field">
+        <label for="event-description">Descrizione</label>
+        <textarea class="input" id="event-description" name="description" required placeholder="Racconta l'attività"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-outline" data-modal-close>Annulla</button>
+        <button type="submit" class="btn btn-primary">Invia proposta</button>
+      </div>
+    </form>
+  </div>
+  <div class="toast" data-toast role="status" aria-live="polite"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+// Trasi — prototipo standalone (SPA a viste multiple in un unico file)
+
+let map = null;
+
+function showView(name) {
+  const target = document.getElementById(`view-${name}`);
+  if (!target) return;
+  document.querySelectorAll('.view').forEach((view) => { view.hidden = view !== target; });
+  document.title = `${target.dataset.title || target.querySelector('h1')?.textContent || 'Trasi'} · Trasi`;
+  window.scrollTo(0, 0);
+  if (name === 'mappa') {
+    if (!map) {
+      if (window.L) initMap();
+      else window.setTimeout(() => { if (window.L && !map) initMap(); }, 300);
+    } else {
+      setTimeout(() => map.invalidateSize(), 50);
+    }
+  }
+}
+window.showView = showView;
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Loading view: fade out dopo 1s poi passa alla vista Calendario
+  const loadingPage = document.querySelector('[data-loading-page]');
+  if (loadingPage) {
+    setTimeout(() => {
+      loadingPage.classList.add('fade-out');
+      setTimeout(() => { showView('calendario'); }, 500);
+    }, 1000);
+  }
+
+  // Navigazione interna (sidebar, header, link tra viste)
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('[data-nav]');
+    if (!link) return;
+    e.preventDefault();
+    const targetView = link.getAttribute('data-nav');
+    showView(targetView);
+    const tabName = link.getAttribute('data-nav-tab');
+    if (tabName) {
+      const tab = document.querySelector(`#view-${targetView} .tab[data-tab-target="${tabName}"]`);
+      if (tab) tab.click();
+    }
+  });
+
+  // Login: passa alla Home senza ricaricare la pagina
+  const loginForm = document.querySelector('[data-login-form]');
+  if (loginForm) {
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!loginForm.reportValidity()) return;
+      showView('home');
+      showToast('Accesso effettuato. Benvenuto in Trasi.');
+    });
+  }
+
+  // Sidebar collapse/expand toggle
+  document.querySelectorAll('[data-sidebar-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const sidebar = btn.closest('[data-sidebar]');
+      if (sidebar) sidebar.classList.toggle('collapsed');
+    });
+  });
+
+  // Tabs (Area Operatore)
+  document.querySelectorAll('[data-tabs]').forEach((tabGroup) => {
+    const tabs = tabGroup.querySelectorAll('.tab');
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const targetId = tab.getAttribute('data-tab-target');
+        tabs.forEach((item) => {
+          const selected = item === tab;
+          item.classList.toggle('active', selected);
+          item.setAttribute('aria-selected', String(selected));
+        });
+        document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
+          panel.hidden = panel.getAttribute('data-tab-panel') !== targetId;
+        });
+      });
+    });
+  });
+
+  // ---------- Generic dropdown (custom select) ----------
+  document.querySelectorAll('[data-dropdown]').forEach((dropdown) => {
+    const trigger = dropdown.querySelector('[data-dropdown-trigger]');
+    const panel = dropdown.querySelector('[data-dropdown-panel]');
+    const label = dropdown.querySelector('[data-dropdown-label]');
+    if (!trigger || !panel) return;
+
+    const close = () => {
+      dropdown.setAttribute('data-open', 'false');
+      trigger.setAttribute('aria-expanded', 'false');
+      panel.classList.add('hidden');
+    };
+    const open = () => {
+      dropdown.setAttribute('data-open', 'true');
+      trigger.setAttribute('aria-expanded', 'true');
+      panel.classList.remove('hidden');
+    };
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = dropdown.getAttribute('data-open') === 'true';
+      document.querySelectorAll('[data-dropdown][data-open="true"]').forEach((d) => {
+        const otherTrigger = d.querySelector('[data-dropdown-trigger]');
+        const otherPanel = d.querySelector('[data-dropdown-panel]');
+        d.setAttribute('data-open', 'false');
+        if (otherTrigger) otherTrigger.setAttribute('aria-expanded', 'false');
+        if (otherPanel) otherPanel.classList.add('hidden');
+      });
+      if (isOpen) close(); else open();
+    });
+
+    panel.querySelectorAll('[data-dropdown-item]').forEach((item) => {
+      item.addEventListener('click', () => {
+        panel.querySelectorAll('[data-dropdown-item]').forEach((option) => option.setAttribute('aria-selected', 'false'));
+        item.setAttribute('aria-selected', 'true');
+        if (label) label.textContent = item.textContent.trim();
+        close();
+        trigger.focus();
+        dropdown.dispatchEvent(new CustomEvent('dropdown:change', { detail: { value: item.getAttribute('data-value') } }));
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+  });
+
+  // ---------- Event drawer (Home / Calendario) ----------
+  const eventDrawer = document.querySelector('[data-event-drawer]');
+  const eventOverlay = document.querySelector('[data-overlay]');
+  if (eventDrawer) {
+    const titleEl = eventDrawer.querySelector('[data-event-title]');
+    const dateEl = eventDrawer.querySelector('[data-event-date]');
+    const locationEl = eventDrawer.querySelector('[data-event-location]');
+    const categoryEl = eventDrawer.querySelector('[data-event-category]');
+    const descEl = eventDrawer.querySelector('[data-event-desc]');
+    const ctaEl = eventDrawer.querySelector('[data-event-cta]');
+    const ctaLabelEl = eventDrawer.querySelector('[data-event-cta-label]');
+    const imageWrap = eventDrawer.querySelector('[data-event-image-wrap]');
+
+    const openEventDrawer = (card) => {
+      const d = card.dataset;
+      if (titleEl) titleEl.textContent = d.title || '';
+      if (dateEl) dateEl.textContent = d.date || '';
+      if (locationEl) locationEl.textContent = d.location || '';
+      if (categoryEl) categoryEl.textContent = d.category || '';
+      if (descEl) descEl.textContent = d.desc || '';
+
+      if (imageWrap) {
+        if (d.image) {
+          imageWrap.className = '';
+          imageWrap.innerHTML = `<img class="event-drawer-image" src="${d.image}" alt="">`;
+        } else {
+          imageWrap.className = '';
+          imageWrap.innerHTML = '';
+        }
+      }
+
+      if (ctaEl) {
+        if (d.ctaUrl && d.ctaUrl !== '#') {
+          ctaEl.classList.remove('is-hidden');
+          ctaEl.href = d.ctaUrl;
+          if (ctaLabelEl) ctaLabelEl.textContent = d.ctaLabel || 'Maggiori informazioni';
+        } else {
+          ctaEl.classList.add('is-hidden');
+        }
+      eventDrawer.classList.add('open');
+      eventDrawer.setAttribute('aria-hidden', 'false');
+      if (eventOverlay) {
+        eventOverlay.classList.add('visible');
+        eventOverlay.setAttribute('aria-hidden', 'false');
+      }
+      eventDrawer.querySelector('[data-event-drawer-close]')?.focus();
+      eventDrawer.classList.remove('open');
+      eventDrawer.setAttribute('aria-hidden', 'true');
+      if (eventOverlay) {
+        eventOverlay.classList.remove('visible');
+        eventOverlay.setAttribute('aria-hidden', 'true');
+      }
+
+      eventDrawer.classList.add('open');
+      eventDrawer.setAttribute('aria-hidden', 'false');
+      if (eventOverlay) {
+        eventOverlay.classList.add('visible');
+        eventOverlay.setAttribute('aria-hidden', 'false');
+      }
+      eventDrawer.querySelector('[data-event-drawer-close]')?.focus();
+    };
+
+    const closeEventDrawer = () => {
+      eventDrawer.classList.remove('open');
+      eventDrawer.setAttribute('aria-hidden', 'true');
+      if (eventOverlay) {
+        eventOverlay.classList.remove('visible');
+        eventOverlay.setAttribute('aria-hidden', 'true');
+      }
+    };
+
+    document.querySelectorAll('[data-event-trigger]').forEach((card) => {
+      card.addEventListener('click', () => openEventDrawer(card));
+    });
+    eventDrawer.querySelectorAll('[data-event-drawer-close]').forEach((btn) => {
+      btn.addEventListener('click', closeEventDrawer);
+    });
+    if (eventOverlay) eventOverlay.addEventListener('click', closeEventDrawer);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeEventDrawer(); });
+  }
+});
+
+// ---------- Mappa (Leaflet, inizializzata al primo accesso alla vista) ----------
+function initMap() {
+    const HOUSES = [
+      {
+        id: 'san-bao',
+        name: 'Casa di Quartiere San Bao',
+        address: 'Via Provinciale San Vito, 12 — Brindisi',
+        lat: 40.6255, lng: 17.9430,
+        hours: [['Lun – Ven', '9:00 – 13:00 / 15:00 – 19:00'], ['Sabato', '9:00 – 13:00']],
+        services: ['Sportello ascolto', 'Prestito attrezzature', 'Doposcuola', 'Corsi di italiano'],
+        operators: ['MR', 'GC', 'LF'],
+        events: [['14 Ott', 'Laboratorio di cucito condiviso'], ['16 Ott', 'Sportello orientamento lavoro']]
+      },
+      {
+        id: 'bozzano',
+        name: 'Casa di Quartiere Bozzano',
+        address: 'Via Bozzano, 45 — Brindisi',
+        lat: 40.6455, lng: 17.9020,
+        hours: [['Lun – Ven', '9:00 – 13:00 / 16:00 – 19:00'], ['Sabato', 'Chiuso']],
+        services: ['Sportello ascolto', 'Attrezzoteca di quartiere', 'Corsi di ginnastica dolce'],
+        operators: ['AM', 'PT'],
+        events: [['12 Ott', 'Corso di ginnastica dolce'], ['18 Ott', 'Sportello anagrafico']]
+      },
+      {
+        id: 'centro-aggregazione',
+        name: 'Centro di Aggregazione Giovanile',
+        address: 'Via Cristoforo Colombo, 30 — Brindisi',
+        lat: 40.6395, lng: 17.9410,
+        hours: [['Lun – Sab', '15:00 – 20:00']],
+        services: ['Attività giovanili', 'Sala studio', 'Doposcuola', 'Tornei sportivi'],
+        operators: ['FD', 'SR'],
+        events: [['15 Ott', 'Torneo di ping pong'], ['21 Ott', 'Sala studio serale']]
+      },
+      {
+        id: 'paradiso',
+        name: 'Casa di Quartiere Paradiso',
+        address: 'Via Paradiso, 22 — Brindisi',
+        lat: 40.6150, lng: 17.9560,
+        hours: [['Lun – Ven', '9:00 – 13:00'], ['Mar e Gio', 'anche 16:00 – 19:00']],
+        services: ['Sportello sociale', 'Prestito libri', 'Orientamento lavoro'],
+        operators: ['NC'],
+        events: [['20 Ott', 'Sportello sociale itinerante']]
+      },
+      {
+        id: 'casale',
+        name: 'Casa di Quartiere Casale',
+        address: 'Via Casale, 5 — Brindisi',
+        lat: 40.6600, lng: 17.9180,
+        hours: [['Lun – Ven', '9:00 – 13:00 / 15:00 – 18:00']],
+        services: ['Sportello ascolto', 'Corsi di italiano', 'Attrezzoteca'],
+        operators: ['EB', 'GV'],
+        events: [['17 Ott', 'Corso di italiano L2'], ['24 Ott', 'Merenda di quartiere']]
+      },
+      {
+        id: 'santelia',
+        name: "Casa di Quartiere Sant'Elia",
+        address: "Via Sant'Elia, 8 — Brindisi",
+        lat: 40.6510, lng: 17.9295,
+        hours: [['Lun – Sab', '9:00 – 13:00']],
+        services: ['Sportello ascolto', 'Prestito attrezzature', 'Attività per anziani'],
+        operators: ['RL'],
+        events: [['23 Ott', 'Pomeriggio con gioco delle carte']]
+      }
+    ];
+
+    map = L.map('leaflet-map', { zoomControl: true }).setView([40.6320, 17.9370], 13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    const markers = {};
+    HOUSES.forEach((h) => {
+      const icon = L.divIcon({
+        className: '',
+        html: `<span class="map-marker" data-marker-id="${h.id}"><svg class="icon"><use href="#icon-map-pin"/></svg></span>`,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+      });
+      const marker = L.marker([h.lat, h.lng], { icon }).addTo(map);
+      marker.on('click', () => selectHouse(h.id));
+      markers[h.id] = marker;
+    });
+
+    const listDrawer = document.querySelector('[data-list-drawer]');
+    const detailDrawer = document.querySelector('[data-detail-drawer]');
+    const houseListEl = document.querySelector('[data-house-list]');
+    const reopenBtn = document.querySelector('[data-reopen-list]');
+
+    function renderList() {
+      houseListEl.innerHTML = HOUSES.map((h) => `
+        <button type="button" class="house-list-item" data-house-item="${h.id}">
+          <span class="icon-wrap"><svg class="icon"><use href="#icon-building"/></svg></span>
+          <span class="text">
+            <span class="name">${h.name}</span>
+            <span class="address">${h.address}</span>
+          </span>
+          <svg class="icon icon-chevron"><use href="#icon-chevron-right"/></svg>
+        </button>
+      `).join('');
+      houseListEl.querySelectorAll('[data-house-item]').forEach((btn) => {
+        btn.addEventListener('click', () => selectHouse(btn.getAttribute('data-house-item')));
+      });
+    }
+    renderList();
+
+    function selectHouse(id) {
+      const h = HOUSES.find((x) => x.id === id);
+      if (!h) return;
+
+      Object.entries(markers).forEach(([hid, m]) => {
+        const el = m.getElement();
+        const pin = el && el.querySelector('.map-marker');
+        if (pin) pin.classList.toggle('selected', hid === id);
+      });
+
+      map.flyTo([h.lat, h.lng], 16, { duration: 0.6 });
+
+      detailDrawer.querySelector('[data-detail-name]').textContent = h.name;
+      detailDrawer.querySelector('[data-detail-address]').textContent = h.address;
+      detailDrawer.querySelector('[data-detail-hours]').innerHTML = h.hours
+        .map(([d, t]) => `<div class="row"><span>${d}</span><span>${t}</span></div>`).join('');
+      detailDrawer.querySelector('[data-detail-services]').innerHTML = h.services
+        .map((s) => `<li><span class="dot"></span>${s}</li>`).join('');
+      detailDrawer.querySelector('[data-detail-operators]').innerHTML = h.operators
+        .map((o) => `<span class="avatar">${o}</span>`).join('');
+      detailDrawer.querySelector('[data-detail-events]').innerHTML = h.events
+        .map(([d, t]) => `<div class="mini-event"><span class="date">${d}</span><span class="title">${t}</span></div>`).join('');
+
+      listDrawer.classList.add('hidden');
+      detailDrawer.classList.remove('hidden');
+      reopenBtn.classList.add('hidden');
+    }
+
+    function showList() {
+      detailDrawer.classList.add('hidden');
+      listDrawer.classList.remove('hidden');
+    }
+
+    document.querySelector('[data-detail-back]').addEventListener('click', showList);
+    document.querySelector('[data-list-drawer-close]').addEventListener('click', () => {
+      listDrawer.classList.add('hidden');
+      reopenBtn.classList.remove('hidden');
+    });
+    reopenBtn.addEventListener('click', () => {
+      reopenBtn.classList.add('hidden');
+      listDrawer.classList.remove('hidden');
+    });
+
+    setTimeout(() => map.invalidateSize(), 200);
+}
+</script>
+</body>
+</html>

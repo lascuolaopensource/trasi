@@ -6,94 +6,134 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — Mappa delle Case</title>
 <meta name="description" content="Trasi: la mappa delle dieci Case di Quartiere di Brindisi, con l’elenco equivalente, centrata sulla Casa scelta.">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 <!-- Leaflet dal vendor locale (BSD-2, `vendor/leaflet/LICENSE`): zero CDN. Il foglio va servito
      dalla sua cartella perché raggiunge le immagini con percorsi relativi (`images/…`). -->
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=1">
-<link rel="stylesheet" href="mappa.css?v=1">
+<link rel="stylesheet" href="mappa.css?v=2">
 </head>
 <body>
 <!-- Risorse locali, zero CDN. L'unico dominio esterno contattato da questa pagina è
      `tile.openstreetmap.org`, per lo sfondo della mappa (vedi mappa.js in testa e WCAG.md). -->
-<a class="salta" href="#mappa">Salta alla mappa</a>
+<a class="salta" href="#mappa-tela">Salta alla mappa</a>
 
-<!-- Testata identica alla Home: stesso markup, stesso `style.css`, stesso selettore della Casa
-     (`#selettore-casa`, letto da `casa.js`). L'elenco delle Case sta anche qui perché la pagina è
-     statica e la validazione dello slug è contro queste <option>. -->
-<header class="testata">
-  <p class="marchio">
-    <img class="marchio-logo" src="assets/logo-case-di-quartiere.png" alt="" width="203" height="88">
-    <span class="marchio-testo">
-      <span class="marchio-nome">TRASI</span>
-      <span class="marchio-sotto">Rete delle Case di Quartiere di Brindisi</span>
-    </span>
-  </p>
-  <div class="casa">
-    <label class="casa-etichetta" for="selettore-casa">Casa di riferimento</label>
-    <select id="selettore-casa">
-      <option value="san-bao" selected>San Bao</option>
-      <option value="bozzano">Centro di Aggregazione Bozzano</option>
-      <option value="buscicchio">Parco Buscicchio</option>
-      <option value="dream">Dream: Laboratorio Creativo</option>
-      <option value="erranti">Accademia degli Erranti</option>
-      <option value="minimus">Minimus</option>
-      <option value="molo12">Molo 12</option>
-      <option value="pop">POP — Piccolo Opificio Popolare</option>
-      <option value="santa-spazio">Santa Spazio Culturale</option>
-      <option value="tuturano">Tuturano — dati provvisori</option>
-    </select>
-    <p class="casa-nota" id="casa-nota" hidden></p>
+<!-- ============================================================ IL GUSCIO ================
+     Sidebar teal 240 px (72 px compressa, bottone in `assets/shell.js`), identica nelle due
+     pagine di lavoro (Mappa e Area operatore). La Home pubblica resta con la sua top-bar,
+     come nel prototipo: il guscio è delle pagine dentro il servizio. -->
+<div class="guscio">
+  <aside class="sidebar" aria-label="Navigazione">
+    <div class="sidebar-testata">
+      <p class="marchio">
+        <svg class="marchio-logo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi.svg"/></svg>
+        <span class="solo-lettore">Trasi</span>
+      </p>
+      <svg class="sidebar-logo-solo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi-mark.svg"/></svg>
+      <button class="sidebar-comprimi" type="button" data-sidebar-comprimi aria-expanded="true" aria-label="Comprimi il menu">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-panel-left"/></svg>
+      </button>
+    </div>
+
+    <nav class="nav" aria-label="Destinazioni">
+      <a class="nav-voce" href="/">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-home"/></svg>
+        <span>Home</span>
+      </a>
+      <a class="nav-voce" href="/mappa.html" aria-current="page">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-map"/></svg>
+        <span>Mappa</span>
+      </a>
+      <a class="nav-voce" href="/operatore.html">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-wrench"/></svg>
+        <span>Area operatore</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-lato">
+      <div class="casa">
+        <label class="casa-etichetta" for="selettore-casa">Casa di riferimento</label>
+        <!-- L'elenco delle Case sta solo qui (e nella Home). L'opzione di Tuturano porta la
+             nota «dati provvisori» nel testo. `data-tendina`: `assets/dropdown.js` lo veste
+             da dropdown del prototipo, il select resta la fonte della verità per `casa.js`. -->
+        <select id="selettore-casa" data-tendina>
+          <option value="san-bao" selected>San Bao</option>
+          <option value="bozzano">Centro di Aggregazione Bozzano</option>
+          <option value="buscicchio">Parco Buscicchio</option>
+          <option value="dream">Dream: Laboratorio Creativo</option>
+          <option value="erranti">Accademia degli Erranti</option>
+          <option value="minimus">Minimus</option>
+          <option value="molo12">Molo 12</option>
+          <option value="pop">POP — Piccolo Opificio Popolare</option>
+          <option value="santa-spazio">Santa Spazio Culturale</option>
+          <option value="tuturano">Tuturano — dati provvisori</option>
+        </select>
+        <p class="casa-nota" id="casa-nota" hidden></p>
+      </div>
+      <p class="privacy">Non conserva dati personali.</p>
+    </div>
+  </aside>
+
+  <div class="area">
+    <!-- ======================================================== LA MAPPA ================
+         Tela a tutta altezza; l'elenco equivalente vive nel cassetto in alto a destra
+         (mappa.css). Tutti gli id sono quelli che `mappa.js` si aspetta. -->
+    <main class="mappa-piena" id="mappa" aria-busy="true">
+      <h1 class="solo-lettore">Le dieci Case della rete</h1>
+
+      <!-- Riga di stato: dice che sta leggendo, poi il fatto («10 Case · centrata su San Bao») o
+           l'indisponibilità in parole. Regione live: cambia da sola. -->
+      <p class="mappa-stato" id="mappa-stato" role="status" aria-live="polite">Lettura in corso…</p>
+
+      <!-- La mappa. I pin Leaflet non sono raggiungibili da tastiera per costruzione: il ruolo lo
+           dichiara il contenitore, che è focalizzabile e rimanda all'elenco, che è l'equivalente. -->
+      <div class="mappa-tela" id="mappa-tela" tabindex="0" role="region"
+           aria-label="Mappa delle dieci Case della rete. L'elenco nel pannello a destra è la stessa informazione, nello stesso ordine, e si può usare da tastiera."
+           aria-describedby="mappa-attribuzione"></div>
+
+      <!-- Sfondo non disponibile (tile bloccati, Leaflet assente): la mappa resta leggibile e lo dice. -->
+      <p class="mappa-stato mappa-stato--attenzione" id="mappa-sfondo" role="status" hidden></p>
+
+      <div class="mappa-angolo">
+        <!-- Legenda in parole: una voce sola, perché su questa mappa c'è un solo tipo di pin. -->
+        <ul class="mappa-legenda" aria-label="Legenda">
+          <li><span class="mappa-simbolo" aria-hidden="true"><svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-map-pin"/></svg></span> <span>Casa della rete — la rete lo sa</span></li>
+          <li><span class="mappa-simbolo mappa-simbolo--scelto" aria-hidden="true"><svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-map-pin"/></svg></span> <span>la Casa scelta — evidenziata sulla mappa e prima nell'elenco</span></li>
+        </ul>
+        <!-- Attribuzione OSM in parole, nel flusso del documento, sempre visibile (policy OSM). -->
+        <p class="mappa-attribuzione" id="mappa-attribuzione">© OpenStreetMap contributors (ODbL)</p>
+      </div>
+
+      <!-- L'elenco equivalente: stesse Case, stesso ordine della mappa (prima la Casa scelta, poi le
+           altre per distanza da essa). È la forma da tastiera e da stampa della mappa. -->
+      <aside class="mappa-cassetto" id="mappa-cassetto" aria-label="Elenco delle Case della rete">
+        <div class="mappa-cassetto-testa">
+          <div>
+            <h2>Le dieci Case della rete</h2>
+            <p>l'elenco è la stessa informazione della mappa, usabile da tastiera</p>
+          </div>
+          <button class="mappa-cassetto-chiudi" type="button" id="mappa-cassetto-chiudi" aria-label="Chiudi l'elenco delle Case">
+            <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-x"/></svg>
+          </button>
+        </div>
+        <div class="mappa-cassetto-corpo">
+          <ol class="mappa-elenco" id="mappa-elenco" aria-label="Le Case della rete, nell'ordine di distanza dalla Casa scelta"></ol>
+        </div>
+      </aside>
+
+      <button class="mappa-riapri" type="button" id="mappa-riapri" hidden>
+        <svg class="icona icona--piccola" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-building"/></svg>
+        Case della rete
+      </button>
+    </main>
   </div>
-  <nav class="azioni" aria-label="Navigazione">
-    <a class="azione" href="/">Home</a>
-    <a class="azione" href="/operatore.html">Area operatore</a>
-  </nav>
-</header>
-
-<main>
-  <div class="mappa" id="mappa" aria-busy="true">
-    <h1 class="titolo">Le dieci Case della rete</h1>
-
-    <!-- Riga di stato: dice che sta leggendo, poi il fatto («10 Case · centrata su San Bao») o
-         l'indisponibilità in parole. È una regione live: cambia da sola. -->
-    <p class="mappa-stato" id="mappa-stato" role="status" aria-live="polite">Lettura in corso…</p>
-
-    <!-- La mappa. I pin Leaflet non sono raggiungibili da tastiera per costruzione: il ruolo lo
-         dichiara il contenitore, che è focalizzabile e rimanda all'elenco, che è l'equivalente. -->
-    <div class="mappa-tela" id="mappa-tela" tabindex="0" role="region"
-         aria-label="Mappa delle dieci Case della rete. L'elenco sotto è la stessa informazione, nello stesso ordine, e si può usare da tastiera."
-         aria-describedby="mappa-attribuzione"></div>
-
-    <!-- Attribuzione OSM in parole, nel flusso del documento, sempre visibile (policy OSM): mai
-         dietro il controllo di Leaflet, che a 24 rem la taglia. -->
-    <p class="mappa-attribuzione" id="mappa-attribuzione">© OpenStreetMap contributors (ODbL)</p>
-
-    <!-- Sfondo non disponibile (tile bloccati, Leaflet assente): la mappa resta leggibile e lo dice. -->
-    <p class="mappa-stato mappa-stato--attenzione" id="mappa-sfondo" role="status" hidden></p>
-
-    <!-- Legenda in parole: una voce sola, perché su questa mappa c'è un solo tipo di pin. -->
-    <ul class="mappa-legenda" aria-label="Legenda">
-      <li><span class="mappa-simbolo mappa-pin--casa" aria-hidden="true">■</span> <span>Casa della rete — la rete lo sa</span></li>
-      <li><span class="mappa-simbolo mappa-pin--casa mappa-pin--scelto-legenda" aria-hidden="true">■</span> <span>la Casa scelta — evidenziata sulla mappa e prima nell'elenco</span></li>
-    </ul>
-
-    <!-- L'elenco equivalente: stesse Case, stesso ordine della mappa (prima la Casa scelta, poi le
-         altre per distanza da essa). È la forma da tastiera e da stampa della mappa. -->
-    <section class="mappa-elenco-pezzo" aria-labelledby="mappa-elenco-titolo">
-      <h2 class="mappa-elenco-titolo" id="mappa-elenco-titolo">Elenco delle Case</h2>
-      <ol class="mappa-elenco" id="mappa-elenco" aria-label="Le Case della rete, nell'ordine di distanza dalla Casa scelta"></ol>
-    </section>
-  </div>
-</main>
-
-<footer class="piede">
-  <p>Trasi · rete delle Case di Quartiere di Brindisi. Questa pagina non conserva dati personali: la Casa scelta resta nel browser.</p>
-</footer>
+</div>
 
 <!-- `casa.js` prima: espone la Casa scelta (stessa regola della Home). Leaflet dal vendor, poi
      la pagina. Nessun CDN. -->
 <script src="casa.js?v=1"></script>
+<script src="assets/dropdown.js?v=1"></script>
+<script src="assets/shell.js?v=1"></script>
 <script src="vendor/leaflet/leaflet.js?v=1"></script>
-<script src="mappa.js?v=1"></script>
+<script src="mappa.js?v=2"></script>
 </body>
 </html>

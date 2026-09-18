@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — area operatore</title>
 <meta name="description" content="Area operatore Trasi: accesso all’assistente in Onyx, registrazione richieste, attrezzoteca, messaggi interni.">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <!-- Area operatore: un solo indirizzo, nessun redirect verso altri domini.
@@ -14,25 +14,63 @@
      questa pagina non vede né conserva credenziali oltre l'invio del modulo. -->
 <a class="salta" href="#banco">Salta al banco di lavoro</a>
 
-<header class="testata">
-  <p class="marchio"><span class="marchio-nome">TRASI</span><span class="marchio-sep" aria-hidden="true">·</span>area operatore —
-    <span id="operatore-casa">accesso in corso…</span>
-  </p>
-  <nav class="azioni" aria-label="Navigazione operatore">
-    <a class="azione" href="/">Home</a>
-    <a class="azione" href="#aiuto">Aiuto</a>
-    <button class="azione" type="button" id="pulsante-esci">Esci</button>
-    <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
-  </nav>
-</header>
+<!-- ============================================================ IL GUSCIO ================
+     Stessa sidebar della Mappa (mappa.html): teal, 240 px, comprimibile con
+     `assets/shell.js`. La Casa in sessione e «Esci» stanno nel lato della sidebar,
+     dove nel prototipo sta l'utente. -->
+<div class="guscio">
+  <aside class="sidebar" aria-label="Navigazione">
+    <div class="sidebar-testata">
+      <p class="marchio">
+        <svg class="marchio-logo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi.svg"/></svg>
+        <span class="solo-lettore">Trasi</span>
+      </p>
+      <svg class="sidebar-logo-solo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi-mark.svg"/></svg>
+      <button class="sidebar-comprimi" type="button" data-sidebar-comprimi aria-expanded="true" aria-label="Comprimi il menu">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-panel-left"/></svg>
+      </button>
+    </div>
+
+    <nav class="nav" aria-label="Destinazioni">
+      <a class="nav-voce" href="/">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-home"/></svg>
+        <span>Home</span>
+      </a>
+      <a class="nav-voce" href="/mappa.html">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-map"/></svg>
+        <span>Mappa</span>
+      </a>
+      <a class="nav-voce" href="/operatore.html" aria-current="page">
+        <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-wrench"/></svg>
+        <span>Area operatore</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-lato">
+      <p class="casa-nome" id="operatore-casa">accesso in corso…</p>
+      <div class="sidebar-piede">
+        <button class="azione azione--contorno" type="button" id="pulsante-esci">
+          <svg class="icona icona--piccola" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-log-out"/></svg>
+          <span>Esci</span>
+        </button>
+        <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
+        <p class="privacy">Non conserva dati personali.</p>
+      </div>
+    </div>
+  </aside>
+
+  <div class="area">
 
 <!-- ============================ accesso ================================== -->
 <main id="accesso" hidden>
-  <h1 class="titolo">Accesso operatori</h1>
+  <!-- L'accesso come scheda del prototipo (vista Login): centrata, bianca, bordo netto,
+       ombra morbida. Il `<main>` resta `#accesso` per `operatore.js`. -->
+  <div class="scheda-accesso">
+  <h1 class="titolo"><svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-key"/></svg>Accesso operatori</h1>
   <form class="modulo" id="modulo-accesso" novalidate>
     <p>
       <label class="etichetta" for="accesso-casa">Casa di Quartiere</label>
-      <select id="accesso-casa" required>
+      <select id="accesso-casa" data-tendina required>
         <option value="san-bao">San Bao</option>
         <option value="bozzano">Centro di Aggregazione Bozzano</option>
         <option value="buscicchio">Parco Buscicchio</option>
@@ -52,6 +90,7 @@
     <p><button class="riquadro-azione" type="submit">Entra</button></p>
     <p class="messaggio-errore" id="accesso-errore" role="alert" hidden></p>
   </form>
+  </div>
 </main>
 
 <!-- ========================== banco di lavoro ============================ -->
@@ -78,7 +117,7 @@
     <form class="modulo" id="modulo-richiesta">
       <p>
         <label class="etichetta" for="richiesta-categoria">Categoria</label>
-        <select id="richiesta-categoria" required>
+        <select id="richiesta-categoria" data-tendina required>
           <option value="orientamento">Orientamento</option>
           <option value="servizi_sociali">Servizi sociali</option>
           <option value="fiscale_isee">Fiscale / ISEE</option>
@@ -93,7 +132,7 @@
       </p>
       <p>
         <label class="etichetta" for="richiesta-esito">Esito</label>
-        <select id="richiesta-esito" required>
+        <select id="richiesta-esito" data-tendina required>
           <option value="risolta">Risolta</option>
           <option value="inviata_altrove">Inviata altrove</option>
           <option value="non_trovata">Non trovata</option>
@@ -164,7 +203,7 @@
     <form class="modulo" id="modulo-messaggio">
       <p>
         <label class="etichetta" for="messaggio-destinatario">Destinatario</label>
-        <select id="messaggio-destinatario">
+        <select id="messaggio-destinatario" data-tendina>
           <option value="">Comune (monitoraggio)</option>
           <option value="san-bao">San Bao</option>
           <option value="bozzano">Centro di Aggregazione Bozzano</option>
@@ -205,7 +244,11 @@
 <footer class="piede">
   <p>Trasi · area operatore. La piattaforma non conserva dati personali dei cittadini.</p>
 </footer>
+  </div>
+</div>
 
+<script src="assets/dropdown.js?v=1"></script>
+<script src="assets/shell.js?v=1"></script>
 <script src="operatore.js?v=4"></script>
 </body>
 </html>

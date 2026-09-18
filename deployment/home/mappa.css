@@ -1,91 +1,258 @@
 /* mappa.css — la pagina «Mappa delle Case» (mappa.html). Prefisso `mappa-`, token da style.css.
  *
- * Preso dalla mappa dell'Osservatorio (ramo old-next) ciò che riguarda tela, pin, attribuzione,
- * legenda ed elenco; le variabili `var(--…)` sono tradotte sui token della Home (`--s-*`, colori,
- * `--raggio`, `--font-mono`). Nessun colore inventato, niente rosso: gli stati sono in parole e in un
- * filetto d'attenzione (`--attenzione-*`), come la riga «Oggi». Il restyling arriverà a parte.
+ * La struttura segue il prototipo (`design/design.html`, vista Mappa): mappa a tutta altezza
+ * nell'area, e l'elenco in un cassetto flottante in alto a destra — largo 1,5 volte la sidebar
+ * espansa (360 px), aperto al caricamento, con il bottone per riaprirlo quando si chiude.
+ *
+ * Due regole conservate dal progetto:
+ *   - l'attribuzione OSM sta nel documento, in parole, sempre visibile (policy OSM);
+ *   - i pin sono aria-hidden e la tastiera va all'elenco, che è l'equivalente (WCAG.md §mappa).
+ *
+ * I tile OSM sono grigi neutri: un filtro CSS li avvicina alla palette della rete (teal)
+ * senza toccare le immagini né chiedere nulla a nessuno. È il filtro del prototipo.
  */
 
-.mappa { display: flex; flex-direction: column; gap: var(--s-4); }
+.mappa-piena { position: relative; height: 100vh; overflow: hidden; }
 
-/* ============================================================ stato in parole */
-.mappa-stato { margin: 0; padding: var(--s-3) var(--s-4); background: var(--superficie); border: 2px solid var(--bordo-tenue); border-left: 4px solid var(--mare); border-radius: var(--raggio); font-size: 1.0625rem; line-height: 1.5; }
-.mappa-stato--attenzione { border-left-color: var(--focus); background: var(--attenzione-sfondo); color: var(--attenzione-testo); }
-.mappa-stato[hidden] { display: none; }
+/* ============================================================ la tela */
 
-/* ============================================================ la mappa */
 .mappa-tela {
-  height: 28rem;
-  min-height: 28rem;
-  border: 2px solid var(--bordo-tenue);
-  border-radius: var(--raggio);
-  background: var(--superficie-incassata);
-  /* Leaflet misura l'altezza del contenitore per calcolare i tile: senza `position` esplicito e
-     altezza definita la mappa si disegna 0×0. */
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 0;
+  /* Leaflet misura l'altezza del contenitore: con `position` e `inset` la tela è misurabile
+     e i pannelli interni di Leaflet restano dentro questo stacking context, sotto il cassetto. */
+  background: var(--superficie-incassata);
 }
 .mappa-tela[hidden] { display: none; }
-.mappa-tela:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-@media (max-width: 40rem) { .mappa-tela { height: 20rem; min-height: 20rem; } }
+.mappa-tela:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 
-/* Attribuzione OSM in parole, nel flusso del documento, sempre visibile (policy OSM). */
-.mappa-attribuzione { margin: 0; font-size: .9375rem; color: var(--testo-tenue); }
-.mappa-attribuzione[hidden] { display: none; }
-
-/* ============================================================ legenda (in parole) */
-.mappa-legenda { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; font-size: .9375rem; color: var(--testo-tenue); }
-.mappa-legenda li { display: flex; align-items: baseline; gap: var(--s-2); }
-.mappa-simbolo { flex: none; width: 1.5rem; text-align: center; font-size: 1.0625rem; }
+.mappa-tela .leaflet-tile-pane {
+  filter: sepia(.45) hue-rotate(158deg) saturate(2.6) brightness(1.04) contrast(.96);
+}
+.mappa-tela .leaflet-control-attribution { font-size: 10.5px; }
+.mappa-tela .leaflet-container { font: inherit; }
 
 /* ============================================================ i pin
- * Forma e parola, mai il solo colore: il quadrato pieno è una Casa della rete. Testo, non immagine.
- * I pin sono `aria-hidden`: l'elenco è l'equivalente accessibile. */
-.mappa-pin { display: flex; align-items: center; justify-content: center; font-size: 1.375rem; line-height: 1; background: transparent; border: 0; }
-.mappa-pin--casa { color: var(--testata); }
-/* La Casa scelta: anello scuro come il focus, più grande — e nell'elenco porta la parola «la Casa scelta». */
-.mappa-pin--scelto { outline: 3px solid var(--focus); outline-offset: 2px; box-shadow: 0 0 0 6px var(--focus-contorno); border-radius: 999px; z-index: 400 !important; font-size: 1.625rem; }
-.mappa-pin--scelto-legenda { outline: 2px solid var(--focus); outline-offset: 1px; box-shadow: 0 0 0 3px var(--focus-contorno); border-radius: 999px; }
-/* Le altre si attenuano quando una è scelta: la mappa resta leggibile, il pin scelto emerge. */
-.mappa-tela--scelta .mappa-pin:not(.mappa-pin--scelto) { opacity: 0.55; }
+ * Cerchio pieno teal con il segno del luogo; la Casa scelta passa all'arancio e cresce.
+ * La forma dice «Casa», la parola sta nell'elenco (`aria-current`, «la Casa scelta»). */
 
-/* ============================================================ l'elenco equivalente */
-.mappa-elenco-titolo { margin: var(--s-3) 0 var(--s-3); font-size: 1.25rem; }
-.mappa-elenco { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
-.mappa-voce {
-  display: flex; flex-direction: column; gap: var(--s-1);
+.mappa-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--primario);
+  color: #fff;
+  border: 2.5px solid #fff;
+  box-shadow: var(--ombra-sollevata);
+  transition: transform 150ms ease-out, background-color 150ms ease-out;
+}
+.mappa-pin .icona { width: 17px; height: 17px; color: #fff; }
+.mappa-pin:hover { transform: scale(1.1); }
+
+.mappa-pin--scelto { background: var(--secondario); transform: scale(1.2); z-index: 400 !important; }
+.mappa-pin--scelto:hover { transform: scale(1.2); }
+
+/* Le altre si attenuano quando una è scelta: il pin scelto emerge, la mappa resta leggibile. */
+.mappa-tela--scelta .mappa-pin:not(.mappa-pin--scelto) { opacity: .55; }
+
+/* ============================================================ la riga di stato e l'attribuzione */
+
+/* Un'unica scheda bianca in basso a sinistra: lo stato, la legenda in parole e
+   l'attribuzione. Resta nel documento (policy OSM) e resta leggibile se i tile non arrivano. */
+.mappa-angolo {
+  position: absolute;
+  left: var(--s-4);
+  bottom: var(--s-4);
+  z-index: 25;
+  max-width: min(26rem, calc(100% - 2 * var(--s-4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
   padding: var(--s-3) var(--s-4);
   background: var(--superficie);
-  border: 1px solid var(--bordo-tenue);
-  border-left: 4px solid var(--bordo-tenue);
-  border-radius: var(--raggio-piccolo);
+  border: 1.5px solid var(--bordo);
+  border-radius: var(--raggio);
+  box-shadow: var(--ombra-scheda);
 }
-/* La voce scelta: filetto blu mare + la parola «la Casa scelta» + `aria-current`, mai il solo colore. */
-.mappa-voce--scelta { border-left-color: var(--mare); background: var(--azione-sfondo-hover); }
-.mappa-voce-testa { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
-.mappa-voce-segno { flex: none; width: 1.25rem; text-align: center; color: var(--testata); }
-.mappa-voce-nome { font-weight: 700; font-size: 1.0625rem; }
-.mappa-voce-etichetta { padding: 0 var(--s-2); font-size: .8125rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--carta); background: var(--testata); border-radius: var(--raggio-piccolo); }
-.mappa-voce-distanza, .mappa-voce-riga { font-size: .9375rem; color: var(--testo-tenue); }
-.mappa-voce-riga { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); }
-.mappa-voce-nota { padding: 0 var(--s-1); background: var(--attenzione-sfondo); color: var(--attenzione-testo); border-radius: var(--raggio-piccolo); }
+.mappa-stato { margin: 0; font-size: .9375rem; line-height: 1.5; }
+.mappa-stato--attenzione { color: var(--attenzione-testo); font-weight: 600; }
+.mappa-stato[hidden] { display: none; }
+
+.mappa-attribuzione { margin: 0; font-size: .8125rem; color: var(--testo-tenue); }
+.mappa-attribuzione[hidden] { display: none; }
+
+/* Legenda in parole: gli stessi segni della mappa, mini. */
+.mappa-legenda { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; font-size: .8125rem; color: var(--testo-tenue); }
+.mappa-legenda li { display: flex; align-items: center; gap: var(--s-2); }
+.mappa-simbolo {
+  flex: none;
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  background: var(--primario);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--bordo);
+}
+.mappa-simbolo .icona { width: 10px; height: 10px; color: #fff; }
+.mappa-simbolo--scelto { background: var(--secondario); }
+.mappa-simbolo[hidden] { display: none; }
+
+/* ============================================================ il cassetto delle Case
+ * Stesso posto e stessa misura per i due pannelli del prototipo: qui c'è solo l'elenco,
+ * perché la scheda del luogo è la voce stessa (il luogo è la Casa). */
+
+.mappa-cassetto {
+  position: absolute;
+  top: var(--s-4);
+  right: var(--s-4);
+  bottom: var(--s-4);
+  width: 22.5rem;                       /* 360 px = 1,5 × sidebar espansa */
+  max-width: calc(100% - 2 * var(--s-4));
+  display: flex;
+  flex-direction: column;
+  background: var(--superficie);
+  border: 1.5px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+  box-shadow: var(--ombra-livello);
+  overflow: hidden;
+  z-index: 25;
+}
+.mappa-cassetto[hidden] { display: none; }
+
+.mappa-cassetto-testa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
+  border-bottom: 1.5px solid var(--bordo);
+  flex: none;
+}
+.mappa-cassetto-testa h2 { margin: 0; font-size: 1.125rem; font-weight: 700; letter-spacing: -.01em; }
+.mappa-cassetto-testa p { margin: 0; font-size: .8125rem; color: var(--testo-tenue); }
+
+.mappa-cassetto-chiudi {
+  width: 32px; height: 32px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--superficie-incassata);
+  color: var(--testo);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: var(--transizione);
+}
+.mappa-cassetto-chiudi:hover { background: var(--evidenzia); }
+
+.mappa-cassetto-corpo { flex: 1; overflow-y: auto; padding: var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); }
+
+.mappa-riapri {
+  position: absolute;
+  right: var(--s-4);
+  bottom: var(--s-4);
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--bersaglio-min);
+  padding: 0 var(--s-5);
+  font: inherit;
+  font-size: .9375rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--primario);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: var(--ombra-livello);
+  cursor: pointer;
+  transition: var(--transizione);
+}
+.mappa-riapri:hover { background: var(--primario-hover); }
+.mappa-riapri[hidden] { display: none; }
+
+/* ============================================================ l'elenco equivalente */
+
+.mappa-elenco { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
+
+.mappa-voce {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  width: 100%;
+  padding: var(--s-3);
+  text-align: left;
+  background: none;
+  border: 1.5px solid transparent;
+  border-radius: var(--raggio);
+  transition: var(--transizione);
+}
+.mappa-voce:hover { background: var(--superficie-incassata); }
+.mappa-voce--scelta { background: var(--evidenzia); border-color: var(--bordo); }
+.mappa-voce--scelta .mappa-voce-nome { color: var(--primario); }
+
+.mappa-voce-testa { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.mappa-voce-segno {
+  flex: none;
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  background: var(--primario);
+  border: 2.5px solid var(--superficie);
+  box-shadow: var(--ombra-scheda);
+}
+.mappa-voce--scelta .mappa-voce-segno { background: var(--secondario); }
+.mappa-voce-segno .icona { width: 17px; height: 17px; color: #fff; }
+.mappa-voce-nome { font-weight: 600; font-size: .9375rem; }
+.mappa-voce-etichetta { padding: 0 var(--s-2); font-size: .8125rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--carta); background: var(--primario); border-radius: var(--raggio-pillola); }
+.mappa-voce-distanza { font-size: .8125rem; color: var(--testo-tenue); }
+.mappa-voce-riga { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); font-size: .8125rem; color: var(--testo-tenue); }
+.mappa-voce-nota { padding: 0 var(--s-2); background: var(--attenzione-sfondo); color: var(--attenzione-testo); border-radius: var(--raggio-pillola); font-size: .75rem; }
 /* Il badge di provenienza (V3): stringa da citare com'è, in monospazio. */
-.mappa-voce-fonte { margin: 0; font-family: var(--font-mono); font-size: .875rem; color: var(--kb-testo); overflow-wrap: anywhere; }
+.mappa-voce-fonte { margin: 0; font-family: var(--font-mono); font-size: .8125rem; color: var(--kb-testo); overflow-wrap: anywhere; }
+
 .mappa-voce-bottone {
   align-self: flex-start;
   min-height: var(--bersaglio-min);
-  padding: var(--s-2) var(--s-4);
-  font: inherit; font-size: .9375rem; font-weight: 600;
-  color: var(--azione);
+  padding: var(--s-1) var(--s-4);
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 600;
+  color: var(--primario);
   background: var(--superficie);
-  border: 2px solid var(--azione);
-  border-radius: var(--raggio);
+  border: 1.5px solid var(--bordo-forte);
+  border-radius: 999px;
   cursor: pointer;
+  transition: var(--transizione);
 }
-.mappa-voce-bottone:hover { background: var(--azione-sfondo-hover); }
-.mappa-voce-bottone:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.mappa-voce-bottone:hover { background: var(--superficie-incassata); }
+
+/* ============================================================ sotto 48 rem */
+
+@media (max-width: 48rem) {
+  .mappa-piena { height: calc(100vh - 4.5rem); }
+  /* Il cassetto diventa un foglio in basso: la mappa resta in vista sopra. */
+  .mappa-cassetto {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 60vh;
+    border-radius: var(--raggio-grande) var(--raggio-grande) 0 0;
+  }
+  .mappa-angolo { bottom: auto; top: var(--s-3); }
+  .mappa-riapri { right: var(--s-3); bottom: var(--s-3); }
+}
 
 /* ============================================================ stampa: si stampa l'elenco, non i tile */
+
 @media print {
-  .mappa-tela, .mappa-attribuzione, .mappa-voce-bottone { display: none; }
+  .mappa-tela, .mappa-angolo, .mappa-riapri, .sidebar, .mappa-cassetto-testa .mappa-cassetto-chiudi { display: none; }
+  .mappa-piena { height: auto; overflow: visible; }
+  .mappa-cassetto { position: static; width: auto; max-width: none; border: 0; box-shadow: none; }
+  .mappa-voce { border-color: currentColor; }
 }
