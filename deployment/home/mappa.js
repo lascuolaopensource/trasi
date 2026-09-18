@@ -89,11 +89,13 @@
   /* ------------------------------------------------------------------ i pin */
 
   function icona(scelta) {
+    /* Il pin del prototipo: cerchio pieno con il segno del luogo. Resta testo nel DOM
+       (divIcon), aria-hidden: l'elenco è l'equivalente accessibile. */
     return L.divIcon({
       className: "mappa-pin mappa-pin--casa" + (scelta ? " mappa-pin--scelto" : ""),
-      html: '<span aria-hidden="true">■</span>',
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
+      html: '<svg class="icona" aria-hidden="true"><use href="assets/icone.svg#icon-map-pin"/></svg>',
+      iconSize: [34, 34],
+      iconAnchor: [17, 17]
     });
   }
 
@@ -170,6 +172,18 @@
     return el;
   }
 
+  /* Il segno del pin, in elenco come sulla mappa: stesso cerchio, stesso simbolo. */
+  function segno() {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "icona");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    var uso = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    uso.setAttribute("href", "assets/icone.svg#icon-map-pin");
+    svg.appendChild(uso);
+    return svg;
+  }
+
   function disegnaElenco() {
     if (!elenco) return;
     while (elenco.firstChild) elenco.removeChild(elenco.firstChild);
@@ -181,7 +195,10 @@
       if (eScelta) voce.setAttribute("aria-current", "true");
 
       var testa = nodo("div", "mappa-voce-testa");
-      testa.appendChild(nodo("span", "mappa-voce-segno", "■")).setAttribute("aria-hidden", "true");
+      var marca = nodo("span", "mappa-voce-segno");
+      marca.setAttribute("aria-hidden", "true");
+      marca.appendChild(segno());
+      testa.appendChild(marca);
       testa.appendChild(nodo("span", "mappa-voce-nome", casa.nome));
       if (eScelta) testa.appendChild(nodo("span", "mappa-voce-etichetta", "la Casa scelta"));
       else if (scelta) testa.appendChild(nodo("span", "mappa-voce-distanza", Math.round(distanza(scelta, casa) / 100) / 10 + " km dalla Casa scelta"));
@@ -304,6 +321,9 @@
      ignorato in silenzio. La scelta si ricorda con la stessa chiave della Home. */
   var iniziale = Casa.daUrl() || Casa.ricorda() || Casa.casaScelta();
   if (selettore) selettore.value = iniziale;
+  /* dropdown.js ha già montato il grilletto sopra il select: scritto il valore da qui,
+     nessun evento parte — si riallinea l'etichetta a mano. */
+  if (window.TrasiTendina) window.TrasiTendina.aggiorna(selettore);
   Casa.memorizza(iniziale);
   leggi(iniziale);
 
@@ -328,6 +348,26 @@
     var slug = Casa.casaValida(evento.newValue);
     if (!slug || !selettore || slug === selettore.value) return;
     selettore.value = slug;
+    if (window.TrasiTendina) window.TrasiTendina.aggiorna(selettore);
     if (stato.perSlug[slug]) seleziona(slug, true); else leggi(slug);
   });
+
+  /* ------------------------------------------------------------- il cassetto
+     Aperto al caricamento; chiuso, resta il bottone per riaprirlo (prototipo, vista Mappa). */
+  var cassetto = document.getElementById("mappa-cassetto");
+  var chiudiCassetto = document.getElementById("mappa-cassetto-chiudi");
+  var riapriCassetto = document.getElementById("mappa-riapri");
+  if (cassetto && chiudiCassetto && riapriCassetto) {
+    chiudiCassetto.addEventListener("click", function () {
+      cassetto.hidden = true;
+      riapriCassetto.hidden = false;
+      riapriCassetto.focus();
+    });
+    riapriCassetto.addEventListener("click", function () {
+      riapriCassetto.hidden = true;
+      cassetto.hidden = false;
+      var prima = cassetto.querySelector("button, a");
+      if (prima) prima.focus();
+    });
+  }
 })();

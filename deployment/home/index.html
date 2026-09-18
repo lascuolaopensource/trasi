@@ -16,17 +16,20 @@
 
 <header class="testata">
   <p class="marchio">
-    <img class="marchio-logo" src="assets/logo-case-di-quartiere.png" alt="" width="203" height="88">
+    <!-- Logo vettoriale (assets/logo-trasi.svg): riempimento `currentColor`, quindi
+         la testata lo tinge di teal senza una seconda immagine. -->
+    <svg class="marchio-logo" aria-hidden="true" focusable="false"><use href="assets/logo-trasi.svg"/></svg>
+    <span class="solo-lettore">Trasi</span>
     <span class="marchio-testo">
-      <span class="marchio-nome">TRASI</span>
       <span class="marchio-sotto">Rete delle Case di Quartiere di Brindisi</span>
     </span>
   </p>
   <div class="casa">
     <label class="casa-etichetta" for="selettore-casa">Casa di riferimento</label>
     <!-- L'elenco delle Case sta solo qui. L'opzione di Tuturano porta la nota
-         «dati provvisori» nel testo: il JS ne ricava il nome per le frasi. -->
-    <select id="selettore-casa">
+         «dati provvisori» nel testo: il JS ne ricava il nome per le frasi.
+         `data-tendina`: `assets/dropdown.js` lo veste da dropdown del prototipo. -->
+    <select id="selettore-casa" data-tendina>
       <option value="san-bao" selected>San Bao</option>
       <option value="bozzano">Centro di Aggregazione Bozzano</option>
       <option value="buscicchio">Parco Buscicchio</option>
@@ -41,13 +44,13 @@
     <p class="casa-nota" id="casa-nota" hidden></p>
   </div>
   <nav class="azioni" aria-label="Aiuto e uscita">
-    <a class="azione" href="/operatore.html">Area operatore</a>
+    <a class="azione" href="/operatore.html"><svg class="icona icona--piccola" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-wrench"/></svg>Area operatore</a>
     <a class="azione" href="#aiuto">Aiuto</a>
     <!-- Esci chiude la sessione **dello shim**, non quella di Onyx: prima era un
          invio del browser a un altro dominio. Il logout ora è
          `POST /api/shim/logout` (cookie HttpOnly revocato sul database),
          gestito in `home.js`. -->
-    <button class="azione" type="button" id="pulsante-esci">Esci</button>
+    <button class="azione azione--contorno" type="button" id="pulsante-esci"><svg class="icona icona--piccola" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-log-out"/></svg>Esci</button>
     <p class="esito-uscita" id="esito-uscita" hidden role="status">Sessione chiusa.</p>
   </nav>
 </header>
@@ -72,27 +75,6 @@
        da solo — accanto c'è sempre la parola. -->
   <section class="fascia" aria-label="Stato di oggi">
     <p class="oggi" id="oggi" role="status" aria-live="polite" aria-busy="true">Lettura dei dati di oggi in corso…</p>
-    <!-- Il calendario del mese sotto il conteggio: tutti gli eventi del mese corrente della
-         Casa scelta, una riga per evento, dalla stessa memoria (`eventi_mese`). Non è una
-         regione live (cambia insieme alla riga, che è già annunciata) e sparisce se la
-         lettura fallisce. Le righe di oggi portano la parola «oggi» e `aria-current="date"`:
-         mai solo il colore. Un mese senza eventi lo dice in parole (`#oggi-eventi-vuoto`),
-         perché il conteggio della riga sopra parla di oggi, non del mese. -->
-    <div class="oggi-eventi" id="oggi-eventi" hidden>
-      <table class="oggi-tabella">
-        <caption id="oggi-eventi-titolo">Eventi del mese</caption>
-        <thead>
-          <tr>
-            <th scope="col">Giorno</th>
-            <th scope="col">Ora</th>
-            <th scope="col">Evento</th>
-            <th scope="col">Dove</th>
-          </tr>
-        </thead>
-        <tbody id="oggi-eventi-righe"></tbody>
-      </table>
-      <p class="oggi-eventi-vuoto" id="oggi-eventi-vuoto" hidden></p>
-    </div>
 
     <div class="coda" id="coda" hidden>
       <p class="coda-testo" id="coda-testo"></p>
@@ -103,6 +85,19 @@
       <span class="nota">il registro non è ancora attivo: per ora si approvano dalla chat</span>
     </div>
   </section>
+    <!-- Il calendario del mese: tutti gli eventi del mese corrente della Casa scelta, una
+         card per evento (come nel prototipo: data grande, titolo, orario, luogo, freccia),
+         dalla stessa memoria (`eventi_mese`). Non è una regione live (cambia insieme alla
+         riga, che è già annunciata) e sparisce se la lettura fallisce. Le card di oggi
+         portano la parola «oggi» e `aria-current="date"`: mai solo il colore. Un mese senza
+         eventi lo dice in parole (`#oggi-eventi-vuoto`), perché il conteggio della riga
+         sopra parla di oggi, non del mese. La card apre il cassetto dell'evento, che sta
+         una volta sola in fondo al documento (`#cassetto-evento`). -->
+    <section class="eventi-pezzo" id="oggi-eventi" hidden aria-labelledby="oggi-eventi-titolo">
+      <h2 class="eventi-titolo" id="oggi-eventi-titolo">Eventi del mese</h2>
+      <div class="eventi-elenco" id="oggi-eventi-righe"></div>
+      <p class="eventi-vuoto" id="oggi-eventi-vuoto" hidden></p>
+    </section>
 
   <div id="destinazioni">
     <h2 class="titolo">La porta della rete delle Case di Quartiere</h2>
@@ -114,7 +109,7 @@
          (`GET /op/config`) a chi ha una sessione operatore — vedi `home.js`. Senza JS o senza
          sessione il riquadro porta all'area operatore, dove si entra e da dove «Chiedi» apre Onyx. -->
     <a class="destinazione principale" id="riquadro-chiedi" data-modello="/operatore.html?casa={casa}" href="/operatore.html?casa=san-bao">
-      <span class="destinazione-titolo principale-titolo">CHIEDI</span>
+      <span class="destinazione-titolo principale-titolo"><svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-message-circle"/></svg>CHIEDI</span>
       <span class="destinazione-testo principale-testo">L’assistente della rete, in Onyx: risponde alla persona che hai davanti — dove andare, con quali orari — e dichiara da dove viene ogni informazione.</span>
       <span class="nota" id="chiedi-nota">entra nell'area operatore con San Bao: da lì «Chiedi» apre Onyx</span>
     </a>
@@ -123,12 +118,12 @@
       <!-- MAPPA apre la pagina statica delle dieci Case (`mappa.html`), già centrata sulla Casa
            scelta: `home.js` riscrive l'`href` da `data-modello` al cambio Casa. -->
       <a class="destinazione" id="riquadro-mappa" data-modello="/mappa.html?casa={casa}" href="/mappa.html?casa=san-bao">
-        <span class="destinazione-titolo">MAPPA</span>
+        <span class="destinazione-titolo"><svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-map"/></svg>MAPPA</span>
         <span class="destinazione-testo">Dove sono le dieci Case della rete, da guardare insieme alla persona.</span>
       </a>
       <a class="destinazione" id="riquadro-osservatorio" data-modello="/metabase/dashboard/3?casa={casa}" href="/metabase/dashboard/3?casa=san-bao">
         <span class="destinazione-intestazione">
-          <span class="destinazione-titolo">OSSERVATORIO</span>
+          <span class="destinazione-titolo"><svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-bar-chart"/></svg>OSSERVATORIO</span>
           <span class="destinazione-contatore" id="osservatorio-contatore" hidden></span>
         </span>
         <span class="destinazione-testo">I numeri della Casa e le proposte che aspettano una decisione.</span>
@@ -139,7 +134,7 @@
          in parole. Un servizio non attivo che occupa un quarto della pagina insegna
          che il sistema promette cose che non fa. -->
     <div class="destinazione spenta" id="riquadro-registra">
-      <span class="destinazione-titolo">REGISTRA / AGGIORNA</span>
+      <span class="destinazione-titolo"><svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-clipboard-list"/></svg>REGISTRA / AGGIORNA</span>
       <span class="destinazione-testo">Schede, eventi e opportunità della Casa.</span>
       <span class="nota">Fino all’attivazione, le correzioni passano dalle proposte in chat.</span>
       <span class="etichetta-attenzione">Servizio non ancora attivo</span>
@@ -182,7 +177,32 @@
   </footer>
 </main>
 
+<!-- Il cassetto dell'evento: UNA istanza nel documento, fuori dalle sezioni che mostrano
+     eventi (regola del prototipo). Lo riempie `home.js` con i dati della card premuta. -->
+<div class="velo" id="velo" aria-hidden="true"></div>
+<aside class="cassetto" id="cassetto-evento" role="dialog" aria-modal="true"
+       aria-labelledby="cassetto-evento-titolo" aria-hidden="true">
+  <button class="cassetto-chiudi" type="button" id="cassetto-evento-chiudi" aria-label="Chiudi i dettagli dell'evento">
+    <svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-x"/></svg>
+  </button>
+  <div class="cassetto-corpo">
+    <span class="badge badge--accento" id="cassetto-evento-oggi" hidden>oggi</span>
+    <h2 class="cassetto-titolo" id="cassetto-evento-titolo"></h2>
+    <div class="cassetto-meta">
+      <p class="cassetto-meta-riga">
+        <svg class="icona icona--piccola" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-calendar"/></svg>
+        <span id="cassetto-evento-quando"></span>
+      </p>
+      <p class="cassetto-meta-riga">
+        <svg class="icona icona--piccola" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-map-pin"/></svg>
+        <span id="cassetto-evento-dove"></span>
+      </p>
+    </div>
+  </div>
+</aside>
+
 <script src="casa.js?v=1"></script>
-<script src="home.js?v=4"></script>
+<script src="assets/dropdown.js?v=1"></script>
+<script src="home.js?v=5"></script>
 </body>
 </html>
