@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — ingresso</title>
 <meta name="description" content="Trasi: la porta della rete delle Case di Quartiere di Brindisi.">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <!-- Risorse locali, zero CDN. Le destinazioni sono URL protocol-relative (`//host`)
@@ -53,6 +53,19 @@
 </header>
 
 <main>
+  <!-- ====================================================== LA COPERTINA DEL SERVIZIO ======
+       La Home è la copertina di Trasi: prima di tutto dice che cos'è, in grande e con aria.
+       Tipografia sola (Commissioner locale, misura di lettura stretta, interlinea ampia): niente
+       immagini, niente riquadri. Il testo è quello del progetto, verbatim; terza persona, nessun
+       imperativo (design/readme.md, «Content fundamentals»). -->
+  <section class="copertina" aria-labelledby="copertina-titolo">
+    <p class="copertina-occhiello">Trasi</p>
+    <h1 class="copertina-titolo" id="copertina-titolo">Il portierato pubblico di Brindisi</h1>
+    <p class="copertina-testo">Trasi è il portierato pubblico di Brindisi, aperto a tutte le persone che abitano e attraversano la città. Fornisce informazioni su eventi, attività e servizi presenti sul territorio.</p>
+    <p class="copertina-testo">Orienta e facilita l’accesso a servizi offerti dalla Rete delle Case di Quartiere, della PA e del Terzo Settore. Sarà erogato presso tutte le Case di Quartiere e, in un secondo momento, disponibile anche in altri luoghi di accesso a servizi di pubblico interesse.</p>
+    <p class="copertina-testo copertina-testo--chiusa">Trasi è un servizio gestito dagli operatori e dalle operatrici di quartiere, supportati/e nel lavoro da uno strumento digitale.</p>
+  </section>
+
   <!-- Le due sole cose che cambiano da sole stanno in testa: si leggono prima di
        scegliere dove andare, non dopo. Il filetto di 4 px a sinistra è il segno di
        stato del sistema: blu mare per «Oggi», terracotta per la coda. Mai il colore
@@ -92,7 +105,7 @@
   </section>
 
   <div id="destinazioni">
-    <h1 class="titolo">La porta della rete delle Case di Quartiere</h1>
+    <h2 class="titolo">La porta della rete delle Case di Quartiere</h2>
 
     <!-- La gerarchia dice quanto una cosa si usa: CHIEDI decine di volte al giorno,
          MAPPA e OSSERVATORIO qualche volta, REGISTRA quando capita. Quattro riquadri

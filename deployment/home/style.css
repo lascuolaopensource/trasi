@@ -155,6 +155,43 @@ border-radius: var(--raggio);
 
 main { max-width: var(--misura-lettura); margin: 0 auto; padding: 24px; }
 
+/* ===== La copertina =====
+   Sola tipografia: Commissioner (variabile, locale), misura di lettura stretta, interlinea ampia,
+   molta aria sopra e sotto. Il titolo scala con la finestra ma resta fra 2 e 3,5 rem; il testo di
+   presentazione fra 1,125 e 1,375 rem. Nessun riquadro: la copertina è il respiro prima delle
+   cose che cambiano (la riga «Oggi») e delle destinazioni. */
+.copertina {
+  max-width: var(--misura-testo);
+  margin: clamp(var(--s-8), 6vw, 4.5rem) auto clamp(var(--s-8), 7vw, 5.5rem);
+  padding: 0 var(--s-2);
+}
+.copertina-occhiello {
+  margin: 0 0 var(--s-3);
+  font-size: .9375rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--testo-tenue);
+}
+.copertina-titolo {
+  margin: 0 0 clamp(var(--s-6), 3vw, var(--s-8));
+  font-size: clamp(2rem, 4.2vw, 3.5rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -.015em;
+  text-wrap: balance;
+  color: var(--testata);
+}
+.copertina-testo {
+  margin: 0 0 var(--s-5);
+  font-size: clamp(1.125rem, 1.5vw, 1.375rem);
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--testo);
+  text-wrap: pretty;
+}
+.copertina-testo--chiusa { margin-bottom: 0; color: var(--testo-tenue); }
+
 /* Le due sole che cambiano da sole, in testa: si leggono prima di scegliere. */
 .fascia { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-6); }
 
