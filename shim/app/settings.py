@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     # che dichiara il ruolo del chiamante è informazione che nessuno deve poter leggere per caso.
     shim_debug: str = "0"
 
+    # Dominio pubblico di Onyx (`ONYX_DOMAIN`, lo stesso del Caddyfile): serve a `GET /op/config` per comporre
+    # il collegamento «Chiedi» della Home verso l'assistente. Vuoto per default: senza, l'endpoint risponde 503
+    # dichiarato e il resto dell'area operatore continua a funzionare.
+    onyx_domain: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

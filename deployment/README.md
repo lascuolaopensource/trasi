@@ -105,6 +105,9 @@ Invariato, come da spec:
 - healthcheck `GET /healthz` → 200
 - env: `DATABASE_URL`, `TRASI_SHIM_KEY`, `OVERPASS_URL`, `OVERPASS_TIMEOUT_S=5`, `SHIM_TIMEOUT_S=3`, `TZ=Europe/Rome`
 - `OVERPASS_URL_2` è **additivo** (concordato con il worker shim: la sua `Settings` ignora le variabili extra)
+- `ONYX_DOMAIN` è **additivo** e lo legge anche lo shim: `GET /op/config` (area operatore, fuori dal contratto) lo
+  restituisce alla Home come `onyx_url` (`https://<ONYX_DOMAIN>/chat?agentId=<ONYX_PERSONA_ID|2>`), così il tasto
+  «Chiedi» apre l'assistente in Onyx. Vuoto → 503 «Onyx non configurato» solo su quell'endpoint
 
 Il compose **valida anche con `../shim` assente** (verificato: `Dockerfile` mancante non blocca `docker compose config`).
 
