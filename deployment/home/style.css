@@ -26,8 +26,11 @@
   --su-secondario: #12333D;
   --cta-sfondo: #AD5000;             /* arancio profondo: testo bianco leggibile */
   --cta-hover: #8F4100;
+  --fascia-aiuto: #E7EFD3;
 
   --testo: #0F303B;                  /* inchiostro teal: 11,4:1 su --sfondo */
+  --sfondo-inchiostro: #1D4859;
+  --superficie-tenue: #F1F2EC;
   --testo-tenue: #6B6B69;            /* 4,8:1 su bianco · 4,5:1 su --sfondo */
 
   --testata: #0D5063;
@@ -54,8 +57,7 @@
   --attenzione-testo: #6B4A00;
   --attenzione-sfondo: #FFE9A8;
 
-  --focus: #0D5063;
-
+  --evidenzia: #E1EDF2;
   /* Commissioner locale: asse wght 30–220; Regular 82, Medium 106, SemiBold 126, Bold 148. */
   --font: "Commissioner", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -461,9 +463,43 @@ input::placeholder, textarea::placeholder { color: var(--testo-tenue); }
   gap: var(--s-5);
 }
 
-.casa-nome { margin: 0; font-size: 1.0625rem; font-weight: 126; }
+/* ============================================================ ingresso a due fasce (3.jpg) */
 
- /* ============================================================ area operatore: linguette, moduli, tabelle */
+.accesso {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 28rem);
+  min-height: 100svh;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+.accesso-sfondo {
+  background: var(--sfondo) url("assets/trasi-wallpaper.svg?v=2") center / cover no-repeat;
+}
+.accesso-pannello {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--s-10) clamp(var(--s-6), 6vw, var(--s-16));
+  background: var(--superficie);
+}
+.accesso-marchio { height: 40px; width: 119px; margin: 0; }
+.accesso-saluto { margin: clamp(var(--s-8), 10vh, 6rem) 0 var(--s-2); font-size: 1.75rem; font-weight: 148; color: var(--primario); }
+.accesso-suggerimento { margin: 0 0 var(--s-6); color: var(--testo-tenue); }
+.accesso-nota { margin: var(--s-6) 0 0; font-size: .9375rem; color: var(--testo-tenue); }
+.accesso .aiuto-apri { position: absolute; top: var(--s-4); right: var(--s-4); }
+.accesso-errore { margin: var(--s-4) 0 0; }
+
+@media (max-width: 60rem) {
+  .accesso { grid-template-columns: minmax(0, 1fr); }
+  .accesso-sfondo { min-height: 38svh; }
+  .accesso-pannello { padding: var(--s-8) var(--s-6); }
+  .accesso-saluto { margin-top: var(--s-6); }
+}
+@media (max-width: 48rem) {
+  .accesso .aiuto-apri { top: auto; bottom: var(--s-4); }
+}
+
 /* ============================================================ corpo pagina */
 
 main { max-width: var(--misura-lettura); margin: 0 auto; padding: var(--s-8) var(--s-6); }

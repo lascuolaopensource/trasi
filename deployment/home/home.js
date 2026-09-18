@@ -525,17 +525,18 @@
   var esitoUscita = document.getElementById("esito-uscita");
   if (pulsanteEsci && esitoUscita) {
     pulsanteEsci.addEventListener("click", function () {
+      pulsanteEsci.disabled = true;
+      esitoUscita.hidden = true;
       fetch("/api/shim/logout", { method: "POST", credentials: "same-origin" })
         .then(function (risposta) {
-          if (risposta.ok) window.TrasiShell.aggiornaChiedi(null);
-          esitoUscita.textContent = risposta.ok
-            ? "Sessione chiusa."
-            : "Uscita non riuscita (risposta " + risposta.status + ").";
-          esitoUscita.hidden = false;
+          if (!risposta.ok) throw new Error("risposta " + risposta.status);
+          window.TrasiShell.aggiornaChiedi(null);
+          window.location.replace("/operatore.html");
         })
-        .catch(function () {
-          esitoUscita.textContent = "Uscita non riuscita: servizio non raggiungibile.";
+        .catch(function (errore) {
+          esitoUscita.textContent = "Uscita non riuscita: " + errore.message + ". Riprova.";
           esitoUscita.hidden = false;
+          pulsanteEsci.disabled = false;
         });
     });
   }

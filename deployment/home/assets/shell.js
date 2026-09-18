@@ -53,21 +53,6 @@
     }
   }
 
-  if (document.querySelector("#sidebar-chiedi[data-carica-onyx]")) {
-    fetch("/api/shim/op/config", { credentials: "same-origin", headers: { Accept: "application/json" } })
-      .then(function (risposta) {
-        if (risposta.status === 401) return null;
-        if (!risposta.ok) throw new Error("risposta " + risposta.status);
-        return risposta.json();
-      })
-      .then(function (config) {
-        if (config === null) return aggiornaChiedi(null);
-        if (!config || typeof config.onyx_url !== "string" || !config.onyx_url) throw new Error("onyx_url assente");
-        aggiornaChiedi(config.onyx_url);
-      })
-      .catch(function () { aggiornaChiedi(false); });
-  }
-
   window.TrasiShell = { pronte: pronte, aggiornaChiedi: aggiornaChiedi };
 
   /* Le pagine caricano questo file a fine `<body>`: il guscio c'è già. */

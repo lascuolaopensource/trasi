@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light">
 <title>Trasi — area operatore</title>
 <meta name="description" content="Area operatore Trasi: accesso all’assistente in Onyx, registrazione richieste, attrezzoteca, messaggi interni.">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 <!-- Area operatore: un solo indirizzo, nessun redirect verso altri domini.
@@ -65,35 +65,38 @@
 
   <div class="area">
 
-<!-- ============================ accesso ================================== -->
-<main id="accesso" hidden>
-  <!-- L'accesso come scheda del prototipo (vista Login): centrata, bianca, bordo netto,
-       ombra morbida. Il `<main>` resta `#accesso` per `operatore.js`. -->
-  <div class="scheda-accesso">
-  <h1 class="titolo"><svg class="icona" aria-hidden="true" focusable="false"><use href="assets/icone.svg#icon-key"/></svg>Accesso operatori</h1>
-  <form class="modulo" id="modulo-accesso" novalidate>
-    <p>
-      <label class="etichetta" for="accesso-casa">Casa di Quartiere</label>
-      <select id="accesso-casa" data-tendina required>
-        <option value="san-bao">San Bao</option>
-        <option value="bozzano">Centro di Aggregazione Bozzano</option>
-        <option value="buscicchio">Parco Buscicchio</option>
-        <option value="dream">Dream: Laboratorio Creativo</option>
-        <option value="erranti">Accademia degli Erranti</option>
-        <option value="minimus">Minimus</option>
-        <option value="molo12">Molo 12</option>
-        <option value="pop">POP — Piccolo Opificio Popolare</option>
-        <option value="santa-spazio">Santa Spazio Culturale</option>
-        <option value="tuturano">Tuturano</option>
-      </select>
-    </p>
-    <p>
-      <label class="etichetta" for="accesso-password">Parola d’ordine della Casa</label>
-      <input id="accesso-password" type="password" autocomplete="current-password" required>
-    </p>
-    <p><button class="riquadro-azione" type="submit">Entra</button></p>
-    <p class="messaggio-errore" id="accesso-errore" role="alert" hidden></p>
-  </form>
+<main class="accesso" id="accesso" hidden>
+  <!-- L'ingresso come nel mockup 3.jpg: sfondo a tutta pagina a sinistra, pannello bianco
+       a destra. Il `<main>` resta `#accesso` per `operatore.js`; niente scheda flottante. -->
+  <div class="accesso-sfondo" aria-hidden="true"></div>
+  <div class="accesso-pannello">
+    <img class="accesso-marchio" src="assets/logo-trasi.svg" alt="Trasi" width="119" height="40">
+    <h1 class="accesso-saluto">Bentornato</h1>
+    <p class="accesso-suggerimento">Accedi alla tua area riservata</p>
+    <form class="modulo" id="modulo-accesso" novalidate>
+      <p>
+        <label class="etichetta" for="accesso-casa">Casa di Quartiere</label>
+        <select id="accesso-casa" data-tendina required>
+          <option value="san-bao">San Bao</option>
+          <option value="bozzano">Centro di Aggregazione Bozzano</option>
+          <option value="buscicchio">Parco Buscicchio</option>
+          <option value="dream">Dream: Laboratorio Creativo</option>
+          <option value="erranti">Accademia degli Erranti</option>
+          <option value="minimus">Minimus</option>
+          <option value="molo12">Molo 12</option>
+          <option value="pop">POP — Piccolo Opificio Popolare</option>
+          <option value="santa-spazio">Santa Spazio Culturale</option>
+          <option value="tuturano">Tuturano</option>
+        </select>
+      </p>
+      <p>
+        <label class="etichetta" for="accesso-password">Parola d’ordine della Casa</label>
+        <input id="accesso-password" type="password" autocomplete="current-password" required>
+      </p>
+      <p><button class="riquadro-azione" type="submit">Accedi</button></p>
+      <p class="messaggio-errore accesso-errore" id="accesso-errore" role="alert" hidden></p>
+    </form>
+    <p class="accesso-nota">Non hai un account? Contatta la tua casa di quartiere.</p>
   </div>
 </main>
 
@@ -256,7 +259,6 @@
 <button class="aiuto-apri" type="button" data-aiuto-apri aria-controls="aiuto" aria-haspopup="dialog" aria-label="Aiuto" title="Aiuto">?</button>
 
 <script src="assets/dropdown.js?v=1"></script>
-<script src="assets/shell.js?v=3"></script>
-<script src="operatore.js?v=5"></script>
+<script src="operatore.js?v=7"></script>
 </body>
 </html>
