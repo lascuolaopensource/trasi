@@ -1,0 +1,50 @@
+[
+  {
+    "slug": "san-bao",
+    "lat": 40.6040161,
+    "lon": 17.9539474,
+    "indirizzo": "Piazza delle Orchidee 21, Brindisi",
+    "fonte_url": "https://www.casediquartiere.it/",
+    "maps_url": "https://www.google.it/maps/place/Piazza+delle+Orchidee,+21,+72100+Brindisi+BR/@40.6040161,17.9517587,17z/data=!3m1!4b1!4m5!3m4!1s0x13467961c3541d5d:0x6a8662c65839083c!8m2!3d40.6040161!4d17.9539474"
+  },
+  {
+    "slug": "molo12",
+    "lat": 40.6401211,
+    "lon": 17.9462869,
+    "indirizzo": "Via Guerrieri 7, Brindisi",
+    "fonte_url": "https://www.casediquartiere.it/",
+    "maps_url": "https://www.google.it/maps/place/COWORKING+MOLO+12+BRINDISI/data=!3m1!4b1!4m3!3m2!1s0x13467b4ba5cdcdaf:0x21f43c4e42937d12!8m2!3d40.6401211!4d17.9462869"
+  },
+  {
+    "slug": "erranti",
+    "lat": 40.6398504,
+    "lon": 17.9438419,
+    "indirizzo": "Via Giovanni Tarantini 35, Brindisi",
+    "fonte_url": "https://www.casediquartiere.it/",
+    "maps_url": "https://www.google.it/maps/place/Accademia+degli+Erranti+-+Statio+Peregrinorum/data=!3m1!4b1!4m3!3m2!1s0x13467b2d750a9a17:0x4c333f1b4ee9c6b8!8m2!3d40.6398504!4d17.9438419"
+  },
+  {
+    "slug": "santa-spazio",
+    "lat": 40.6407236,
+    "lon": 17.9450817,
+    "indirizzo": "Via Santa Chiara 2, Brindisi",
+    "fonte_url": "https://www.casediquartiere.it/",
+    "maps_url": "https://www.google.it/maps/place/YEAHJASI+Brindisi+Spazio+Musica+%7C+Ex+Convento+Santa+Chiara/@40.6407276,17.940597,17z/data=!3m1!4b1!4m6!3m5!1s0x13467a226fa19af7:0x2f5063acd3822aab!8m2!3d40.6407236!4d17.9450817!16s%2Fg%2F11dxl9_908"
+  },
+  {
+    "slug": "minimus",
+    "lat": 40.6344692,
+    "lon": 17.9401671,
+    "indirizzo": "Via Bastioni San Giorgio 64, Brindisi",
+    "fonte_url": "https://www.casediquartiere.it/",
+    "maps_url": "https://www.google.it/maps/place/Bastione+Carlo+V/@40.6344733,17.9379784,17z/data=!3m1!4b1!4m6!3m5!1s0x13467a3b72dbeb49:0x6b2336a26782dd16!8m2!3d40.6344692!4d17.9401671!16s%2Fg%2F11g9jj14hx"
+  },
+  {
+    "slug": "buscicchio",
+    "lat": 40.6193339,
+    "lon": 17.9196314,
+    "indirizzo": "Via Andrea Mantegna 10, Brindisi",
+    "fonte_url": "https://www.casediquartiere.it/",
+    "maps_url": "https://www.google.it/maps/place/Parco+Buscicchio/@40.6193339,17.9174427,17z/data=!3m1!4b1!4m6!3m5!1s0x13467b74ad2b4955:0x79eaa8f2a24dd107!8m2!3d40.6193339!4d17.9196314!16s%2Fg%2F11k69nnw5r"
+  }
+]
