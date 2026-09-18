@@ -105,7 +105,15 @@
       this.setAttribute("aria-pressed", "true");
       var pannelli = document.querySelectorAll(".pannello");
       for (var k = 0; k < pannelli.length; k++) pannelli[k].hidden = true;
-      $("pannello-" + this.getAttribute("data-pannello")).hidden = false;
+      var pannello = this.getAttribute("data-pannello");
+      $("pannello-" + pannello).hidden = false;
+      /* L'inventario si rilegge **all'apertura** della linguetta, non solo al login: un oggetto
+         aggiunto dalla chat Onyx (`salva_dato` con `entita=oggetto`) deve comparire qui senza
+         ricaricare la pagina. Stessa query dello shim per entrambe le porte (`inventario()`). */
+      if (pannello === "attrezzoteca" && casaCorrente) {
+        caricaInventario($("cerca-oggetto").value.trim());
+        caricaMovimenti();
+      }
     });
   }
 

@@ -25,6 +25,10 @@ OPERAZIONI_ATTESE: tuple[tuple[str, str, str], ...] = (
     # che la chat non aveva — l'assistente non poteva rispondere a «quante richieste quest'anno?».
     ("statistiche", "get", "/statistiche"),
     ("cerca_web", "get", "/cerca_web"),
+    # L'inventario dell'attrezzoteca in chat (2026-09-18): la lettura che Onyx non aveva (l'unica porta era
+    # `/op/attrezzoteca`, cookie del browser). Stessa query del portale; la scrittura è `salva_dato`
+    # con `entita=oggetto` (db/032).
+    ("cerca_oggetto", "get", "/cerca_oggetto"),
 )
 
 # L'unico URL ammesso in `servers`, con il segnaposto che Onyx sostituisce lato server.

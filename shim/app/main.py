@@ -50,6 +50,11 @@ FIRMA_OPERAZIONI: tuple[tuple[str, str], ...] = (
     ("oggi", "GET"),
     ("statistiche", "GET"),
     ("cerca_web", "GET"),
+    # L'inventario dell'attrezzoteca per Onyx (2026-09-18): la lettura che la chat non aveva — l'unico
+    # endpoint era `/op/attrezzoteca`, canale browser con cookie. Stessa query del portale
+    # (`attrezzoteca.inventario`), aperta a tutte le Case. La scrittura è `salva_dato` con
+    # `entita="oggetto"` (db/032).
+    ("cerca_oggetto", "GET"),
 )
 
 
@@ -149,10 +154,13 @@ def crea_app() -> FastAPI:
     # I router delle scritture e degli output sono dell'altro worker (B3ShimB) e vivono in file separati: si
     # montano **dopo** i miei e ognuno monta il proprio `router`, così nessuno riscrive il file dell'altro. Il
     # prefisso lo applica il loro `monta()`, derivandolo dal contratto congelato.
-    from . import scritture, testi
+    from . import attrezzoteca, scritture, testi
 
     scritture.monta(applicazione)
     testi.monta(applicazione)
+    # `cerca_oggetto` (contratto congelato, 2026-09-18): il router **del contratto** di `attrezzoteca.py`,
+    # distinto dal suo `router` sotto `/op` (cookie): due porte, due autenticazioni, una query.
+    applicazione.include_router(attrezzoteca.router_contratto, prefix=prefisso)
 
     # --- area operatore (schede !NEW 3/5/6/7): le funzioni del browser, non di Onyx --------------
     #
@@ -176,7 +184,7 @@ def crea_app() -> FastAPI:
     # `shim/openapi.yaml`. Gli endpoint dell'area operatore non sono strumenti del LLM — li chiama
     # il browser — quindi non appartengono a quel documento: dichiararli qui li tiene fuori dal
     # contratto **senza** indebolire il gate (che resta `esposte == attese`, non un suo sottoinsieme).
-    from . import attrezzoteca, auth, messaggi
+    from . import auth, messaggi
 
     applicazione.include_router(auth.router, include_in_schema=False)
 

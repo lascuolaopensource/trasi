@@ -463,11 +463,13 @@ paths:
       operationId: salva_dato
       tags:
       - kb
-      summary: 'Crea o aggiorna un dato della **propria** Casa: la scheda di un servizio, un''opportunità, o gli orari
-        della Casa. Scrittura diretta, non una proposta: la Casa scrive i propri dati. Usalo quando l''operatore
-        comunica o corregge qualcosa che riguarda la sua Casa (es. "il corso di italiano è il martedì alle 15", "siamo
-        chiusi ad agosto", "è uscito il bando del Comune"). Se il dato riguarda il **territorio** o un''altra Casa, usa
-        `proponi_modifica`: quello lo decide l''AT.'
+      summary: 'Crea o aggiorna un dato della **propria** Casa: la scheda di un servizio, un''opportunità, gli orari
+        della Casa, una persona della Casa o un **oggetto dell''attrezzoteca** della Casa. Scrittura diretta, non una
+        proposta: la Casa scrive i propri dati. Usalo quando l''operatore comunica o corregge qualcosa che riguarda la
+        sua Casa (es. "il corso di italiano è il martedì alle 15", "siamo chiusi ad agosto", "è uscito il bando del
+        Comune", "abbiamo 5 sedie pieghevoli in più", "il proiettore è danneggiato"). Se il dato riguarda il
+        **territorio** o un''altra Casa, usa `proponi_modifica`: quello lo decide l''AT. Gli oggetti delle altre Case
+        si leggono soltanto (`cerca_oggetto`): se l''operatore chiede di modificarli, digli di contattare quella Casa.'
       requestBody:
         required: true
         description: 'Il dato della propria Casa. `casa_id` non è ammesso: la Casa è quella dell''identità. Per
@@ -487,8 +489,10 @@ paths:
                   - opportunita
                   - casa
                   - persona
+                  - oggetto
                   description: 'Cosa si scrive: una scheda di servizio, un''opportunità, gli orari/recapiti della
-                    Casa stessa, oppure una **persona della Casa** (foglio 1.1, db/029).'
+                    Casa stessa, una **persona della Casa** (foglio 1.1, db/029), oppure un **oggetto
+                    dell''attrezzoteca** della Casa (inventario condiviso, db/014).'
                 id:
                   type: integer
                   minimum: 1
@@ -557,10 +561,12 @@ paths:
                   type: string
                   minLength: 3
                   maxLength: 120
-                  description: 'Solo per `entita=persona`: nome della persona **come vuole che sia citato** (es. "Maria
+                  description: 'Per `entita=persona`: nome della persona **come vuole che sia citato** (es. "Maria
                     Rossi"), dal foglio 1.1. È l''unico dato personale che un''operazione di questo contratto accetta, e
                     entra nella knowledge base — quindi in chat — **solo con il consenso dell''interessata**: chiedi
-                    conferma all''operatore prima di usarlo. Nessun recapito: email e telefoni sono respinti.'
+                    conferma all''operatore prima di usarlo. Nessun recapito: email e telefoni sono respinti.
+                    Per `entita=oggetto`: il nome dell''oggetto (es. "sedie pieghevoli"), **obbligatorio alla
+                    creazione**.'
                 ruolo:
                   type: string
                   minLength: 2
@@ -584,6 +590,28 @@ paths:
                     persona ha acconsentito a comparire nella KB e in chat (il database timbra la data). Con `id`,
                     `false` è la **revoca**: la persona esce dalla KB e il flusso di export la rimuove da Onyx.
                     Per le altre entità non è ammesso.'
+                tipo:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                  description: 'Solo per `entita=oggetto`: tipo di materiale (es. "arredo", "audio", "attrezzi"),
+                    per filtrare l''inventario. Facoltativo.'
+                quantita:
+                  type: integer
+                  minimum: 1
+                  description: 'Solo per `entita=oggetto`: esemplari presenti presso la Casa (almeno 1).
+                    **Obbligatorio alla creazione**; con `id` aggiorna la quantità.'
+                condizione:
+                  type: string
+                  enum:
+                  - integro
+                  - danneggiato
+                  - mancante_di_parti
+                  description: 'Solo per `entita=oggetto`: stato dell''oggetto. Se omesso alla creazione, `integro`.'
+                attivo:
+                  type: boolean
+                  description: 'Solo per `entita=oggetto` e **solo con `id`**: `false` ritira l''oggetto
+                    dall''attrezzoteca (non si cancella mai, resta nella memoria come ritirato), `true` lo riammette.'
       responses:
         '201':
           description: Dato salvato nella memoria della rete.
@@ -743,6 +771,57 @@ paths:
           $ref: '#/components/responses/ChiaveShimNonValida'
         '403':
           $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '422':
+          $ref: '#/components/responses/ParametriNonAmmessi'
+        '501':
+          $ref: '#/components/responses/NonImplementato'
+  /cerca_oggetto:
+    get:
+      operationId: cerca_oggetto
+      tags:
+      - kb
+      summary: 'Cerca nell''attrezzoteca della rete: l''inventario degli oggetti condivisi di **tutte** le Case di
+        Quartiere, con quantità presenti, pezzi disponibili (al netto dei prestiti in corso), condizione e fonte.
+        Usalo quando l''operatore chiede dove si trova un oggetto, quanti pezzi sono disponibili o cosa c''è
+        nell''attrezzoteca di una Casa («dove trovo 5 microfoni?», «cosa ha Bozzano in inventario?»). Riporta
+        Casa, disponibilità e `badge` così come sono. Per aggiungere, correggere o ritirare un oggetto della
+        **propria** Casa usa `salva_dato` con `entita=oggetto`; gli oggetti delle altre Case si leggono soltanto. I
+        prestiti si fanno dal portale, non in chat.'
+      parameters:
+      - name: q
+        in: query
+        required: false
+        description: 'Cosa si cerca: nome, descrizione o tipo dell''oggetto (es. "microfono", "sedie", "audio").
+          Omesso = tutto l''inventario.'
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 120
+      - name: casa
+        in: query
+        required: false
+        description: 'Slug o nome della Casa di Quartiere per restringere la ricerca a una Casa sola; se omesso si cerca
+          in tutte le Case della rete.'
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: 'Oggetti trovati, ordinati per Casa e nome; `items: []` se nessuno corrisponde.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RispostaCercaOggetto'
+        '401':
+          $ref: '#/components/responses/ChiaveShimNonValida'
+        '403':
+          $ref: '#/components/responses/IdentitaNonRiconosciuta'
+        '404':
+          description: La Casa indicata non esiste (vocabolario chiuso delle Case della rete).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Errore'
         '422':
           $ref: '#/components/responses/ParametriNonAmmessi'
         '501':
@@ -1318,6 +1397,7 @@ components:
           - opportunita
           - casa
           - persona
+          - oggetto
           description: L'entità salvata, come dichiarata nella richiesta.
         creato:
           type: boolean
@@ -1483,3 +1563,73 @@ components:
           description: Esito del motore di ricerca interrogato.
           items:
             $ref: '#/components/schemas/FonteEsterna'
+    ItemOggetto:
+      type: object
+      additionalProperties: false
+      required:
+      - oggetto_id
+      - nome
+      - casa
+      - casa_nome
+      - quantita
+      - quantita_fuori
+      - quantita_disponibile
+      - condizione
+      - badge
+      description: 'Un oggetto dell''attrezzoteca della rete, come lo mostra il portale (stessa vista `v_inventario`).'
+      properties:
+        oggetto_id:
+          type: integer
+          minimum: 1
+          description: Identificativo dell'oggetto; è l'`id` da passare a `salva_dato` per correggerlo o ritirarlo (solo se è della propria Casa).
+        nome:
+          type: string
+          description: Nome dell'oggetto (es. "sedie pieghevoli").
+        tipo:
+          type: string
+          nullable: true
+          description: Tipo di materiale (es. "arredo", "audio"), se dichiarato.
+        casa:
+          type: string
+          description: Slug della Casa che possiede l'oggetto (es. `san-bao`).
+        casa_nome:
+          type: string
+          description: Nome della Casa, da usare nella risposta all'operatore.
+        quantita:
+          type: integer
+          minimum: 1
+          description: Esemplari presenti presso la Casa.
+        quantita_fuori:
+          type: integer
+          minimum: 0
+          description: Esemplari in prestito confermato, oggi.
+        quantita_disponibile:
+          type: integer
+          minimum: 0
+          description: 'Esemplari disponibili oggi (`quantita` − `quantita_fuori`): è **il** numero da dire all''operatore.'
+        condizione:
+          type: string
+          enum:
+          - integro
+          - danneggiato
+          - mancante_di_parti
+          description: Stato dichiarato dell'oggetto.
+        fonte:
+          type: string
+          nullable: true
+          description: Nome della fonte che ha dichiarato l'oggetto, se diversa dalla Casa.
+        badge:
+          type: string
+          description: 'Etichetta di provenienza (V3), da riportare così com''è (es. "rete").'
+    RispostaCercaOggetto:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      description: 'Esito della ricerca nell''attrezzoteca: `items: []` è un inventario senza corrispondenze, non un errore.'
+      properties:
+        items:
+          type: array
+          description: Oggetti trovati, ordinati per Casa e nome.
+          items:
+            $ref: '#/components/schemas/ItemOggetto'

@@ -80,9 +80,9 @@ DETAIL_RIGA_NON_DELLA_CASA = "riga non appartiene alla Casa dell'operatore"
 #: Il rifiuto di una proposta su un dato **proprio**, con la via alternativa. Il messaggio dice dove andare,
 #: non solo che non si passa di qui: `{entita}` è una delle ENTITA_DIRETTE.
 DETAIL_USA_SCRITTURA_DIRETTA = (
-    "i dati della propria Casa si scrivono direttamente (salva_dato per scheda/opportunità, crea_evento per "
-    "gli eventi, salva_orari per gli orari): una proposta su «{entita}» della propria Casa non è decidibile da "
-    "nessuno, perché operatore e gestore condividono un solo accesso per Casa"
+    "i dati della propria Casa si scrivono direttamente (salva_dato per scheda/opportunità/persona/oggetto "
+    "dell'attrezzoteca e per gli orari della Casa, crea_evento per gli eventi): una proposta su «{entita}» della "
+    "propria Casa non è decidibile da nessuno, perché operatore e gestore condividono un solo accesso per Casa"
 )
 DETAIL_DESTINAZIONE_INESISTENTE = "destinazione_id non corrisponde a un luogo della memoria della rete"
 DETAIL_CASA_INESISTENTE = "casa_id non corrisponde a una Casa della rete"
@@ -404,7 +404,7 @@ async def crea_evento(
 #: proposta → approvazione **non ha un secondo umano a cui passare**: chiedere a qualcuno di approvare ciò che
 #: ha appena scritto l'unica identità della Casa è la definizione del vicolo cieco, ed è esattamente BUG-02.
 #:
-ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa", "persona")
+ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa", "persona", "oggetto")
 
 #: Le colonne che `salva_dato` accetta di scrivere, per entità. Elenco chiuso: `casa_id` non c'è perché viene
 #: dall'identità (la policy lo impone comunque), e le colonne di servizio (`fonte_id`, `affidabilita`,
@@ -423,6 +423,10 @@ ENTITA_DIRETTE = ("scheda_servizio", "opportunita", "casa", "persona")
 #: persona senza dichiarare il consenso sarebbe una scrittura di un nome in attesa di una promessa.
 #: La revoca non passa da qui: è `DELETE` della persona (la RLS la concede alla propria Casa), e il
 #: flusso export cancella il documento da Onyx. Vedi `db/029_persone_casa.sql`.
+#:
+#: Per `oggetto` (db/014 + db/032, decisione 2026-09-18): l'attrezzoteca della propria Casa si scrive come
+#: la scheda — `nome` e `quantita` obbligatori alla creazione (sono `NOT NULL`), `attivo=false` con `id` è
+#: il **ritiro** (V4 regola 7: mai DELETE). I tipi di proposta `*_oggetto` restano per il cross-Casa (AT).
 COLONNE_DIRETTE: dict[str, tuple[str, ...]] = {
     "scheda_servizio": ("titolo", "descrizione", "categoria", "orari", "referente_ruolo", "scadenza", "url"),
     "opportunita": ("titolo", "descrizione", "categoria", "scadenza", "url"),
@@ -431,7 +435,12 @@ COLONNE_DIRETTE: dict[str, tuple[str, ...]] = {
     # della Casa: `db/002` per orari/email_digest, `db/025` per i tre nuovi.
     "casa": ("orari", "orari_provvisori", "email_digest", "indirizzo", "edificio"),
     "persona": ("nome", "ruolo", "competenze", "informativa"),
+    "oggetto": ("nome", "descrizione", "tipo", "quantita", "condizione", "attivo"),
 }
+
+#: Le condizioni ammesse per un oggetto (CHECK di db/014): dichiarate qui perché un valore fuori elenco sia un
+#: 422 con l'elenco, non un 500 da violazione di CHECK.
+CONDIZIONI_OGGETTO = ("integro", "danneggiato", "mancante_di_parti")
 
 
 class SalvaDatoIn(BaseModel):
@@ -445,7 +454,7 @@ class SalvaDatoIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    entita: Literal["scheda_servizio", "opportunita", "casa", "persona"]  # type: ignore[valid-type]
+    entita: Literal["scheda_servizio", "opportunita", "casa", "persona", "oggetto"]  # type: ignore[valid-type]
     # None = nuova entità; un id = modifica di quella esistente (che la RLS riserva alla propria Casa).
     # Per `entita="casa"` è **sempre** None: la Casa è una sola, quella dell'identità, e non si sceglie.
     id: int | None = Field(default=None, ge=1)
@@ -477,6 +486,13 @@ class SalvaDatoIn(BaseModel):
     # altri, è la condizione che rende legittimo scrivere il nome — per questo il validatore lo
     # impone e la risposta della API lo riporta.
     consenso: bool | None = None
+    # I campi dell'attrezzoteca (solo `entita="oggetto"`), db/014 + db/032. `nome` è condiviso con
+    # `persona` ma qui è il nome di una cosa («sedie pieghevoli»); `descrizione` è condivisa con la
+    # scheda. `quantita` sono gli esemplari presenti; `attivo=false` con `id` è il ritiro (mai DELETE).
+    tipo: str | None = Field(default=None, min_length=1, max_length=80)
+    quantita: int | None = Field(default=None, ge=1)
+    condizione: Literal["integro", "danneggiato", "mancante_di_parti"] | None = None  # type: ignore[valid-type]
+    attivo: bool | None = None
 
     @model_validator(mode="after")
     def _coerenza(self) -> "SalvaDatoIn":
@@ -487,6 +503,27 @@ class SalvaDatoIn(BaseModel):
         """
         if self.entita == "opportunita" and self.orari is not None:
             raise ValueError("orari non si applica a «opportunita»: è una colonna di scheda_servizio")
+        if self.entita == "oggetto":
+            # L'attrezzoteca della propria Casa (db/014 + db/032). `nome` e `quantita` sono `NOT NULL`:
+            # senza questo controllo l'assenza sarebbe un `NotNullViolation` → 500, invece del 422 dichiarato.
+            # `attivo` ha senso solo con `id`: `false` è il ritiro (V4 regola 7: mai DELETE), `true` la
+            # riammissione; alla creazione l'oggetto nasce attivo e dichiararlo non aggiunge nulla.
+            if self.id is None and (self.nome is None or not self.nome.strip()):
+                raise ValueError("nome è obbligatorio per creare «oggetto»")
+            if self.id is None and self.quantita is None:
+                raise ValueError("quantita è obbligatoria per creare «oggetto» (esemplari presenti, almeno 1)")
+            if self.id is None and self.attivo is not None:
+                raise ValueError("attivo si usa con id: false ritira l'oggetto, true lo riammette")
+            if any(v is not None for v in (self.titolo, self.categoria, self.orari, self.referente_ruolo,
+                                           self.scadenza, self.url, self.orari_provvisori, self.email_digest,
+                                           self.indirizzo, self.edificio, self.ruolo, self.competenze,
+                                           self.informativa, self.consenso)):
+                raise ValueError(
+                    "«oggetto» accetta solo nome, descrizione, tipo, quantita, condizione e attivo (con id)"
+                )
+            return self
+        if any(v is not None for v in (self.tipo, self.quantita, self.condizione, self.attivo)):
+            raise ValueError("tipo/quantita/condizione/attivo si applicano solo a «oggetto»")
         if (
             self.entita not in ("casa", "persona")
             and self.id is None
@@ -557,7 +594,7 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
     chiedere l'approvazione. Il ciclo mediato resta per ciò che **non** è della Casa (`luogo`, promozioni
     dall'esterno), dove il secondo decisore c'è.
 
-    Quattro entità, due forme:
+    Cinque entità, due forme:
 
     * `scheda_servizio` / `opportunita` — `id` assente = INSERT, `id` presente = UPDATE della propria riga;
     * `casa` — **sempre** UPDATE della riga dell'identità (`casa_corrente()`), mai INSERT: una Casa non si
@@ -567,6 +604,9 @@ async def salva_dato(corpo: SalvaDatoIn, sess: Sessione = Depends(sessione)) -> 
     * `persona` (db/029) — INSERT o UPDATE come una scheda, **con il consenso richiesto dal validatore**:
       il nome entra nella KB; la revoca è `consenso=false` con `id` (timbra `revoca_il`, la riga resta ed
       esce dalla KB), la cancellazione della riga è l'altra via ammessa alla Casa.
+    * `oggetto` (db/014 + db/032) — l'attrezzoteca della propria Casa, INSERT o UPDATE come una scheda;
+      `attivo=false` con `id` è il ritiro (V4 regola 7: mai DELETE). Gli oggetti delle **altre** Case si
+      leggono soltanto (`cerca_oggetto`): la RLS `ogg_upd_casa` rende un UPDATE su di essi «0 righe» → 403.
 
     **Chi garantisce cosa.** La RLS: `scheda_ins_casa`/`scheda_upd_casa` (e le omologhe su `opportunita`,
     `casa` e `persona`) impongono `casa_id = casa_corrente()`. La scrittura su un dato di un'altra Casa non
@@ -745,9 +785,10 @@ async def proponi_modifica(
     # altro ruolo è ammesso da `upd_client`. Misurato: **5 tipi su 12** restavano per sempre in coda.
     #
     # La correzione non è allentare V4 — è togliere la ragione per cui la proposta esiste: se il dato è
-    # della Casa, la Casa lo scrive **direttamente** (`salva_dato` per scheda/opportunità/orari,
-    # `crea_evento` per gli eventi). Il ciclo mediato resta per ciò che non è della Casa — `luogo`,
-    # `promuovi_esterno`, la scheda/opportunità di un'**altra** Casa — dove un secondo decisore c'è.
+    # della Casa, la Casa lo scrive **direttamente** (`salva_dato` per scheda/opportunità/persona/orari e,
+    # da db/032, per l'`oggetto` dell'attrezzoteca; `crea_evento` per gli eventi). Il ciclo mediato resta
+    # per ciò che non è della Casa — `luogo`, `promuovi_esterno`, la scheda/opportunità/oggetto di
+    # un'**altra** Casa (tipi `*_oggetto`) — dove un secondo decisore c'è.
     #
     # Il rifiuto è un **422 con la via alternativa**, non un errore muto: chi chiama (l'assistente, o un
     # operatore) deve sapere *dove* andare. Un 403 direbbe «non puoi», che è falso: puoi, per un'altra via.

@@ -1,4 +1,4 @@
--- Trasi — db/tests/t_rls.sql · T01…T12
+-- Trasi — db/tests/t_rls.sql · T01…T15
 -- La RLS è l'autorità: questi test girano SEMPRE come ruolo applicativo (SET ROLE), mai come
 -- superuser, altrimenti darebbero falsi positivi. Convenzione: PASS = NOTICE, FAIL = EXCEPTION
 -- (interrompe il run). Eseguito con `-1`: ogni INSERT di prova è rollbackato a fine file.
@@ -309,4 +309,98 @@ BEGIN
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL T14 — Bozzano non ha potuto cancellare la propria persona (% righe)', n; END IF;
 
   RAISE NOTICE 'PASS T14 — persona_casa: INSERT, UPDATE e DELETE cross-Casa → 0 righe/42501; la propria Casa cancella (la RLS isola anche i nomi)';
+END $$;
+
+-- T15 · oggetto (db/014 + db/032): la propria Casa scrive l'attrezzoteca, le altre no, nessuno cancella ----
+-- La decisione D1 estesa all'inventario: `casa_sanbao` INSERT/UPDATE su `casa_id` proprio; su Bozzano la
+-- policy (`ogg_ins_casa` WITH CHECK, `ogg_upd_casa` USING) decide — non lo shim. DELETE negato a tutti i
+-- ruoli Casa (V4 regola 7: il ritiro è attivo=false). `rete` e `shim_rw` non hanno il privilegio di
+-- scrittura. E la scrittura diretta della propria Casa **non** è una violazione di V4: non compare in
+-- `v_scritture_senza_audit`.
+DO $$
+DECLARE sanbao int; bozzano int; n int; nuovo int; fallito boolean; violazioni int;
+BEGIN
+  SELECT id INTO sanbao  FROM trasi.casa WHERE slug = 'san-bao';
+  SELECT id INTO bozzano FROM trasi.casa WHERE slug = 'bozzano';
+
+  -- INSERT per la propria Casa: consentito, e l'impronta di scrittura è del ruolo.
+  EXECUTE 'SET ROLE casa_sanbao';
+  INSERT INTO trasi.oggetto (casa_id, nome, quantita, condizione)
+  VALUES (sanbao, 'Oggetto di prova T15 (san-bao)', 3, 'integro') RETURNING id INTO nuovo;
+  EXECUTE 'RESET ROLE';
+  IF nuovo IS NULL THEN RAISE EXCEPTION 'FAIL T15 — san-bao non ha potuto inserire un oggetto proprio'; END IF;
+  IF (SELECT aggiornato_da FROM trasi.oggetto WHERE id = nuovo) IS DISTINCT FROM 'casa_sanbao' THEN
+    RAISE EXCEPTION 'FAIL T15 — l''impronta di scrittura non è casa_sanbao (scrittura_00_ts assente?)';
+  END IF;
+
+  -- INSERT con casa_id di Bozzano: WITH CHECK → 42501, non 23514.
+  EXECUTE 'SET ROLE casa_sanbao';
+  fallito := false;
+  BEGIN
+    INSERT INTO trasi.oggetto (casa_id, nome, quantita) VALUES (bozzano, 'Oggetto di Bozzano via San Bao (T15)', 1);
+    fallito := true;
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF fallito THEN RAISE EXCEPTION 'FAIL T15 — san-bao ha inserito un oggetto di Bozzano (atteso 42501)'; END IF;
+
+  -- Un oggetto di Bozzano c'è davvero (scritto da Bozzano): senza fixture l'UPDATE cross-Casa toccherebbe
+  -- 0 righe per assenza di righe, non per la RLS.
+  EXECUTE 'SET ROLE casa_bozzano';
+  INSERT INTO trasi.oggetto (casa_id, nome, quantita) VALUES (bozzano, 'Oggetto di prova T15 (bozzano)', 2);
+  EXECUTE 'RESET ROLE';
+
+  -- UPDATE su un oggetto di Bozzano: la policy USING lo nasconde → 0 righe.
+  EXECUTE 'SET ROLE casa_sanbao';
+  UPDATE trasi.oggetto SET quantita = 99 WHERE nome = 'Oggetto di prova T15 (bozzano)';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  EXECUTE 'RESET ROLE';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL T15 — san-bao ha aggiornato % oggetti di Bozzano', n; END IF;
+
+  -- UPDATE del proprio: 1 riga (il ritiro è così, attivo=false).
+  EXECUTE 'SET ROLE casa_sanbao';
+  UPDATE trasi.oggetto SET attivo = false WHERE id = nuovo;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  EXECUTE 'RESET ROLE';
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL T15 — san-bao non ha potuto ritirare il proprio oggetto (% righe)', n; END IF;
+
+  -- DELETE: nessun privilegio, nemmeno sul proprio (V4 regola 7).
+  EXECUTE 'SET ROLE casa_sanbao';
+  fallito := false;
+  BEGIN
+    DELETE FROM trasi.oggetto WHERE id = nuovo;
+    fallito := true;
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF fallito THEN RAISE EXCEPTION 'FAIL T15 — san-bao ha cancellato un oggetto: il ritiro è attivo=false, mai DELETE'; END IF;
+
+  -- rete e shim_rw: nessuna scrittura (la scrittura è della Casa, per la propria).
+  EXECUTE 'SET ROLE rete';
+  fallito := false;
+  BEGIN
+    INSERT INTO trasi.oggetto (casa_id, nome, quantita) VALUES (sanbao, 'Oggetto via rete (T15)', 1);
+    fallito := true;
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF fallito THEN RAISE EXCEPTION 'FAIL T15 — rete ha inserito un oggetto (atteso 42501)'; END IF;
+  EXECUTE 'SET ROLE shim_rw';
+  fallito := false;
+  BEGIN
+    INSERT INTO trasi.oggetto (casa_id, nome, quantita) VALUES (sanbao, 'Oggetto via shim_rw (T15)', 1);
+    fallito := true;
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF fallito THEN RAISE EXCEPTION 'FAIL T15 — shim_rw ha inserito un oggetto (atteso 42501)'; END IF;
+
+  -- La contabilità V4: le due scritture dirette (san-bao e bozzano, ciascuna sulla propria) non sono violazioni.
+  SELECT count(*) INTO violazioni FROM trasi.v_scritture_senza_audit
+   WHERE entita = 'oggetto' AND entita_id IN (SELECT id FROM trasi.oggetto WHERE nome LIKE 'Oggetto di prova T15%');
+  IF violazioni <> 0 THEN
+    RAISE EXCEPTION 'FAIL T15 — % scritture dirette della propria Casa contabilizzate come violazioni di V4', violazioni;
+  END IF;
+
+  RAISE NOTICE 'PASS T15 — oggetto: INSERT/UPDATE della propria Casa OK e fuori da v_scritture_senza_audit; cross-Casa 42501/0 righe; DELETE 42501; rete e shim_rw 42501';
 END $$;
