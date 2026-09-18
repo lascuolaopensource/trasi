@@ -459,3 +459,10 @@ scontrino (stato, focus, contrasti calcolati):
   esplicita a zoom 200% è stata fatta nella versione precedente della pagina con
   `Emulation.setDeviceMetricsOverride`; con la nuova veste non è stata ripetuta con lo stesso
   strumento, e non è dichiarata come rieseguita.
+
+## 8 · Correzioni Home e font (18 settembre 2026)
+
+- Home con sidebar condivisa, menu comprimibile, Casa, Aiuto ed Esci. Copertina e paragrafi allineati alla larghezza delle altre sezioni; tolto il filetto accentuato di «Oggi».
+- Commissioner: corretto il range `wght` a 30–220 e tutti i pesi nelle tre pagine; corpo Regular 82, titoli Bold 148. I pesi 82/106/126/148/185/220 producono ora sei larghezze distinte nel browser, anziché convergere su Black.
+- Verifica visiva sull'istanza a 1440×900 e 360×800: copertina e destinazioni larghe rispettivamente 944 e 328 px, senza overflow orizzontale. Sidebar 240→72 px e `aria-expanded` aggiornato; dropdown Casa aperto correttamente sopra il selettore desktop.
+- Queste verifiche non costituiscono una nuova certificazione WCAG completa; i limiti delle sezioni precedenti restano dichiarati.

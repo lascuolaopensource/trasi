@@ -79,7 +79,7 @@
   box-shadow: var(--ombra-scheda);
 }
 .mappa-stato { margin: 0; font-size: .9375rem; line-height: 1.5; }
-.mappa-stato--attenzione { color: var(--attenzione-testo); font-weight: 600; }
+.mappa-stato--attenzione { color: var(--attenzione-testo); font-weight: 126; }
 .mappa-stato[hidden] { display: none; }
 
 .mappa-attribuzione { margin: 0; font-size: .8125rem; color: var(--testo-tenue); }
@@ -132,7 +132,7 @@
   border-bottom: 1.5px solid var(--bordo);
   flex: none;
 }
-.mappa-cassetto-testa h2 { margin: 0; font-size: 1.125rem; font-weight: 700; letter-spacing: -.01em; }
+.mappa-cassetto-testa h2 { margin: 0; font-size: 1.125rem; font-weight: 148; letter-spacing: -.01em; }
 .mappa-cassetto-testa p { margin: 0; font-size: .8125rem; color: var(--testo-tenue); }
 
 .mappa-cassetto-chiudi {
@@ -161,7 +161,7 @@
   padding: 0 var(--s-5);
   font: inherit;
   font-size: .9375rem;
-  font-weight: 700;
+  font-weight: 148;
   color: #fff;
   background: var(--primario);
   border: 0;
@@ -205,13 +205,13 @@
 }
 .mappa-voce--scelta .mappa-voce-segno { background: var(--secondario); }
 .mappa-voce-segno .icona { width: 17px; height: 17px; color: #fff; }
-.mappa-voce-nome { font-weight: 600; font-size: .9375rem; }
-.mappa-voce-etichetta { padding: 0 var(--s-2); font-size: .8125rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--carta); background: var(--primario); border-radius: var(--raggio-pillola); }
+.mappa-voce-nome { font-weight: 126; font-size: .9375rem; }
+.mappa-voce-etichetta { padding: 0 var(--s-2); font-size: .8125rem; font-weight: 148; letter-spacing: .06em; text-transform: uppercase; color: var(--carta); background: var(--primario); border-radius: var(--raggio-pillola); }
 .mappa-voce-distanza { font-size: .8125rem; color: var(--testo-tenue); }
 .mappa-voce-riga { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); font-size: .8125rem; color: var(--testo-tenue); }
 .mappa-voce-nota { padding: 0 var(--s-2); background: var(--attenzione-sfondo); color: var(--attenzione-testo); border-radius: var(--raggio-pillola); font-size: .75rem; }
 /* Il badge di provenienza (V3): stringa da citare com'è, in monospazio. */
-.mappa-voce-fonte { margin: 0; font-family: var(--font-mono); font-size: .8125rem; color: var(--kb-testo); overflow-wrap: anywhere; }
+.mappa-voce-fonte { margin: 0; font-family: var(--font-mono); font-weight: 400; font-size: .8125rem; color: var(--kb-testo); overflow-wrap: anywhere; }
 
 .mappa-voce-bottone {
   align-self: flex-start;
@@ -219,7 +219,7 @@
   padding: var(--s-1) var(--s-4);
   font: inherit;
   font-size: .875rem;
-  font-weight: 600;
+  font-weight: 126;
   color: var(--primario);
   background: var(--superficie);
   border: 1.5px solid var(--bordo-forte);
