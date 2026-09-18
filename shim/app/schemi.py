@@ -81,6 +81,22 @@ class RispostaEventiOggi(BaseModel):
     eventi: list[ItemEvento]
 
 
+class RispostaEventiMese(BaseModel):
+    """`eventi_mese` (fuori contratto, calendario della Home): gli eventi di una Casa dal primo all'ultimo giorno del mese.
+
+    `oggi` è il giorno nel fuso della rete secondo lo shim: la Home lo usa per evidenziare le righe di oggi, così
+    l'evidenza coincide con la riga «Oggi» della stessa pagina e non dipende dall'orologio del browser.
+    """
+
+    model_config = TIPO_STRETTO
+
+    casa: str
+    dal: date
+    al: date
+    oggi: date
+    eventi: list[ItemEvento]
+
+
 class FonteEsterna(BaseModel):
     """Esito di una fonte esterna interrogata: uno stato dichiarato, mai un'eccezione al chiamante."""
 
