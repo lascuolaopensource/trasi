@@ -111,13 +111,36 @@
   </section>
 
   <!-- -------------------------- attrezzoteca ----------------------------- -->
+  <style>
+    /* Veste locale della sezione Attrezzoteca (prefisso `op-`): token di style.css, niente rosso.
+       Il resto della pagina usa le classi già esistenti (tabella, riquadro-azione, modulo). */
+    .op-aggiornato { margin: var(--s-2) 0; font-size: .9375rem; color: var(--testo-tenue); }
+    .op-aggiornato:empty { display: none; }
+    .op-riga-modulo > td { background: var(--superficie-incassata); }
+    .op-modulo { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: end; }
+    .op-modulo-titolo { flex-basis: 100%; margin: 0 0 var(--s-1); font-weight: 600; }
+    .op-campo { display: flex; flex-direction: column; gap: var(--s-1); }
+    .op-campo label { font-size: .875rem; color: var(--testo-tenue); }
+    .op-modulo-azioni { display: flex; gap: var(--s-2); }
+    .riquadro-azione--quieto { background: var(--superficie); color: var(--testo); border-color: var(--bordo-tenue); }
+    .riquadro-azione--quieto:hover { border-color: var(--bordo-forte); }
+    .op-movimento { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); padding: var(--s-2) 0; border-bottom: 1px solid var(--bordo-tenue); }
+    .op-movimento-testo { flex: 1 1 auto; min-width: 0; }
+    .op-movimento-attesa { color: var(--testo-tenue); }
+  </style>
   <section class="pannello" id="pannello-attrezzoteca" hidden aria-labelledby="attrezzoteca-titolo">
     <h2 id="attrezzoteca-titolo">Attrezzoteca della rete</h2>
     <form class="modulo modulo-in-linea" id="modulo-cerca-oggetto">
       <label class="etichetta" for="cerca-oggetto">Cerca oggetto</label>
       <input id="cerca-oggetto" type="search" maxlength="80" placeholder="Es. microfono">
       <button class="riquadro-azione" type="submit">Cerca</button>
+      <!-- Rilettura esplicita, oltre a quella automatica (30 s con la linguetta visibile, e al ritorno
+           del focus dalla scheda di Onyx): l'operatore che ha appena scritto in chat non deve chiedersi
+           se la pagina si è accorta. -->
+      <button class="riquadro-azione" type="button" id="aggiorna-attrezzoteca">Aggiorna</button>
     </form>
+    <!-- Regione live discreta: dice **quando** l'inventario è stato letto l'ultima volta. -->
+    <p class="op-aggiornato" id="attrezzoteca-aggiornato" role="status" aria-live="polite"></p>
     <table class="tabella" id="tabella-inventario">
       <caption class="solo-lettore">Inventario condiviso degli oggetti della rete</caption>
       <thead>
@@ -126,6 +149,8 @@
       <tbody id="corpo-inventario"><tr><td colspan="6">Caricamento…</td></tr></tbody>
     </table>
     <h3>Movimenti da confermare</h3>
+    <!-- Per ogni voce: chi ha proposto e chi decide vengono dallo shim (`decide_casa_slug`, `ruolo_mio`),
+         che li legge dalla vista del database: i pulsanti compaiono solo a chi deve decidere. -->
     <ul class="elenco-movimenti" id="movimenti-da-confermare"><li>Caricamento…</li></ul>
     <p class="messaggio-ok" id="attrezzoteca-ok" role="status" hidden></p>
     <p class="messaggio-errore" id="attrezzoteca-errore" role="alert" hidden></p>
@@ -181,6 +206,6 @@
   <p>Trasi · area operatore. La piattaforma non conserva dati personali dei cittadini.</p>
 </footer>
 
-<script src="operatore.js?v=3"></script>
+<script src="operatore.js?v=4"></script>
 </body>
 </html>

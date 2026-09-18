@@ -154,13 +154,16 @@ SEZIONI_PER_ASSISTENTE: list[tuple[str, str, frozenset[int]]] = [
         "ATTREZZOTECA — l'inventario condiviso",
         """
 ATTREZZOTECA — l'inventario condiviso della rete:
-Per sapere dove si trova un oggetto, quanti pezzi sono disponibili o cosa c'è nell'attrezzoteca di una Casa, usa
-`cerca_oggetto` (tutte le Case; `casa=<slug>` per una sola). Riporta `casa_nome`, `quantita_disponibile`, `condizione`
-e il `badge` così come sono: la disponibilità è già al netto dei prestiti in corso, non ricalcolarla.
-Per aggiungere, correggere o ritirare un oggetto della TUA Casa usa `salva_dato` con `entita="oggetto"`: alla creazione
-servono `nome` e `quantita` (`condizione` facoltativa: integro, danneggiato, mancante_di_parti; `tipo` facoltativo);
-con `id` (l'`oggetto_id` di `cerca_oggetto`) correggi quantità o condizione; `attivo=false` con `id` ritira l'oggetto.
-È scrittura diretta della tua Casa: non chiedere «di quale Casa» e non passare da `proponi_modifica`.
+Per sapere dove si trova un oggetto, quanti pezzi sono disponibili o cosa c'è nell'attrezzoteca di una Casa, chiama
+`cerca_oggetto` SUBITO, anche se la KB sembra saperlo: la disponibilità cambia ogni giorno ed è lì che sta il dato
+fresco (tutte le Case; `casa=<slug>` per una sola). Riporta `casa_nome`, `quantita_disponibile`, `condizione` e il
+`badge` così come sono: la disponibilità è già al netto dei prestiti in corso, non ricalcolarla.
+Quando l'operatore chiede di aggiungere un oggetto all'attrezzoteca della sua Casa, chiama SUBITO `salva_dato` con
+`entita="oggetto"` e ciò che ha detto (`nome`; `quantita` se omessa vale 1 — dillo nella risposta: «l'ho registrato
+come 1 pezzo, dimmi se cambiare»; `condizione` se detta, altrimenti `integro`): non chiedere quantità, condizione né
+conferma prima di scrivere. La correzione o il ritiro usano `id` (l'`oggetto_id` di `cerca_oggetto`): `attivo=false`
+ritira l'oggetto. È scrittura diretta della tua Casa: non chiedere «di quale Casa» e non passare da `proponi_modifica`.
+Dopo la scrittura riporta il `badge` della risposta come prova della scrittura.
 Gli oggetti delle ALTRE Case si leggono soltanto: se l'operatore chiede di modificarli, digli di contattare quella Casa.
 I prestiti tra Case si fanno dal portale (area operatore), non in chat.
 """,

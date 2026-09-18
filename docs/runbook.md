@@ -1092,3 +1092,40 @@ rebuild dello shim; ri-registrazione del tool Onyx (id 12) con il contratto a 13
 `definition` = `shim/openapi.yaml`); `python3 ops/allinea_prompt_assistenti.py` (sezioni «ATTREZZOTECA» su Casa e Rete).
 Verifica: `onyx.openapi_to_method_specs` deve elencare `cerca_oggetto`; chat come `op.san-bao` «Aggiungi all'attrezzoteca
 5 sedie pieghevoli, integre» → tool call `salva_dato` → 201 senza chiedere «di quale Casa».
+
+### 11.5 · Movimenti bidirezionali: richiesta in prestito, rifiuto, default quantità (db/033, 2026-09-18)
+
+Quattro difetti osservati in esercizio: (1) l'assistente chiedeva quantità/condizione/conferma prima di chiamare
+`salva_dato` (l'attrezzo compariva al terzo scambio); (2) «Conferma ricezione» compariva anche alla Casa cedente;
+(3) «Chiedi in prestito» di un oggetto di un'altra Casa non esisteva; (4) un oggetto scritto in chat non compareva
+finché non si cambiava linguetta. In più (5, trovato in revisione): `POST /op/movimento/{id}/conferma` con
+`azione: "rifiuta"` **confermava** e rispondeva `stato: "rifiuta"`.
+
+**Fix**: `db/033_movimenti_bidirezionali.sql` — `movimento.proposto_da_casa_id` (chi propone: cedente o ricevente);
+policy `mov_ins_casa` bidirezionale; `conferma_movimento(p_movimento, p_ruolo, p_azione='conferma',
+p_condizione_rientro=NULL)` sostituisce la firma a due parametri: su `proposto` decide la **controparte** di chi ha
+proposto (`conferma` sposta l'oggetto, `rifiuta` lo lascia fermo), su `confermato` `rientro` della cedente con
+`condizione_rientro = COALESCE(param, condizione dell'oggetto)`; `v_movimenti_da_confermare` esporta
+`proposto_da_casa_slug` e `decide_casa_slug`. Shim: `POST /op/movimento` accetta `a_casa` (prestito) **o** `da_casa`
+(richiesta); la conferma passa azione e condizione e risponde con lo **stato letto** dalla riga;
+`movimenti_da_confermare` aggiunge `ruolo_mio`. Portale: pulsanti solo a chi deve decidere, «Rifiuta», moduli in
+linea al posto di `window.prompt`, rilettura automatica ogni 30 s con linguetta visibile + al ritorno del focus +
+bottone «Aggiorna», riga «Inventario aggiornato alle HH:MM». Prompt: «chiama `salva_dato` SUBITO, quantità se
+omessa vale 1, non chiedere conferma prima di scrivere; per "dove trovo…" chiama `cerca_oggetto` prima di rispondere».
+
+```bash
+# richiesta della ricevente (Molo 12 chiede l'oggetto di Buscicchio)
+$ curl -s -b cookie_molo12 -H 'Content-Type: application/json' -d '{"oggetto_id":123,"da_casa":"buscicchio"}' \
+    http://127.0.0.1:8000/op/movimento
+{"movimento_id":57,"stato":"proposto","ruolo_mio":"ricevente","decide_casa_slug":"buscicchio"}
+# Buscicchio rifiuta
+$ curl -s -b cookie_buscicchio -H 'Content-Type: application/json' -d '{"azione":"rifiuta"}' \
+    http://127.0.0.1:8000/op/movimento/57/conferma
+{"movimento_id":57,"stato":"rifiutato"}
+# prestito proposto dalla cedente, confermato dalla cedente → 409 parlante
+{"detail":"la decisione sul movimento 57 spetta a molo12 (la controparte di chi ha proposto), non a casa_buscicchio: la decisione resta umana (V6)"}
+```
+
+**Passi di deploy**: `./db/apply.sh 033` (idempotente; 014/006/016 rieseguiti prima riportano le forme vecchie e
+033 le porta alla forma nuova), rebuild dello shim, `python3 ops/allinea_prompt_assistenti.py`, ri-registrazione del
+tool Onyx (id 12) se `openapi.yaml` cambia (il campo `quantita` ha una descrizione nuova).
